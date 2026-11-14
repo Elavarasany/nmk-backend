@@ -1,9 +1,8 @@
 
 package nmk_backend.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.math.BigDecimal;
+import java.util.Map;
 
 public record AdminOrderItemResponse(
         Long id,
@@ -14,5 +13,5 @@ public record AdminOrderItemResponse(
         String prescriptionType,
         String lensType,
         Boolean photochromic,
-        JsonNode prescription
+        Map<String, Object> prescription
 ) {}

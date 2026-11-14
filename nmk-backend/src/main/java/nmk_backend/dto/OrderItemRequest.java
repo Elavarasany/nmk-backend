@@ -8,11 +8,11 @@ public class OrderItemRequest {
     private Long productId;
     private Integer quantity;
 
+    private String lensKind;
     private String prescriptionType;
     private String lensType;
     private Boolean photochromic;
 
-    // Customer's prescription: either {mode: "image", imageUrl} or {mode: "manual", right, left, ...}
     private Map<String, Object> prescription;
     private String prescriptionFileName;
 
@@ -30,6 +30,14 @@ public class OrderItemRequest {
 
     public void setQuantity(Integer quantity) {
         this.quantity = quantity;
+    }
+
+    public String getLensKind() {
+        return lensKind;
+    }
+
+    public void setLensKind(String lensKind) {
+        this.lensKind = lensKind;
     }
 
     public String getPrescriptionType() {

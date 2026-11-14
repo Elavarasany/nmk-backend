@@ -1,12 +1,12 @@
 
 package nmk_backend.controller;
+import nmk_backend.dto.AdminOrderItemResponse;
 import nmk_backend.service.OrderService;
 import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.security.core.Authentication;
 
 import nmk_backend.dto.UpdateDeliveryDetailsRequest;
 import nmk_backend.service.SmsService;
-import nmk_backend.dto.AdminOrderItemResponse;
 import nmk_backend.dto.AdminOrderResponse;
 import nmk_backend.dto.UpdateOrderStatusRequest;
 import nmk_backend.entity.Order;
@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
@@ -400,14 +400,18 @@ public class AdminOrderController {
 
     private static final ObjectMapper PRESCRIPTION_READER = new ObjectMapper();
 
-    private JsonNode parsePrescription(String json) {
+    private Map<String, Object> parsePrescription(String json) {
         if (json == null || json.isBlank()) {
             return null;
         }
 
         try {
-            return PRESCRIPTION_READER.readTree(json);
+            return PRESCRIPTION_READER.readValue(
+                    json,
+                    new TypeReference<Map<String, Object>>() {}
+            );
         } catch (JsonProcessingException e) {
+            System.err.println("Unable to parse prescription JSON: " + e.getMessage());
             return null;
         }
     }

@@ -56,7 +56,7 @@ public class OrderService {
 
         List<OrderItem> orderItems = new ArrayList<>();
 
-        // Combine quantities when the same product appears multiple times
+        // Combine quantities when the same product appears multiple times.
         Map<Long, Integer> reservedQuantities = new LinkedHashMap<>();
 
         for (OrderItemRequest itemRequest : request.getItems()) {
@@ -80,14 +80,14 @@ public class OrderService {
                 );
             }
 
-            // Aggregate quantity for atomic stock reservation
+            // Aggregate quantity for stock reservation.
             reservedQuantities.merge(
                     product.getId(),
                     itemRequest.getQuantity(),
                     Integer::sum
             );
 
-            // Start with the frame/product price
+            // Start with the frame/product price.
             BigDecimal unitPrice = product.getPrice();
 
             boolean isEyeglasses =
@@ -236,7 +236,7 @@ public class OrderService {
                         );
                 }
 
-                // Add lens charges to the frame price
+                // Add lens charges to the frame price.
                 unitPrice = unitPrice.add(lensPrice);
 
             } else if (
@@ -249,24 +249,24 @@ public class OrderService {
                 );
             }
 
-            // Calculate total for this item
+            // Calculate total for this item.
             BigDecimal itemTotal = unitPrice.multiply(
                     BigDecimal.valueOf(itemRequest.getQuantity())
             );
 
             total = total.add(itemTotal);
 
-            // Create order item
+            // Create order item.
             OrderItem orderItem = new OrderItem();
 
             orderItem.setProductId(product.getId());
             orderItem.setProductName(product.getName());
             orderItem.setQuantity(itemRequest.getQuantity());
 
-            // Store final unit price, including lens charges
+            // Store final unit price, including lens charges.
             orderItem.setPrice(unitPrice);
 
-            // Store lens selections for Eyeglasses
+            // Store lens selections for Eyeglasses.
             if (isEyeglasses) {
 
                 orderItem.setPrescriptionType(prescription);
@@ -280,8 +280,13 @@ public class OrderService {
                 }
             }
 
+            // Save eyeglasses or contact lens prescription details.
             orderItem.setPrescriptionJson(
-                    toPrescriptionJson(itemRequest.getPrescription(), itemRequest.getPrescriptionFileName())
+                    toPrescriptionJson(
+                            itemRequest.getPrescription(),
+                            itemRequest.getPrescriptionFileName(),
+                            itemRequest.getLensKind()
+                    )
             );
 
             orderItem.setOrder(order);
@@ -289,7 +294,7 @@ public class OrderService {
             orderItems.add(orderItem);
         }
 
-        // Reserve stock atomically for every product
+        // Reserve stock atomically for every product.
         for (Map.Entry<Long, Integer> entry :
                 reservedQuantities.entrySet()) {
 
@@ -306,11 +311,11 @@ public class OrderService {
             }
         }
 
-        // Set order details
+        // Set order details.
         order.setTotalAmount(total);
         order.setItems(orderItems);
 
-        // Set 15-minute stock reservation
+        // Set 15-minute stock reservation.
         order.setStockReserved(true);
 
         order.setReservationExpiresAt(
@@ -401,34 +406,74 @@ public class OrderService {
         orderRepository.save(order);
     }
 
+    // Prescription JSON saving.
 
-    // Keeps only the prescription fields the admin needs, so nothing else from the request is stored
-    private static final ObjectMapper PRESCRIPTION_WRITER = new ObjectMapper();
-    private static final List<String> EYE_FIELDS = List.of("sph", "cyl", "axis", "add");
+    private static final ObjectMapper PRESCRIPTION_WRITER =
+            new ObjectMapper();
 
-    private String toPrescriptionJson(Map<String, Object> rx, String fileName) {
+    private static final List<String> EYE_FIELDS =
+            List.of("sph", "cyl", "axis", "add");
+
+    private static final List<String> CONTACT_EYE_FIELDS =
+            List.of("sph", "cyl", "axis", "boxes");
+
+    private String toPrescriptionJson(
+            Map<String, Object> rx,
+            String fileName,
+            String lensKind
+    ) {
+
         if (rx == null || rx.isEmpty()) {
             return null;
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
 
-        if ("image".equals(text(rx.get("mode")))) {
-            // The link is kept whole: a Cloudinary URL is longer than the short text fields.
+        // Uploaded prescription image or PDF.
+        if ("image".equalsIgnoreCase(text(rx.get("mode")))) {
+
             String url = urlText(rx.get("imageUrl"));
 
             if (!url.startsWith("https://")) {
-                throw new IllegalArgumentException("The prescription image link is not valid.");
+                throw new IllegalArgumentException(
+                        "The prescription image link is not valid."
+                );
             }
 
             out.put("mode", "image");
             out.put("imageUrl", url);
-            out.put("imageName", fileName == null ? "" : fileName.trim());
+            out.put(
+                    "imageName",
+                    fileName == null ? "" : fileName.trim()
+            );
+
+            // Contact lens prescription.
+        } else if ("contact".equalsIgnoreCase(lensKind)) {
+
+            out.put("mode", "contact");
+            out.put("right", cleanContactEye(rx.get("right")));
+            out.put("left", cleanContactEye(rx.get("left")));
+
+            // Eyeglasses manual prescription.
         } else {
+
             out.put("mode", "manual");
-            out.put("sameForBothEyes", Boolean.TRUE.equals(rx.get("sameForBothEyes")));
-            out.put("hasCylinder", Boolean.TRUE.equals(rx.get("hasCylinder")));
-            out.put("needsAddition", Boolean.TRUE.equals(rx.get("needsAddition")));
+
+            out.put(
+                    "sameForBothEyes",
+                    Boolean.TRUE.equals(rx.get("sameForBothEyes"))
+            );
+
+            out.put(
+                    "hasCylinder",
+                    Boolean.TRUE.equals(rx.get("hasCylinder"))
+            );
+
+            out.put(
+                    "needsAddition",
+                    Boolean.TRUE.equals(rx.get("needsAddition"))
+            );
+
             out.put("right", cleanEye(rx.get("right")));
             out.put("left", cleanEye(rx.get("left")));
         }
@@ -436,38 +481,70 @@ public class OrderService {
         try {
             return PRESCRIPTION_WRITER.writeValueAsString(out);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Unable to save the prescription.", e);
+            throw new IllegalStateException(
+                    "Unable to save the prescription.",
+                    e
+            );
         }
     }
 
+    // Clean eyeglasses prescription fields.
     private Map<String, String> cleanEye(Object raw) {
+
         Map<String, String> eye = new LinkedHashMap<>();
 
         for (String field : EYE_FIELDS) {
-            Object value = raw instanceof Map<?, ?> row ? row.get(field) : null;
+
+            Object value =
+                    raw instanceof Map<?, ?> row
+                            ? row.get(field)
+                            : null;
+
             eye.put(field, text(value));
         }
 
         return eye;
     }
 
-    // Rejects an over-long link instead of cutting it, so a broken link is never saved
+    // Clean contact lens prescription fields.
+    private Map<String, String> cleanContactEye(Object raw) {
+
+        if (!(raw instanceof Map<?, ?> row)) {
+            return null;
+        }
+
+        Map<String, String> eye = new LinkedHashMap<>();
+
+        for (String field : CONTACT_EYE_FIELDS) {
+            eye.put(field, text(row.get(field)));
+        }
+
+        return eye;
+    }
+
+    // Reject an over-long URL instead of cutting it.
     private String urlText(Object value) {
+
         if (value == null) {
             return "";
         }
 
         String s = String.valueOf(value).trim();
+
         return s.length() > 2048 ? "" : s;
     }
 
+    // Clean short prescription text fields.
     private String text(Object value) {
+
         if (value == null) {
             return "";
         }
 
         String s = String.valueOf(value).trim();
-        return s.length() > 40 ? s.substring(0, 40) : s;
-    }
 
+        return s.length() > 40
+                ? s.substring(0, 40)
+                : s;
+    }
 }
