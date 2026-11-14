@@ -11,6 +11,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 
 @Service
 public class RazorpayService {
@@ -20,6 +21,8 @@ public class RazorpayService {
 
     @Value("${razorpay.key.secret}")
     private String keySecret;
+    @Value("${razorpay.webhook.secret}")
+    private String webhookSecret;
 
     public Order createOrder(int amount) throws Exception {
 
@@ -100,5 +103,81 @@ public class RazorpayService {
 
     public String getKeyId() {
         return keyId;
+    }
+    public boolean hasUnsettledOrSuccessfulPayment(
+            String razorpayOrderId) throws Exception {
+
+        RazorpayClient client =
+                new RazorpayClient(keyId, keySecret);
+
+        // Fetch the latest Razorpay order status.
+        com.razorpay.Order razorpayOrder =
+                client.orders.fetch(razorpayOrderId);
+
+        String orderStatus = razorpayOrder.get("status");
+
+        // A paid order must never have its reservation released.
+        if ("paid".equalsIgnoreCase(orderStatus)) {
+            return true;
+        }
+
+        // Fetch every payment attempt associated with this order.
+        List<com.razorpay.Payment> payments =
+                client.orders.fetchPayments(razorpayOrderId);
+
+        for (com.razorpay.Payment payment : payments) {
+
+            String status = payment.get("status");
+
+            // Only terminal failed or fully refunded attempts
+            // are safe to ignore.
+            if (!"failed".equalsIgnoreCase(status)
+                    && !"refunded".equalsIgnoreCase(status)) {
+                return true;
+            }
+        }
+
+        // If Razorpay reports attempts but gives no payment records,
+        // treat the result as uncertain and retain the reservation.
+        Number attempts = razorpayOrder.get("attempts");
+
+        if (attempts != null
+                && attempts.intValue() > 0
+                && payments.isEmpty()) {
+            return true;
+        }
+
+        return false;
+    }
+    public boolean verifyWebhookSignature(
+            String rawBody,
+            String signature) throws Exception {
+
+        if (rawBody == null || signature == null) {
+            return false;
+        }
+
+        Mac mac = Mac.getInstance("HmacSHA256");
+
+        SecretKeySpec secretKey = new SecretKeySpec(
+                webhookSecret.getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"
+        );
+
+        mac.init(secretKey);
+
+        byte[] expected = mac.doFinal(
+                rawBody.getBytes(StandardCharsets.UTF_8)
+        );
+
+        byte[] actual;
+
+        try {
+            actual = hexToBytes(signature);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+
+        return MessageDigest.isEqual(expected, actual);
     }
 }

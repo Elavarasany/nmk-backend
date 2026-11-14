@@ -1,4 +1,3 @@
-
 package nmk_backend.controller;
 
 import nmk_backend.dto.CreateOrderRequest;
@@ -16,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
-@CrossOrigin(origins = "http://localhost:5173")
 public class OrderController {
 
     private final OrderService orderService;
@@ -37,28 +35,29 @@ public class OrderController {
     public ResponseEntity<?> createCheckout(
             @RequestBody CreateOrderRequest request) {
 
+        Order order = null;
+
         try {
+            // 1. Create pending order and reserve stock.
+            order = orderService.createPendingOrder(request);
 
-            // 1. Create pending MySQL order
-            Order order = orderService.createPendingOrder(request);
-
-            // 2. Convert INR to paise
+            // 2. Convert total amount into paise.
             int amountInPaise = order.getTotalAmount()
                     .setScale(2, RoundingMode.HALF_UP)
                     .movePointRight(2)
                     .intValueExact();
 
-            // 3. Create Razorpay order
+            // 3. Create Razorpay payment order.
             com.razorpay.Order razorpayOrder =
                     razorpayService.createOrder(amountInPaise);
 
             String razorpayOrderId = razorpayOrder.get("id");
 
-            // 4. Link Razorpay order with MySQL order
+            // 4. Save Razorpay order ID.
             order.setRazorpayOrderId(razorpayOrderId);
             orderRepository.save(order);
 
-            // 5. Return checkout details
+            // 5. Return checkout details to frontend.
             CreateCheckoutResponse response =
                     new CreateCheckoutResponse(
                             order.getId(),
@@ -72,6 +71,8 @@ public class OrderController {
 
         } catch (IllegalArgumentException e) {
 
+            releaseStockAfterFailure(order);
+
             return ResponseEntity.badRequest().body(
                     Map.of("message", e.getMessage())
             );
@@ -80,8 +81,27 @@ public class OrderController {
 
             e.printStackTrace();
 
+            releaseStockAfterFailure(order);
+
             return ResponseEntity.internalServerError().body(
                     Map.of("message", "Unable to create payment order")
+            );
+        }
+    }
+
+    private void releaseStockAfterFailure(Order order) {
+
+        if (order == null) {
+            return;
+        }
+
+        try {
+            orderService.releaseReservation(order.getId());
+
+        } catch (Exception e) {
+            System.err.println(
+                    "WARNING: Could not release stock reservation for order "
+                            + order.getId() + ": " + e.getMessage()
             );
         }
     }

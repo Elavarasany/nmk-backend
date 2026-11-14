@@ -27,6 +27,10 @@ public class OrderItem {
     @Column(name = "photochromic")
     private Boolean photochromic;
 
+    // Prescription saved at checkout as JSON (mode, eyes, image link); null when none was given
+    @Column(name = "prescription_json", length = 4000)
+    private String prescriptionJson;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
@@ -96,5 +100,13 @@ public class OrderItem {
 
     public void setPhotochromic(Boolean photochromic) {
         this.photochromic = photochromic;
+    }
+
+    public String getPrescriptionJson() {
+        return prescriptionJson;
+    }
+
+    public void setPrescriptionJson(String prescriptionJson) {
+        this.prescriptionJson = prescriptionJson;
     }
 }

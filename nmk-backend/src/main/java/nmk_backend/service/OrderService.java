@@ -9,12 +9,17 @@ import nmk_backend.entity.Product;
 import nmk_backend.repository.OrderRepository;
 import nmk_backend.repository.ProductRepository;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class OrderService {
@@ -48,13 +53,18 @@ public class OrderService {
         order.setPaymentStatus("PENDING");
 
         BigDecimal total = BigDecimal.ZERO;
+
         List<OrderItem> orderItems = new ArrayList<>();
+
+        // Combine quantities when the same product appears multiple times
+        Map<Long, Integer> reservedQuantities = new LinkedHashMap<>();
 
         for (OrderItemRequest itemRequest : request.getItems()) {
 
             if (itemRequest.getProductId() == null ||
                     itemRequest.getQuantity() == null ||
                     itemRequest.getQuantity() <= 0) {
+
                 throw new IllegalArgumentException("Invalid cart item");
             }
 
@@ -64,18 +74,18 @@ public class OrderService {
                     new IllegalArgumentException("Product not found")
             );
 
-            if (product.getStockQuantity() == null ||
-                    product.getStockQuantity() < itemRequest.getQuantity()) {
-                throw new IllegalArgumentException(
-                        "Insufficient stock for " + product.getName()
-                );
-            }
-
             if (!Boolean.TRUE.equals(product.getActive())) {
                 throw new IllegalArgumentException(
                         product.getName() + " is unavailable"
                 );
             }
+
+            // Aggregate quantity for atomic stock reservation
+            reservedQuantities.merge(
+                    product.getId(),
+                    itemRequest.getQuantity(),
+                    Integer::sum
+            );
 
             // Start with the frame/product price
             BigDecimal unitPrice = product.getPrice();
@@ -103,7 +113,6 @@ public class OrderService {
                 switch (prescription) {
 
                     case "Frame Only":
-                        // No lens charges
                         lensPrice = BigDecimal.ZERO;
                         break;
 
@@ -120,19 +129,24 @@ public class OrderService {
                         switch (prescription) {
 
                             case "Single Vision":
+
                                 switch (lens) {
                                     case "ClearGuard":
                                         lensPrice = BigDecimal.valueOf(899);
                                         break;
+
                                     case "ClearGuard Blue":
                                         lensPrice = BigDecimal.valueOf(1649);
                                         break;
+
                                     case "ClearGuard Plus":
                                         lensPrice = BigDecimal.valueOf(1989);
                                         break;
+
                                     case "ClearGuard NightDrive":
                                         lensPrice = BigDecimal.valueOf(2899);
                                         break;
+
                                     default:
                                         throw new IllegalArgumentException(
                                                 "Invalid lens type"
@@ -144,22 +158,28 @@ public class OrderService {
                                             BigDecimal.valueOf(689)
                                     );
                                 }
+
                                 break;
 
                             case "Progressive":
+
                                 switch (lens) {
                                     case "ClearGuard":
                                         lensPrice = BigDecimal.valueOf(1799);
                                         break;
+
                                     case "ClearGuard Blue":
                                         lensPrice = BigDecimal.valueOf(2449);
                                         break;
+
                                     case "ClearGuard Plus":
                                         lensPrice = BigDecimal.valueOf(2989);
                                         break;
+
                                     case "ClearGuard NightDrive":
                                         lensPrice = BigDecimal.valueOf(3899);
                                         break;
+
                                     default:
                                         throw new IllegalArgumentException(
                                                 "Invalid lens type"
@@ -171,22 +191,28 @@ public class OrderService {
                                             BigDecimal.valueOf(989)
                                     );
                                 }
+
                                 break;
 
                             case "Bifocal":
+
                                 switch (lens) {
                                     case "ClearGuard":
                                         lensPrice = BigDecimal.valueOf(1399);
                                         break;
+
                                     case "ClearGuard Blue":
                                         lensPrice = BigDecimal.valueOf(1849);
                                         break;
+
                                     case "ClearGuard Plus":
                                         lensPrice = BigDecimal.valueOf(2489);
                                         break;
+
                                     case "ClearGuard NightDrive":
                                         lensPrice = BigDecimal.valueOf(2999);
                                         break;
+
                                     default:
                                         throw new IllegalArgumentException(
                                                 "Invalid lens type"
@@ -198,8 +224,10 @@ public class OrderService {
                                             BigDecimal.valueOf(989)
                                     );
                                 }
+
                                 break;
                         }
+
                         break;
 
                     default:
@@ -240,6 +268,7 @@ public class OrderService {
 
             // Store lens selections for Eyeglasses
             if (isEyeglasses) {
+
                 orderItem.setPrescriptionType(prescription);
 
                 if ("Frame Only".equals(prescription)) {
@@ -251,14 +280,194 @@ public class OrderService {
                 }
             }
 
+            orderItem.setPrescriptionJson(
+                    toPrescriptionJson(itemRequest.getPrescription(), itemRequest.getPrescriptionFileName())
+            );
+
             orderItem.setOrder(order);
 
             orderItems.add(orderItem);
         }
 
+        // Reserve stock atomically for every product
+        for (Map.Entry<Long, Integer> entry :
+                reservedQuantities.entrySet()) {
+
+            int updatedRows = productRepository.reserveStock(
+                    entry.getKey(),
+                    entry.getValue()
+            );
+
+            if (updatedRows != 1) {
+                throw new IllegalArgumentException(
+                        "Insufficient stock for one or more products. " +
+                                "Please refresh your cart and try again."
+                );
+            }
+        }
+
+        // Set order details
         order.setTotalAmount(total);
         order.setItems(orderItems);
 
+        // Set 15-minute stock reservation
+        order.setStockReserved(true);
+
+        order.setReservationExpiresAt(
+                LocalDateTime.now().plusMinutes(15)
+        );
+
         return orderRepository.save(order);
     }
+
+    @Transactional
+    public void releaseReservation(Long orderId) {
+
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Order not found")
+                );
+
+        releaseReservationForOrder(order);
+    }
+
+    @Transactional
+    public void cancelPendingOrder(Long orderId) {
+
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Order not found")
+                );
+
+        if (!"PENDING".equalsIgnoreCase(order.getOrderStatus())) {
+            throw new IllegalStateException(
+                    "Only pending orders can be cancelled through this action"
+            );
+        }
+
+        if (!"PENDING".equalsIgnoreCase(order.getPaymentStatus())) {
+            throw new IllegalStateException(
+                    "This order is not an unpaid pending order"
+            );
+        }
+
+        if (order.isStockReserved()) {
+            releaseReservationForOrder(order);
+        } else {
+            order.setPaymentStatus("FAILED");
+            order.setOrderStatus("CANCELLED");
+            order.setReservationExpiresAt(null);
+            orderRepository.save(order);
+        }
+    }
+
+    private void releaseReservationForOrder(Order order) {
+
+        // Prevent stock from being released more than once.
+        if (!order.isStockReserved()) {
+            return;
+        }
+
+        Map<Long, Integer> quantities = new LinkedHashMap<>();
+
+        for (OrderItem item : order.getItems()) {
+            quantities.merge(
+                    item.getProductId(),
+                    item.getQuantity(),
+                    Integer::sum
+            );
+        }
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+
+            int updatedRows = productRepository.releaseStock(
+                    entry.getKey(),
+                    entry.getValue()
+            );
+
+            if (updatedRows != 1) {
+                throw new IllegalStateException(
+                        "Could not release stock for product ID: "
+                                + entry.getKey()
+                );
+            }
+        }
+
+        order.setStockReserved(false);
+        order.setReservationExpiresAt(null);
+        order.setPaymentStatus("FAILED");
+        order.setOrderStatus("CANCELLED");
+
+        orderRepository.save(order);
+    }
+
+
+    // Keeps only the prescription fields the admin needs, so nothing else from the request is stored
+    private static final ObjectMapper PRESCRIPTION_WRITER = new ObjectMapper();
+    private static final List<String> EYE_FIELDS = List.of("sph", "cyl", "axis", "add");
+
+    private String toPrescriptionJson(Map<String, Object> rx, String fileName) {
+        if (rx == null || rx.isEmpty()) {
+            return null;
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+
+        if ("image".equals(text(rx.get("mode")))) {
+            // The link is kept whole: a Cloudinary URL is longer than the short text fields.
+            String url = urlText(rx.get("imageUrl"));
+
+            if (!url.startsWith("https://")) {
+                throw new IllegalArgumentException("The prescription image link is not valid.");
+            }
+
+            out.put("mode", "image");
+            out.put("imageUrl", url);
+            out.put("imageName", fileName == null ? "" : fileName.trim());
+        } else {
+            out.put("mode", "manual");
+            out.put("sameForBothEyes", Boolean.TRUE.equals(rx.get("sameForBothEyes")));
+            out.put("hasCylinder", Boolean.TRUE.equals(rx.get("hasCylinder")));
+            out.put("needsAddition", Boolean.TRUE.equals(rx.get("needsAddition")));
+            out.put("right", cleanEye(rx.get("right")));
+            out.put("left", cleanEye(rx.get("left")));
+        }
+
+        try {
+            return PRESCRIPTION_WRITER.writeValueAsString(out);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Unable to save the prescription.", e);
+        }
+    }
+
+    private Map<String, String> cleanEye(Object raw) {
+        Map<String, String> eye = new LinkedHashMap<>();
+
+        for (String field : EYE_FIELDS) {
+            Object value = raw instanceof Map<?, ?> row ? row.get(field) : null;
+            eye.put(field, text(value));
+        }
+
+        return eye;
+    }
+
+    // Rejects an over-long link instead of cutting it, so a broken link is never saved
+    private String urlText(Object value) {
+        if (value == null) {
+            return "";
+        }
+
+        String s = String.valueOf(value).trim();
+        return s.length() > 2048 ? "" : s;
+    }
+
+    private String text(Object value) {
+        if (value == null) {
+            return "";
+        }
+
+        String s = String.valueOf(value).trim();
+        return s.length() > 40 ? s.substring(0, 40) : s;
+    }
+
 }

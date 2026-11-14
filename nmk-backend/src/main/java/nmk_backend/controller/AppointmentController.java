@@ -1,44 +1,73 @@
 
 package nmk_backend.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 import nmk_backend.entity.Appointment;
 import nmk_backend.repository.AppointmentRepository;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import nmk_backend.service.AdminActionAuthorizationService;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/appointments")
-@CrossOrigin(origins = "http://localhost:5173")
 public class AppointmentController {
+    private final AdminActionAuthorizationService authorizationService;
 
     private final AppointmentRepository appointmentRepository;
 
-    public AppointmentController(AppointmentRepository appointmentRepository) {
+    public AppointmentController(
+            AppointmentRepository appointmentRepository,
+            AdminActionAuthorizationService authorizationService
+    ) {
         this.appointmentRepository = appointmentRepository;
+        this.authorizationService = authorizationService;
     }
     @DeleteMapping("/clear")
     @Transactional
-    public ResponseEntity<?> clearAllAppointments() {
+    public ResponseEntity<?> clearAllAppointments(
+            @RequestHeader(
+                    value = "X-Admin-Action-Authorization",
+                    required = false
+            ) String authorizationToken,
+            Authentication authentication
+    ) {
+        try {
+            if (authentication == null) {
+                return ResponseEntity.status(401).body(
+                        Map.of("message", "Admin login required")
+                );
+            }
 
-        long deletedCount = appointmentRepository.count();
+            authorizationService.consumeAuthorization(
+                    authentication.getName(),
+                    authorizationToken,
+                    "CLEAR_APPOINTMENTS"
+            );
 
-        appointmentRepository.deleteAll();
+            long deletedCount = appointmentRepository.count();
 
-        return ResponseEntity.ok(Map.of(
-                "message", "All appointments deleted successfully",
-                "deletedCount", deletedCount
-        ));
+            appointmentRepository.deleteAll();
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "All appointments deleted successfully",
+                    "deletedCount", deletedCount
+            ));
+
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(403).body(
+                    Map.of("message", exception.getMessage())
+            );
+        }
     }
 
     // Customer: Book an appointment
@@ -64,22 +93,18 @@ public class AppointmentController {
 
         LocalTime time = appointment.getAppointmentTime();
 
-        if (time.isBefore(LocalTime.of(9, 0)) ||
-                !time.isBefore(LocalTime.of(18, 0))) {
+        Set<LocalTime> allowedSlots = Set.of(
+                LocalTime.of(9, 0),
+                LocalTime.of(12, 0),
+                LocalTime.of(15, 0)
+        );
+
+        if (!allowedSlots.contains(time)) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Appointments are available between 9 AM and 6 PM."));
-        }
-
-        boolean alreadyBooked =
-                appointmentRepository.existsByAppointmentDateAndAppointmentTimeAndStatusNot(
-                        appointment.getAppointmentDate(),
-                        time,
-                        "CANCELLED"
-                );
-
-        if (alreadyBooked) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("message", "This appointment slot is already booked."));
+                    .body(Map.of(
+                            "message",
+                            "Choose one of the available slots: 9 AM, 12 PM, or 3 PM."
+                    ));
         }
 
         appointment.setId(null);

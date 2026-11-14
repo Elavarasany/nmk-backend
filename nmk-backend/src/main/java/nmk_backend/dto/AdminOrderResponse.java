@@ -1,3 +1,4 @@
+
 package nmk_backend.dto;
 
 import java.math.BigDecimal;
@@ -18,6 +19,9 @@ public record AdminOrderResponse(
         String orderStatus,
         String razorpayOrderId,
         String razorpayPaymentId,
+        String courierName,
+        String trackingNumber,
+        String trackingToken,
         LocalDateTime orderDate,
         List<AdminOrderItemResponse> items
 ) {}

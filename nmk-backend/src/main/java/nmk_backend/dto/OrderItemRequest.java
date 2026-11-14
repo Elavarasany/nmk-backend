@@ -1,6 +1,8 @@
 
 package nmk_backend.dto;
 
+import java.util.Map;
+
 public class OrderItemRequest {
 
     private Long productId;
@@ -9,6 +11,10 @@ public class OrderItemRequest {
     private String prescriptionType;
     private String lensType;
     private Boolean photochromic;
+
+    // Customer's prescription: either {mode: "image", imageUrl} or {mode: "manual", right, left, ...}
+    private Map<String, Object> prescription;
+    private String prescriptionFileName;
 
     public Long getProductId() {
         return productId;
@@ -48,5 +54,21 @@ public class OrderItemRequest {
 
     public void setPhotochromic(Boolean photochromic) {
         this.photochromic = photochromic;
+    }
+
+    public Map<String, Object> getPrescription() {
+        return prescription;
+    }
+
+    public void setPrescription(Map<String, Object> prescription) {
+        this.prescription = prescription;
+    }
+
+    public String getPrescriptionFileName() {
+        return prescriptionFileName;
+    }
+
+    public void setPrescriptionFileName(String prescriptionFileName) {
+        this.prescriptionFileName = prescriptionFileName;
     }
 }

@@ -1,63 +1,71 @@
 
 package nmk_backend.controller;
-import org.springframework.security.core.Authentication;
+
 import nmk_backend.service.AdminAuthService;
+import nmk_backend.service.AdminActionAuthorizationService;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/auth")
-@CrossOrigin(origins = "http://localhost:5173")
 public class AdminAuthController {
 
     private final AdminAuthService adminAuthService;
+    private final AdminActionAuthorizationService authorizationService;
 
-    public AdminAuthController(AdminAuthService adminAuthService) {
+    public AdminAuthController(
+            AdminAuthService adminAuthService,
+            AdminActionAuthorizationService authorizationService
+    ) {
         this.adminAuthService = adminAuthService;
+        this.authorizationService = authorizationService;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
-
+    public ResponseEntity<?> login(
+            @RequestBody Map<String, String> request
+    ) {
         String username = request.get("username");
         String password = request.get("password");
 
-        if (username == null || password == null ||
-                username.isBlank() || password.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Username and password are required"));
+        if (username == null || password == null
+                || username.isBlank() || password.isBlank()) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", "Username and password are required")
+            );
         }
 
         try {
             String token = adminAuthService.login(username, password);
 
-            return ResponseEntity.ok(
-                    Map.of(
-                            "message", "Login successful",
-                            "token", token,
-                            "username", username
-                    )
-            );
+            return ResponseEntity.ok(Map.of(
+                    "message", "Login successful",
+                    "token", token,
+                    "username", username
+            ));
 
         } catch (RuntimeException exception) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("message", "Invalid username or password"));
+            return ResponseEntity.status(401).body(
+                    Map.of("message", "Invalid username or password")
+            );
         }
     }
+
     @PostMapping("/verify-password")
     public ResponseEntity<?> verifyPassword(
             @RequestBody Map<String, String> request,
             Authentication authentication
     ) {
-
         String password = request.get("password");
 
         if (password == null || password.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Password is required"));
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", "Password is required")
+            );
         }
 
         try {
@@ -66,13 +74,53 @@ public class AdminAuthController {
                     password
             );
 
-            return ResponseEntity.ok(
-                    Map.of("verified", true)
-            );
+            return ResponseEntity.ok(Map.of("verified", true));
 
         } catch (RuntimeException exception) {
-            return ResponseEntity.status(400)
-                    .body(Map.of("message", "Incorrect admin password"));
+            return ResponseEntity.status(400).body(
+                    Map.of("message", "Incorrect admin password")
+            );
+        }
+    }
+
+    @PostMapping("/authorize-action")
+    public ResponseEntity<?> authorizeAction(
+            @RequestBody Map<String, String> request,
+            Authentication authentication
+    ) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(
+                    Map.of("message", "Admin login required")
+            );
+        }
+
+        String password = request.get("password");
+        String action = request.get("action");
+
+        if (password == null || password.isBlank()
+                || action == null || action.isBlank()) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", "Password and action are required")
+            );
+        }
+
+        try {
+            String authorizationToken =
+                    authorizationService.authorizeAction(
+                            authentication.getName(),
+                            password,
+                            action
+                    );
+
+            return ResponseEntity.ok(Map.of(
+                    "authorizationToken", authorizationToken,
+                    "expiresInSeconds", 120
+            ));
+
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", exception.getMessage())
+            );
         }
     }
 }

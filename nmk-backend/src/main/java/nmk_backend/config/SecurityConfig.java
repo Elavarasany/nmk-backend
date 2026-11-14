@@ -3,6 +3,7 @@ package nmk_backend.config;
 
 import nmk_backend.security.JwtAuthenticationFilter;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,6 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -24,6 +26,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:5174}")
+    private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
@@ -42,14 +47,21 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // Allow browser CORS preflight requests
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                                 // Password verification requires JWT authentication
                                 .requestMatchers(
                                         HttpMethod.POST,
-                                        "/api/admin/auth/verify-password"
+                                        "/api/admin/auth/verify-password",
+                                        "/api/admin/auth/authorize-action"
                                 ).authenticated()
 
 // Admin login remains public
-                                .requestMatchers("/api/admin/auth/**").permitAll()
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/api/admin/auth/login"
+                                ).permitAll()
 
                         // Public product GET APIs
                         .requestMatchers(
@@ -72,6 +84,8 @@ public class SecurityConfig {
                                 "/index.html",
                                 "/admin",
                                 "/admin/**",
+                                "/track",
+                                "/track/**",
                                 "/assets/**",
                                 "/favicon.ico"
                         ).permitAll()
@@ -81,6 +95,7 @@ public class SecurityConfig {
 
                         // Public customer checkout API
                         .requestMatchers("/api/orders/checkout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/orders/track/**").permitAll()
 
                         // Public appointment booking
                         .requestMatchers(
@@ -110,25 +125,25 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://localhost:8080"
-        ));
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+
+        configuration.setAllowedOrigins(origins);
 
         configuration.setAllowedMethods(List.of(
                 "GET",
                 "POST",
                 "PUT",
+                "PATCH",
                 "DELETE",
                 "OPTIONS"
         ));
 
-        configuration.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type"
-        ));
-
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();

@@ -1,11 +1,11 @@
 
 package nmk_backend.entity;
-
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "customer_orders")
@@ -31,8 +31,22 @@ public class Order {
     private String paymentStatus;
     private String orderStatus = "PENDING";
 
+    @Column(name = "reservation_expires_at")
+    private LocalDateTime reservationExpiresAt;
+
+    @Column(name = "stock_reserved", nullable = false)
+    private boolean stockReserved = false;
+
     private String razorpayOrderId;
     private String razorpayPaymentId;
+
+    // Delivery details
+    private String courierName;
+    private String trackingNumber;
+
+    // Unique token for public order tracking
+    @Column(unique = true, length = 64)
+    private String trackingToken;
 
     private LocalDateTime orderDate;
 
@@ -49,6 +63,12 @@ public class Order {
 
         if (orderStatus == null) {
             orderStatus = "PENDING";
+        }
+
+        if (trackingToken == null) {
+            trackingToken = UUID.randomUUID()
+                    .toString()
+                    .replace("-", "");
         }
     }
 
@@ -152,6 +172,30 @@ public class Order {
         this.razorpayPaymentId = razorpayPaymentId;
     }
 
+    public String getCourierName() {
+        return courierName;
+    }
+
+    public void setCourierName(String courierName) {
+        this.courierName = courierName;
+    }
+
+    public String getTrackingNumber() {
+        return trackingNumber;
+    }
+
+    public void setTrackingNumber(String trackingNumber) {
+        this.trackingNumber = trackingNumber;
+    }
+
+    public String getTrackingToken() {
+        return trackingToken;
+    }
+
+    public void setTrackingToken(String trackingToken) {
+        this.trackingToken = trackingToken;
+    }
+
     public LocalDateTime getOrderDate() {
         return orderDate;
     }
@@ -162,5 +206,20 @@ public class Order {
 
     public void setItems(List<OrderItem> items) {
         this.items = items;
+    }
+    public LocalDateTime getReservationExpiresAt() {
+        return reservationExpiresAt;
+    }
+
+    public void setReservationExpiresAt(LocalDateTime reservationExpiresAt) {
+        this.reservationExpiresAt = reservationExpiresAt;
+    }
+
+    public boolean isStockReserved() {
+        return stockReserved;
+    }
+
+    public void setStockReserved(boolean stockReserved) {
+        this.stockReserved = stockReserved;
     }
 }
