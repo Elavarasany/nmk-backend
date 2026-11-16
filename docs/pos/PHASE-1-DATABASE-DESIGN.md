@@ -1300,3 +1300,174 @@ Initial permissions follow Section 10.12: manager approval within configured aut
 - Acceptance tests must cover split tender, under/overpayment rejection, duplicate submission, concurrent final-unit sales, rollback after tender/stock/invoice failure, immediate and collect-later fulfilment, reprint without side effects, partial and repeated returns, damaged versus sellable disposition, failed/pending/confirmed refunds, exchange difference collection/refund, online Razorpay success/duplicate webhook/uncertain state, financial-year invoice rollover and void-number handling.
 
 This section is a target design correction only. It does not create tables, alter existing online checkout/payment code, issue invoices, process refunds, change inventory, or authorize API/schema/application changes. Before implementation, confirm invoice legal wording and issuance timing with the accountant/adviser, select the final invoice sequence scope, define supported electronic POS payment verification, and approve the exact status/permission matrix.
+
+## 10.27 Operational schema reconciliation — staff permissions, cash registers/shifts, suppliers and purchasing
+
+This section defines the operational records required to run the physical shop safely. It supplements Sections 10.6, 10.13, 10.14 and 10.21 and the transaction model in Section 10.26. All stock references remain variant/location scoped under Section 10.25. These are target relational requirements, not permission to change the existing authentication system or production records.
+
+### Staff accounts, roles and permission enforcement
+
+The initial role set is exactly:
+
+- `OWNER_ADMIN`: full business access, staff and role administration, settings, reports, stock, purchase operations, refunds and sensitive actions.
+- `MANAGER`: operational POS, permitted returns/refunds/voids, stock adjustments, purchasing and reports; approvals are subject to owner-configured limits and assigned permissions.
+- `CASHIER`: create fully paid POS sales, accept supported tenders, print/reprint invoices and access only the minimum customer information needed for the sale. A cashier cannot independently adjust stock, edit completed sales/payment records, delete transactions, approve refunds or perform restricted purchase operations.
+
+The logical schema should include:
+
+#### `staff_accounts`
+
+| Field | Purpose and rule |
+|---|---|
+| `id` | Primary key |
+| `username` | NOT NULL, normalized and unique |
+| `password_hash` | BCrypt or an approved adaptive password hash; never plaintext |
+| `display_name` | Staff display name |
+| `role_id` | FK to staff_roles |
+| `active` | Disabled accounts cannot authenticate or perform new actions |
+| `created_at`, `updated_at` | Audit timestamps |
+| `last_login_at` | Nullable operational timestamp |
+
+#### `staff_roles` and `permissions`
+
+- `staff_roles`: stable role code, display name, description and active flag. Seed only the three approved initial roles; do not rely on display names for authorization.
+- `permissions`: stable permission code and description, such as `POS_SALE_CREATE`, `SALE_VOID`, `REFUND_APPROVE`, `STOCK_ADJUST`, `PURCHASE_RECEIVE`, `STAFF_MANAGE`, `PRESCRIPTION_VIEW` and `REPORT_EXPORT`.
+- `role_permissions`: unique role/permission mapping with foreign keys.
+- If individual exceptional grants are later required, model them explicitly with grantor, reason, expiry and audit; do not silently widen a role.
+
+Backend authorization is mandatory on every protected endpoint and service operation. Hiding a button in React is not authorization. The authenticated principal must carry verified staff identity and effective authorities. Deny by default when role/permission data is missing, stale or invalid.
+
+#### Approval and authorization records
+
+Use an explicit `approval_requests` (or equivalent) record for controlled actions requiring another staff member's approval. Store action type, target type/ID, requested amount or quantity where relevant, requester, approver, decision, reason, timestamps, expiry and one-time consumption state. The approver must be authorized for that action and must not be the requester where separation of duties is required. Approval must be bound to the exact action details and cannot be reused for a different sale, refund, adjustment or amount.
+
+Sensitive actions must require reauthentication where policy specifies it. Existing `AdminActionAuthorization` may be evaluated for reuse only after its token binding, expiry, one-time consumption and actor checks are reviewed. Do not assume it replaces role authorization.
+
+#### Authentication migration and security controls
+
+1. Preserve the current admin login during migration. Inspect the current `Admin`, JWT filter and `JwtService` implementation before choosing whether to extend or migrate them.
+2. Introduce staff identity/role support through an additive, staged migration. Existing administrator access must not be accidentally locked out; the bootstrap owner account must be explicitly mapped and verified before enabling role enforcement.
+3. Use individual staff accounts; prohibit shared cashier logins. Disable departed staff promptly and revoke or invalidate their active sessions/tokens.
+4. JWT/session authorization must include a safe strategy for role changes and account disablement. A token issued before a staff role is revoked must not retain privileged access for its full lifetime without a revocation/version check.
+5. Use BCrypt or another approved adaptive password hash, secure password reset, rate limiting, HTTPS and exact production CORS origins. Never log passwords, bearer tokens, authorization codes or secrets.
+6. Configure POS inactivity lock and reauthentication for sensitive actions. Do not create a universal production default password.
+7. Record actor identity for every transaction and operational change. Do not allow nullable/anonymous actors for privileged operations.
+8. Cashier customer access is limited. Prescription records and images require separate permissions and audit as specified in Section 10.18.
+9. Audit permission changes, staff creation/disablement, login/security events, approval decisions and denied sensitive actions without logging prescription contents or credentials.
+
+### Cash registers, shifts and cash reconciliation
+
+The initial system supports one or more physical registers per shop location, with no more than one active shift per register. A shift belongs to one register and one opening staff member; additional authorized staff activity must still be attributable to the actual actor.
+
+#### `pos_registers`
+
+- `id` primary key.
+- `location_id` FK to inventory_locations.
+- Stable register code unique within a location.
+- Display name, active flag and created/updated timestamps.
+- A disabled register cannot open new shifts but its historical shifts remain readable.
+
+#### `pos_shifts`
+
+- `id` primary key; `register_id` FK; `opened_by` staff FK.
+- `opened_at`, `opening_cash_amount`, `opening_note`.
+- `shift_status`: OPEN, CLOSING or CLOSED.
+- `closed_by`, `closed_at`, `closing_note` nullable until close.
+- `expected_cash_amount`, `counted_cash_amount`, `cash_difference_amount`.
+- Manager review state, reviewer, review time and explanation where a discrepancy exceeds configured policy.
+- Unique/transactional enforcement allowing only one OPEN/CLOSING shift per register. A simple application-side pre-check is insufficient under concurrent requests.
+
+#### `cash_movements`
+
+Each non-sale cash movement records:
+
+- Shift and register/location references.
+- Movement type: OPENING_FLOAT, CASH_IN, CASH_OUT, CASH_REFUND or another explicitly approved category.
+- Positive amount, direction/type, reason and supporting reference.
+- Actor, approver where required, timestamp and idempotency key.
+- Immutable record after posting; corrections use linked compensating movements.
+
+POS cash sales and cash refunds must link to their originating tender/refund records and shift. Do not duplicate them as unexplained manual cash movements. Non-sale cash-in/out requires a reason and permission/approval according to owner-configured limits.
+
+#### Cash closing calculation and rules
+
+Expected drawer cash is calculated from the shift's opening float plus confirmed cash tender received, plus approved cash-in, less cash-out and confirmed cash refunds. UPI and card tender are excluded from drawer cash and reconciled separately.
+
+At close:
+
+1. Stop accepting new sales on the shift and serialize the close against concurrent tender recording.
+2. Calculate expected cash from immutable linked transactions; do not trust a client-submitted expected amount.
+3. Record the actual counted amount and calculate the difference.
+4. Preserve both expected and counted values. Never silently create a cash adjustment to force them to match.
+5. Require manager review when the absolute difference exceeds the owner-configured threshold; record the reason and reviewer.
+6. Close only after required checks and approvals. Reopening a closed shift requires owner-authorized action, reason and audit event.
+7. Retain a complete per-shift reconciliation of cash tenders, refunds, cash movements, electronic tenders and relevant transaction references.
+
+UPI/card acceptance and bank settlement are separate. Electronic reconciliation records should capture provider/bank reference, expected amount, reconciled amount, discrepancy, reviewer and timestamps without treating POS acceptance as bank settlement. The initial scope does not require direct bank API integration.
+
+### Suppliers and purchasing lifecycle
+
+Purchasing is separate from sales. A purchase order is a request/commitment to a supplier; it does not increase inventory. Inventory increases only when goods are physically received, inspected and accepted.
+
+#### `suppliers`
+
+Include supplier ID, legal/trading name, contact person, phone, email, address, active status, notes and timestamps. Supplier GSTIN may be stored as optional supplier-provided information, subject to validation and applicable business need. NMK itself is currently not GST-registered; storing a supplier GSTIN does not mean NMK is GST-registered or entitled to claim input tax credit. Tax/accounting treatment must be confirmed with the accountant.
+
+Do not store supplier credentials or unnecessary personal information. Deactivation preserves historical purchases.
+
+#### `purchase_orders` and `purchase_order_items`
+
+A purchase order should record:
+
+- Unique purchase-order number, supplier, location, status, created_by, approved_by, ordered_at and expected delivery date.
+- Currency, item subtotal, discounts, freight/other landed-cost components and total cost snapshots as applicable.
+- Notes, cancellation reason and audit timestamps.
+- Lines reference `variant_id`, ordered quantity, expected unit purchase cost and line-cost snapshot.
+- Statuses such as DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CANCELLED and CLOSED, with backend-validated transitions.
+
+Purchase costs are distinct from retail selling prices. Store supplier quote/order values as snapshots. Do not change the sale price when a purchase cost changes.
+
+Managers may create/prepare and approve purchasing actions only within assigned permissions and limits; owner controls policy and overrides. Cashiers cannot create, approve, receive or return purchases. Approval thresholds must be configurable, not hardcoded.
+
+#### `goods_receipts` and `goods_receipt_items`
+
+A receipt references its purchase order and supplier/location, with received_by, received_at, delivery note/reference, status and inspection notes. Receipt lines reference the exact purchase-order line and `variant_id`, and record:
+
+- Quantity physically delivered.
+- Quantity accepted into sellable stock.
+- Quantity rejected/damaged/missing or held for inspection.
+- Accepted purchase cost and any documented variance from the ordered cost.
+- Reason, inspector and timestamps.
+
+Support multiple partial receipts against one purchase order. Enforce that cumulative accepted/rejected quantities do not exceed delivered/ordered quantities under the approved tolerance policy. Do not mark the entire purchase order received merely because one partial receipt was entered.
+
+Only accepted sellable quantity increases `inventory.on_hand_quantity`. The inventory update and corresponding `PURCHASE_RECEIPT` stock movement must commit atomically and be idempotent by receipt line/event. Rejected, damaged or quarantined goods do not become available POS stock. A later decision to move inspected goods into sellable stock must be a separately authorized disposition with its own movement.
+
+#### Purchase cost and inventory valuation
+
+Maintain purchase cost independently from sale price. The recommended initial valuation method is weighted-average cost, but its exact calculation, landed-cost allocation, rounding and treatment of returns/discounts/freight must be approved before implementation.
+
+If weighted-average valuation is selected, retain sufficient receipt and adjustment history to reproduce valuation changes. Do not derive reliable gross profit from the latest purchase price or mutable product fields. A purchase receipt's inventory quantity and cost valuation update must be transactionally consistent; valuation adjustments must be auditable. Profit reporting remains disabled until cost-of-goods-sold, discounts, returns and expenses are reliably defined as stated in Section 10.20.
+
+#### `purchase_returns` and supplier settlement
+
+A purchase return references the original supplier, purchase order and receipt/receipt line. Store requested, approved and dispatched quantities, reason, authorization, handover/dispatched timestamp and supplier credit/refund reference.
+
+Reduce on-hand stock only when the goods are physically dispatched/handed back under the approved return process, not merely when a return is requested. Record a variant/location stock movement exactly once. Supplier refund, credit note or settlement is a separate financial record; stock leaving the shop does not prove that supplier money/credit has been received.
+
+Supplier payments/settlements should be recorded separately from goods receipts, with amount, method/reference, date, actor, approval and allocation to supplier invoices/purchases. Do not infer that an order is paid because goods were received, or that a supplier balance is settled because a payment record was attempted. Cash purchase payments must reconcile to the relevant register/shift cash movement where they are paid from the shop drawer.
+
+### Cross-module integrity, permissions and audit
+
+1. Every staff, register, shift, cash movement, purchase order, receipt, purchase return and supplier settlement must have stable foreign-key relationships and actor/timestamp history.
+2. Apply unique constraints to staff username, role/permission codes, register code within location, active shift per register, purchase-order number, receipt references and idempotency keys.
+3. Use InnoDB transactions and row locking for shift opening/closing, cash tender posting, purchase receipt acceptance, stock updates and supplier return dispatch. Prevent concurrent requests from opening two active shifts or receiving the same quantity twice.
+4. Stock receipt/return operations must use the authoritative `variant_id + location_id` inventory row and append-only stock ledger from Section 10.25.
+5. A shift close must not race with a new sale or refund. Define a lock/order strategy for shift, sale/tender and inventory rows and use a stable lock order to reduce deadlocks.
+6. No role may bypass server-side validation by calling a lower-level controller or repository path. Route stock/purchase operations through validated service methods.
+7. Audit approvals, cash discrepancies, shift reopenings, supplier edits, purchase approval/receipt/return, valuation changes, permission changes and exports. Store reason and before/after metadata where appropriate; exclude secrets and prescription contents.
+8. Enforce least privilege on reports and exports. Cashiers should not gain unrestricted purchase cost, profit, prescription or staff-security information.
+9. Use idempotency and duplicate-event handling for receipt posting, supplier settlement and cash movement submissions. A retry must not duplicate inventory or cash.
+10. Acceptance tests must cover concurrent shift opening, sale during close, cash-in/out approval, cash refund reconciliation, cash shortage/excess review, electronic tender reconciliation, role-denied operations, disabled staff sessions, approval expiry/reuse, partial purchase receipts, over-receipt rejection, damaged/rejected stock, duplicate receipt retries, purchase returns, supplier credits and full rollback when ledger insertion fails.
+
+This section defines the target operational schema only. It does not create staff accounts, alter JWT/authentication behaviour, configure register hardware, post cash movements, create purchase orders, receive goods, change inventory or execute migrations. Before implementation, approve the exact permission matrix and approval limits, opening/closing policy, cash discrepancy threshold, supplier payment workflow, landed-cost allocation and final inventory valuation method.
