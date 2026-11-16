@@ -318,3 +318,228 @@ Before creating entities or migrations, locate and inspect:
 - Product SKU/barcode fields and product variant/size representation.
 
 **No application code, schema, database records, credentials, deployment settings or other repository files are changed by this design document.**
+
+## 9. Detailed proposed relational schema (review baseline)
+
+This is a logical schema baseline for review, not an executable migration. Final DDL must be validated against the deployed MySQL version and existing data.
+
+### 9.1 Common conventions
+
+- Use InnoDB for transactional tables and BIGINT auto-increment primary keys.
+- Use DATETIME(6) consistently for audit timestamps.
+- Use DECIMAL(12,2) for INR money; never FLOAT or DOUBLE.
+- Use integer quantities for discrete stock units.
+- Validate statuses in the service layer and add database CHECK constraints where supported.
+- Never store card numbers, CVV, UPI PINs, payment credentials or provider secrets.
+
+### 9.2 customers
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK, auto-increment |
+| name | VARCHAR(150) | Nullable for anonymous walk-in |
+| phone | VARCHAR(20) | Nullable |
+| phone_normalized | VARCHAR(20) | Nullable; normalized lookup value |
+| email | VARCHAR(254) | Nullable |
+| active | BOOLEAN | NOT NULL, default TRUE |
+| created_at | DATETIME(6) | NOT NULL |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Initially index phone_normalized without enforcing uniqueness. Review duplicate and missing phone handling before adding a unique constraint. Walk-in sales must not require a saved customer.
+
+### 9.3 customer_addresses
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| customer_id | BIGINT | NOT NULL, FK to customers |
+| address_line | VARCHAR(1000) | Nullable |
+| city | VARCHAR(120) | Nullable |
+| state | VARCHAR(120) | Nullable |
+| pincode | VARCHAR(20) | Nullable; string preserves leading zeroes |
+| is_default | BOOLEAN | NOT NULL, default FALSE |
+| created_at | DATETIME(6) | NOT NULL |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Index customer_id and is_default. Enforce at most one default address per customer in a service transaction.
+
+### 9.4 inventory_locations
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| code | VARCHAR(30) | NOT NULL, UNIQUE |
+| name | VARCHAR(120) | NOT NULL |
+| active | BOOLEAN | NOT NULL, default TRUE |
+| created_at | DATETIME(6) | NOT NULL |
+
+Seed one initial location for the Avalurpet shop. This location dimension avoids a redesign if a second branch is added later; multi-branch UI is not part of the initial scope.
+
+### 9.5 inventory
+
+One row per product per location.
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| product_id | BIGINT | NOT NULL, FK to products |
+| location_id | BIGINT | NOT NULL, FK to inventory_locations |
+| on_hand_quantity | INT | NOT NULL, >= 0 |
+| reserved_quantity | INT | NOT NULL, default 0, >= 0 |
+| reorder_level | INT | NOT NULL, default 0, >= 0 |
+| version | BIGINT | NOT NULL, default 0; optional optimistic lock |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Unique constraint: product_id + location_id. Available quantity is calculated as on_hand_quantity minus reserved_quantity; do not store it as an independently editable field. Enforce reserved_quantity <= on_hand_quantity in service logic and with a CHECK constraint where supported.
+
+### 9.6 stock_movements
+
+Append-only audit ledger. Correct mistakes with a new reversing movement, never by editing old movement rows.
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| product_id | BIGINT | NOT NULL, FK to products |
+| location_id | BIGINT | NOT NULL, FK to inventory_locations |
+| movement_type | VARCHAR(40) | NOT NULL |
+| quantity_delta | INT | NOT NULL, signed; positive adds on-hand, negative removes |
+| on_hand_after | INT | NOT NULL |
+| reserved_delta | INT | NOT NULL, default 0; positive reserves, negative releases |
+| reserved_after | INT | NOT NULL |
+| reference_type | VARCHAR(40) | Nullable, e.g. POS_SALE, ONLINE_ORDER, PURCHASE_RECEIPT, RETURN, ADJUSTMENT |
+| reference_id | BIGINT | Nullable |
+| idempotency_key | VARCHAR(100) | Nullable; unique when supplied |
+| reason | VARCHAR(500) | Required for manual adjustments/write-offs |
+| created_by | BIGINT | Nullable until staff model is finalized |
+| created_at | DATETIME(6) | NOT NULL |
+
+Indexes: product_id + location_id + created_at; reference_type + reference_id. Use a unique index for supplied idempotency keys after validating MySQL nullable-unique behaviour. Update inventory summary and insert its movement in the same transaction.
+
+Movement types include OPENING_BALANCE, POS_SALE, ONLINE_RESERVATION, ONLINE_RESERVATION_RELEASE, ONLINE_ORDER_FULFILLED, PURCHASE_RECEIPT, RETURN_RESTOCK, DAMAGE_WRITE_OFF and MANUAL_ADJUSTMENT.
+
+Important: current online checkout deducts products.stockQuantity when reserving. The new model must not reserve inventory and deduct it again at payment. Design the reservation-to-fulfilment transition against the actual online order lifecycle before switching code.
+
+### 9.7 sales
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| invoice_number | VARCHAR(50) | NOT NULL, UNIQUE, immutable once issued |
+| location_id | BIGINT | NOT NULL, FK to inventory_locations |
+| customer_id | BIGINT | Nullable FK to customers |
+| sale_status | VARCHAR(30) | NOT NULL; DRAFT, COMPLETED, VOIDED, PARTIALLY_RETURNED, RETURNED |
+| subtotal | DECIMAL(12,2) | NOT NULL, >= 0 |
+| discount_amount | DECIMAL(12,2) | NOT NULL, default 0, >= 0 |
+| tax_amount | DECIMAL(12,2) | NOT NULL, default 0 |
+| total_amount | DECIMAL(12,2) | NOT NULL, >= 0 |
+| customer_name_snapshot | VARCHAR(150) | Nullable |
+| customer_phone_snapshot | VARCHAR(20) | Nullable |
+| notes | VARCHAR(1000) | Nullable |
+| sold_at | DATETIME(6) | Nullable until completion |
+| created_by | BIGINT | Nullable until staff identity model is finalized |
+| created_at | DATETIME(6) | NOT NULL |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Indexes: location_id + sold_at; customer_id + sold_at; sale_status + sold_at. Allocate an invoice number only on completion, unless an accountant-approved numbering policy requires otherwise.
+
+NMK is currently not GST-registered. Do not require GSTIN, calculate or represent GST as collected, or hardcode a GST rate. Keep tax fields for future extensibility; initial tax behaviour should be zero unless qualified review identifies another applicable tax treatment. Confirm invoice wording and applicable obligations with the business's accountant/adviser before launch.
+
+### 9.8 sale_items
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| sale_id | BIGINT | NOT NULL, FK to sales |
+| product_id | BIGINT | Nullable FK to products |
+| product_name_snapshot | VARCHAR(255) | NOT NULL |
+| sku_snapshot | VARCHAR(100) | Nullable |
+| barcode_snapshot | VARCHAR(100) | Nullable |
+| quantity | INT | NOT NULL, > 0 |
+| unit_price | DECIMAL(12,2) | NOT NULL, >= 0 |
+| discount_amount | DECIMAL(12,2) | NOT NULL, default 0, >= 0 |
+| tax_amount | DECIMAL(12,2) | NOT NULL, default 0 |
+| line_total | DECIMAL(12,2) | NOT NULL, >= 0 |
+| prescription_required | BOOLEAN | NOT NULL, default FALSE |
+| prescription_data | JSON | Nullable; structured values only |
+| created_at | DATETIME(6) | NOT NULL |
+
+Index sale_id. Product name, SKU/barcode and price snapshots are authoritative for historic invoices. Prefer archiving products and restricting deletion once referenced.
+
+### 9.9 sale_payments
+
+This is the POS tender table and must remain separate from the existing Razorpay online payment flow.
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| sale_id | BIGINT | NOT NULL, FK to sales |
+| payment_method | VARCHAR(30) | NOT NULL: CASH, UPI, CARD, OTHER |
+| amount | DECIMAL(12,2) | NOT NULL, > 0 |
+| payment_status | VARCHAR(30) | NOT NULL: PENDING, COMPLETED, FAILED, REFUNDED, PARTIALLY_REFUNDED |
+| reference_number | VARCHAR(150) | Nullable provider/bank reference; no secrets |
+| idempotency_key | VARCHAR(100) | Nullable, unique when supplied |
+| paid_at | DATETIME(6) | Nullable until successful |
+| created_at | DATETIME(6) | NOT NULL |
+
+Index sale_id + payment_status and reference_number. Multiple completed rows support split tender. The sum of completed payments must equal the amount due before a sale is fully paid. A pending UPI/card initiation is not collected money. Record refunds separately; do not delete the original payment.
+
+### 9.10 invoice_sequences
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| location_id | BIGINT | NOT NULL, FK to inventory_locations |
+| financial_year | VARCHAR(9) | NOT NULL; India financial-year format to be finalized |
+| prefix | VARCHAR(20) | NOT NULL |
+| next_number | BIGINT | NOT NULL, > 0 |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Unique constraint: location_id + financial_year + prefix. Allocate numbers by locking the sequence row inside the sale transaction. Never use MAX(invoice_number) + 1 or an unlocked counter. Confirm numbering and cancellation treatment with the accountant/adviser.
+
+### 9.11 returns and return_items
+
+returns:
+- id BIGINT PK; return_number VARCHAR(50) NOT NULL UNIQUE; sale_id BIGINT NOT NULL FK to sales.
+- return_status VARCHAR(30) NOT NULL: REQUESTED, APPROVED, REJECTED, COMPLETED.
+- reason VARCHAR(500) NOT NULL; refund_amount DECIMAL(12,2) NOT NULL default 0.
+- created_by BIGINT and approved_by BIGINT nullable until staff model is finalized.
+- created_at DATETIME(6) NOT NULL; completed_at DATETIME(6) nullable.
+
+return_items:
+- id BIGINT PK; return_id BIGINT NOT NULL FK to returns; sale_item_id BIGINT NOT NULL FK to sale_items.
+- quantity INT NOT NULL and > 0; restock_quantity INT NOT NULL default 0 and <= quantity.
+- refund_amount DECIMAL(12,2) NOT NULL and >= 0; inspection_notes VARCHAR(500) nullable.
+
+Completed returns across all return records must not exceed the originally sold quantity. Restock only after physical inspection and approval, using a separate inventory movement. Refund execution must be recorded and idempotent. A refund request is not a completed refund.
+
+### 9.12 Product identifiers and deletion policy
+
+The current Product entity has no dedicated SKU or barcode fields. Add nullable SKU and barcode only after reviewing catalogue data and defining legacy assignment. Enforce uniqueness for non-empty normalized values; do not treat repeated empty strings as valid identifiers. Barcode scanners can initially work as keyboard input.
+
+Do not physically delete products referenced by sales, stock movements, purchase receipts or returns. Prefer deactivation/archive. Financial and inventory foreign-key deletion behaviour should be RESTRICT/NO ACTION; never cascade-delete transaction history.
+
+### 9.13 Transaction boundaries and invariants
+
+1. POS completion: lock inventory rows in stable product/location order; validate available quantities; write sale and items; record completed tender(s); decrement on-hand; write stock movements; allocate invoice number; commit atomically.
+2. Split tender: payment rows and sale completion are atomic. A partially paid sale requires an explicitly designed receivable/credit policy.
+3. Duplicate requests: require an idempotency key for sale submission and payment callbacks; retries return the original result rather than duplicate invoices, payments or movements.
+4. Online reservation: reserve from the same shared inventory available balance. Preserve the existing Razorpay fail-closed expiry behaviour until a tested replacement is deployed.
+5. Locking: use row-level locks or guarded atomic updates. For multi-product transactions, lock in deterministic order; retry known transient deadlocks only with idempotency.
+6. Stock ledger: inventory summary and movement ledger update in the same transaction. Normal product-edit APIs must not overwrite inventory balances.
+7. Returns: preserve original sale/payment; create separate return/refund records and stock movements.
+8. Money: compute totals server-side using BigDecimal; validate discounts, line totals, payment sums and refund caps.
+9. Authorization: enforce cashier/manager/admin permissions in backend services/controllers, not only the UI. Staff identity and role references need a separate authentication design review.
+10. Audit: price overrides, discounts, manual stock adjustments, voids, returns and refunds must record actor, timestamp and reason.
+
+### 9.14 Sign-off gates before implementation
+
+- Confirm SKU/barcode assignment and whether product variants are separately stocked.
+- Confirm staff/cashier roles and actor references.
+- Confirm invoice numbering and invoice wording with the accountant/adviser.
+- Confirm whether POS is cash-and-carry only or supports later collection/delivery.
+- Define online stock transitions from reservation through payment, packing, dispatch, cancellation and refund.
+- Perform physical stock count and reconcile every active online reservation at cutover.
+- Choose Flyway or Liquibase and write explicit additive migrations; do not rely on Hibernate schema auto-update for production.
+- Test rollback, concurrent checkout, duplicate submissions, payment retries, reservation expiry, partial returns and database restore in staging.
+
+**Phase 1 schema status:** proposed for review only. No Java entities, repositories, controllers, SQL migration files, database records or production settings are changed by this section.
