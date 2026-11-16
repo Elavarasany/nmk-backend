@@ -543,3 +543,53 @@ Do not physically delete products referenced by sales, stock movements, purchase
 - Test rollback, concurrent checkout, duplicate submissions, payment retries, reservation expiry, partial returns and database restore in staging.
 
 **Phase 1 schema status:** proposed for review only. No Java entities, repositories, controllers, SQL migration files, database records or production settings are changed by this section.
+
+
+## 10. Confirmed business decisions and schema amendments
+
+The following decisions were confirmed during Phase 1 review.
+
+### 10.1 Variant-level stock
+
+Each sellable product variant must have its own stock quantity. For example, different frame colours or sizes are distinct stock-keeping variants and must not share one quantity.
+
+Add a `product_variants` table:
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK |
+| product_id | BIGINT | NOT NULL, FK to the existing products table |
+| variant_code | VARCHAR(100) | NOT NULL; unique within a product |
+| attributes | JSON | NOT NULL; structured values such as colour and size |
+| barcode | VARCHAR(100) | Nullable; unique when supplied after normalization |
+| is_active | BOOLEAN | NOT NULL, default true |
+| created_at | DATETIME(6) | NOT NULL |
+| updated_at | DATETIME(6) | NOT NULL |
+
+A product with no selectable options still gets one default variant. This keeps inventory and POS sale lines consistent: every stock-tracked sale refers to a specific variant, never to an ambiguous parent product.
+
+**Required amendment to Sections 9.5, 9.6 and 9.8:** inventory balances, stock movements and sale items must reference `variant_id` (FK to `product_variants`) rather than using only `product_id` as the stock identity. Keep `product_id` on sale-item snapshots if useful for reporting, but variant is the authoritative stock identity. Inventory uniqueness becomes location_id + variant_id. Stock movement records should retain both variant_id and a product/variant description snapshot where audit readability requires it.
+
+Existing online order lines and the current `products.stockQuantity` model must be mapped to default or newly created variants during a controlled migration. Do not create variant rows or migrate balances blindly: first reconcile current product stock, physical count, and active online reservations. Online checkout and POS must then reserve/decrement the same variant-level inventory without double deduction.
+
+### 10.2 POS payment policy
+
+- A POS sale can be completed only when fully paid.
+- Multiple tender types are allowed in one sale (split payment), such as cash plus UPI.
+- Phase 1 does not support partial payment, customer credit, or an outstanding customer balance.
+- Payment rows must be recorded individually, and the sum of successful/collected payments must equal the amount due before the sale is marked paid/completed.
+- Customer credit/receivables are explicitly deferred to a later phase and must not be simulated by leaving a Phase 1 sale partially paid.
+
+### 10.3 Invoice numbering
+
+Invoice numbering restarts with a new sequence for each Indian financial year (April to March), and the sequence is scoped by inventory location and configured prefix. Example format for discussion: `NMK/26-27/0001`.
+
+The `invoice_sequences` design in Section 9.10 applies: allocate the next number by locking the matching location + financial_year + prefix row inside the sale transaction. Never calculate the next invoice number using MAX + 1. Final invoice format, prefix, treatment of void/cancelled invoices, and applicable invoice wording must be checked with the accountant/adviser before production use.
+
+### 10.4 Updated sign-off status
+
+Confirmed: variant-level stock, full settlement with split tender, and financial-year invoice sequence reset.
+
+Still requiring review before implementation: exact product/variant mapping from the current catalogue, staff roles and permissions, online reservation-to-fulfilment stock lifecycle, physical stock reconciliation, migration strategy, and accountant review of invoice format and wording.
+
+**Phase 1 remains a design document only.** No application code, SQL migration, live database or production configuration is changed by these decisions.
