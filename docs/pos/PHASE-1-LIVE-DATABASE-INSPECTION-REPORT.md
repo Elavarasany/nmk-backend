@@ -11,7 +11,7 @@
 
 ## 1. Executive summary
 
-The live database contains nine application tables and the initial POS inspection queries completed using a dedicated Aiven service user, `nmk_inspector`, granted `SELECT` and `SHOW VIEW`.
+The live database contains ten application tables and the initial POS inspection queries completed using a dedicated Aiven service user, `nmk_inspector`, granted `SELECT` and `SHOW VIEW`.
 
 The current schema supports the existing online optical-store workflow: products, online orders, order items, prescription data, appointments, marketing content, admin authorization, and Razorpay webhook event storage.
 
@@ -35,7 +35,7 @@ No passwords, connection secrets, customer records, prescription contents, or pa
 
 The application database confirmed from the backend datasource configuration is `defaultdb`.
 
-Nine base tables were listed:
+Ten base tables were listed:
 
 | Table | Observed purpose |
 |---|---|
@@ -50,7 +50,7 @@ Nine base tables were listed:
 | `razorpay_webhook_events` | Webhook event processing records |
 | `website_images` | Website image configuration |
 
-Correction: the list above contains **10 table names** when `website_images` is included. The initial table listing returned nine names; recounting the names in the captured output gives nine: admins, admin_action_authorizations, appointments, customer_orders, marketing_banners, offer_bars, order_items, products, razorpay_webhook_events, website_images. Therefore the correct count is **10**. The initial statement of nine was an arithmetic error.
+The table listing contains **10 application tables**.
 
 ## 4. Observed record counts
 
