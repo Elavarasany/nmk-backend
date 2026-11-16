@@ -698,3 +698,60 @@ The sale's existing `created_by` identifies the staff member who records the sal
 Home delivery is deferred from the initial POS release. The initial workflow covers immediate handover at the shop and later customer collection at the shop. Partial fulfilment of individual lines is also deferred unless a later workflow decision explicitly requires it.
 
 **Confirmed initial policy:** support immediate collection and fully paid collect-later sales; keep payment and fulfilment statuses separate; deduct stock once at sale recording; defer home delivery and partial payment/credit. No Java implementation, SQL migration or UI is included in this document update.
+
+### 10.8 Shared inventory lifecycle for online orders and POS
+
+Online checkout and physical POS sales must use one shared, variant-level inventory source of truth. The inventory balance is scoped by inventory location and product variant, as defined in Sections 10.1 and 9.5–9.6.
+
+#### Inventory quantity meanings
+
+- `on_hand_quantity` is the physical quantity currently held in sellable shop inventory, including units temporarily reserved for unpaid online checkout.
+- `reserved_quantity` is the subset of on-hand units held for active online checkout/payment attempts.
+- `available_quantity = on_hand_quantity - reserved_quantity`.
+- All quantities must remain non-negative, and reserved quantity must never exceed on-hand quantity.
+
+#### Required stock transitions
+
+| Event | on_hand_quantity | reserved_quantity | available quantity |
+|---|---:|---:|---:|
+| Create a valid online checkout reservation | No change | Increase | Decrease |
+| Confirm successful online payment | Decrease | Decrease by the same quantity | No further change |
+| Safely release failed, cancelled or expired online reservation | No change | Decrease | Increase |
+| Complete a fully paid POS sale | Decrease | No change | Decrease |
+| Pack, mark ready, dispatch or hand over an already-paid online order | No change | No change | No change |
+| Approve a physically inspected return for resale | Increase by approved resale quantity | No change | Increase |
+
+1. **Online reservation:** lock or atomically update the relevant location/variant inventory row. Reserve only when available quantity is sufficient. Increase reserved quantity and write an idempotent reservation movement in the same database transaction. Do not reduce on-hand quantity at reservation time in this target model.
+2. **Online payment success:** after verified provider payment, atomically decrease both on-hand and reserved quantities by the reserved amount, and write the corresponding fulfilment/sale movement. This converts the held units into sold units; it must not deduct the stock a second time while leaving the reservation in place. Payment confirmation and this conversion must be idempotent.
+3. **Payment failure, cancellation or expiry:** release only the reserved quantity after the payment provider state is safely established as not paid. Do not increase on-hand quantity, because it was not reduced when the reservation was created. Write one idempotent reservation-release movement.
+4. **Uncertain payment state:** preserve the existing Razorpay fail-closed behaviour. If Razorpay is unavailable, the attempt is unsettled, or payment state cannot be established, keep the reservation held for reconciliation. Never release stock merely because a timeout elapsed. Add operational monitoring and a safe reconciliation path for reservations that remain held.
+5. **POS sale:** lock inventory rows in a deterministic order and permit sale only when on-hand minus reserved is sufficient. On successful, fully paid sale completion, decrease on-hand quantity and write the POS sale movement atomically with the sale and tender records. POS must never consume units reserved for online checkout.
+6. **Fulfilment:** packing, preparation, ready-for-collection, dispatch, delivery and customer handover are fulfilment events, not additional stock deductions. The inventory deduction/conversion occurs once at the appropriate sale/payment commitment transition.
+7. **Returns:** refund processing and inventory restocking are separate decisions. Increase on-hand quantity only for the quantity physically received, inspected and explicitly approved for resale. Record the return movement and approval actor; damaged or non-resalable units must not be returned to sellable stock.
+
+#### Concurrency, ledger and integrity
+
+- Every inventory transition must update the inventory summary and append its stock movement in the same database transaction.
+- Use row locks or guarded atomic updates, stable lock ordering for multi-variant operations, and idempotency keys/reference constraints to prevent duplicate reservation, release, payment conversion, POS sale or return movements.
+- Validate available quantity on the backend at the moment of reservation or POS completion; storefront/cart quantities are informational and are never authoritative.
+- Keep an auditable reference to the originating online order/order item or POS sale/sale item, the location and variant, quantity deltas, resulting balances, actor/system source, timestamp and reason.
+- Do not allow ordinary product or variant edit endpoints to overwrite inventory balances. Corrections must use authorized, reasoned stock-adjustment movements.
+- If a payment callback or retry is received more than once, return the prior result and do not repeat inventory or ledger changes.
+
+#### Migration and cutover from the current implementation
+
+The existing online checkout currently subtracts reserved quantities directly from `products.stockQuantity` and restores them on safe reservation release. That legacy field therefore behaves like available stock while reservations are active; it is not equivalent to the target model's physical on-hand quantity.
+
+Do not switch the source of truth by copying `products.stockQuantity` directly into `on_hand_quantity`. Before cutover:
+
+1. Back up the database and verify a restore in a non-production environment.
+2. Freeze or tightly control stock-changing operations for the cutover window.
+3. Count physical stock by the final product variant and inventory location.
+4. Identify and reconcile every active online reservation, pending payment, paid order and unresolved Razorpay attempt.
+5. Derive and validate opening on-hand and reserved balances from the physical count and verified reservation/order state. Record the reconciliation snapshot and opening movements with a traceable reference.
+6. Implement and test the new reservation, payment-conversion, safe-release and POS deduction transitions together. Preserve the fail-closed Razorpay scheduler behaviour throughout rollout.
+7. Run staging tests for concurrent online checkout and POS sales, duplicate payment callbacks, provider outages, reservation expiry, cancellation, retries, returns and rollback.
+8. Reconcile inventory totals, reservation totals, stock movement ledger and order/payment records before enabling the new inventory source of truth.
+9. Retain a documented rollback point and compatibility plan. Do not remove or stop maintaining the legacy stock field until every application path has been migrated and verified.
+
+**Confirmed Phase 1 policy:** website orders and POS sales share one variant/location inventory system; online checkout reserves available stock; verified payment converts the reservation into a stock deduction; safe failure/expiry releases only the reservation; POS deducts unreserved stock immediately on fully paid sale completion; and approved returns restock only after inspection. This is a target design, not a claim that the current implementation already behaves this way. No application code, SQL migration, database record or production configuration is changed by this section.
