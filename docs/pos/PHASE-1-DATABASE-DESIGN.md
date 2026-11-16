@@ -786,3 +786,20 @@ Use parent-product pricing as the default and allow an explicit selling-price ov
 
 This is a logical design decision only. It does not authorize immediate schema migration, price updates, or application-code changes. Implementation requires a separately reviewed migration and compatibility plan.
 
+### 10.11 POS discounts and approval controls
+
+The POS must support controlled discounts at both sale-item and whole-bill level. Discounts are separate from the catalogue selling price and must never rewrite the parent product price, variant override or historical sale price.
+
+1. **Discount scope:** Support an item-level discount on an individual sale item and a bill-level discount on the eligible sale subtotal. Record the scope and the sale item reference where applicable.
+2. **Discount types:** Support a fixed INR amount and a percentage discount. Validate that the entered value is positive and that the resulting discount does not exceed the eligible amount. The final payable amount must never become negative.
+3. **Discount calculation:** Calculate discounts on the backend using the effective variant selling price and quantity. Define and consistently apply currency rounding. Prevent unintended stacking or duplicate application of discounts; the configured policy must determine whether bill-level discounts apply before or after item-level discounts.
+4. **Owner-configured limits:** Store discount permissions and limits as configurable business settings, with scope for role, discount type and applicable amount or percentage. Do not hardcode a cashier percentage or rupee threshold in application code.
+5. **Cashier permissions:** A cashier may apply discounts only within the currently configured cashier limit. The backend must enforce the limit for every sale; hiding or disabling a frontend control is not sufficient authorization.
+6. **Manager approval:** A discount above the cashier's permitted limit requires approval by an authorized manager, within the manager's own configured authority. Capture the approving staff member and approval time. An approval must be explicitly recorded before the discounted sale can be completed.
+7. **Owner authority:** The owner administrator can configure discount limits and perform authorized overrides. Owner overrides must also be recorded and auditable; they must not bypass calculation, amount validation or transaction integrity rules.
+8. **Audit trail:** For every applied, changed, rejected or approved discount, retain the actor, approver where applicable, timestamp, discount scope and type, entered value, original eligible amount, calculated discount and resulting amount. Preserve the reason or note when required by the configured approval policy.
+9. **Completed-sale integrity:** Once a sale is completed, its item prices, discounts, approvals and final totals are immutable historical transaction data. Corrections must use the authorized void, return, refund or adjustment workflow; do not edit the original completed sale or change catalogue prices to represent a discount.
+10. **Returns and reporting:** Preserve enough item-level and bill-level discount allocation detail to calculate a fair return value and produce accurate net-sales and discount reports. A bill-level discount must be allocated consistently across sale items for return calculations, without changing the original invoice snapshot.
+11. **Server-side totals:** The backend must calculate and persist line totals, discount totals and final payable amount from trusted catalogue prices and authorized discount inputs. Recalculate and validate the total atomically when completing the sale; do not accept client-calculated totals as authoritative.
+
+This is a logical design decision only. It does not authorize immediate schema migration, discount-setting changes, or application-code changes. Implementation requires a separately reviewed database and API design, including the exact approval workflow and rounding/allocation rules.
