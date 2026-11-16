@@ -228,3 +228,35 @@ These are inspection queries only. If Workbench remains unavailable, use another
 **Completion status:** MySQL-specific physical design rules and migration review drafted. This is not executable SQL and is not authorization to modify Aiven.
 
 **Next phase:** Phase 5 — Executable DDL/migration package for review and staging only, after server capability capture and remaining schema decisions are resolved.
+
+
+## 11. Aiven environment confirmation — 2026-11-16
+
+The Aiven service overview supplied by the project owner confirms:
+
+| Setting | Confirmed value |
+|---|---|
+| Engine/version | MySQL 8.4.11 |
+| Service state | Running |
+| Database | `defaultdb` |
+| Port | `17401` |
+| TLS | Required |
+| Region | DigitalOcean Bangalore (`blr`) |
+| Plan resources | 1 CPU, 1 GB RAM, 1 GB storage |
+
+### Consequences
+
+- MySQL 8.4.11 is above the MySQL 8.0.16 minimum for enforced CHECK constraints. CHECK constraints may be included in the reviewed DDL, while backend validation and transactional guards remain mandatory.
+- MySQL 8.4 supports the JSON and generated-column capabilities discussed above. Any generated-column uniqueness pattern must still be tested in staging before production use.
+- Use InnoDB and explicit `utf8mb4` table definitions for new transactional tables.
+- TLS remains required for every SQL client connection.
+
+### Still unverified
+
+The Aiven overview does not show the active SQL mode, session/system timezone, server charset/collation, database defaults, or existing table engines/collations. Capture those read-only values before final DDL generation. Do not infer them from the MySQL version.
+
+### Resource caution
+
+The service overview showed 77% memory usage and 28.8% storage usage at the time it was shared. This is a snapshot, not a capacity guarantee. Keep migrations additive and small, avoid unnecessary indexes/large table rewrites, and inspect resource usage before each migration. Do not run bulk backfills or opening-stock operations on production during schema preparation.
+
+**Updated completion status:** MySQL version and connection/TLS context are confirmed. Remaining server/database settings and staging/restore validation are still required. No SQL migration has been generated or executed.
