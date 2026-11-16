@@ -1070,3 +1070,77 @@ NMK must be able to recover business records and private uploaded files after ac
 18. **Acceptance criteria:** Demonstrate restoration of a database backup into local MySQL and a separate cloud/test environment; retrieval and checksum verification of associated private objects; recovery of a representative invoice and prescription reference; payment and stock reconciliation; successful application startup against the restored database; and documented measured RPO/RTO. Test at least one scenario involving accidental deletion or corruption and one scenario involving unavailable primary cloud resources.
 
 This section defines target requirements only. It does not authorize creation of cloud resources, backup jobs, object replication, database migrations, production configuration changes or application code. Before production launch, choose the exact Oracle database and Object Storage services, verify current service/Always Free limits and costs, agree retention/RPO/RTO with the owner, assign operational responsibility, and complete a witnessed restore and recovery exercise.
+
+## 10.25 Foundational schema reconciliation — variant-level inventory
+
+This section is the authoritative reconciliation of the earlier conceptual model in Sections 3–4 and the detailed baseline in Sections 9.5, 9.6 and 9.8. Where those earlier sections describe product-level stock identity, they are superseded by this section and the confirmed variant requirements in Sections 10.1 and 10.8. The existing `products` table remains the parent catalogue record; it is not the stock identity.
+
+#### Authoritative identity and relationships
+
+1. Every stock-tracked sellable item must resolve to exactly one `product_variants` row. A product without selectable options still has one default variant, as specified in Section 10.1.
+2. `product_variants.product_id` references the parent `products.id`. A variant belongs to one parent product; a parent product may have multiple variants.
+3. Inventory is scoped by `(location_id, variant_id)`. The `inventory` table must have a foreign key to `product_variants.id` and a unique constraint on `(location_id, variant_id)`. It must not use a unique `product_id + location_id` stock row.
+4. Every stock movement references the exact `variant_id` and `location_id`. A parent `product_id` may be retained as a redundant, validated reporting/reference field or obtained through the variant relationship; it must never replace the variant stock identity.
+5. Every stock-tracked POS `sale_items` row references `variant_id`. Retain `product_id` only where useful for reporting or historical linkage, and validate that it is the parent of the referenced variant. Preserve product name, variant description, SKU/barcode and price as immutable transaction-time snapshots.
+6. Online order items must also resolve to the purchased `variant_id`. Existing online order rows that currently contain only `product_id` require an explicit, reviewed mapping to a default or newly created variant before the new inventory model is activated.
+7. Supplier purchase lines, accepted goods receipts, returns/restock records, stock counts, adjustments and low-stock thresholds must all reference the same variant and location identity. No workflow may create or adjust stock against a parent product alone.
+8. SKU is the stable internal identifier for a variant. Barcode is an optional lookup identifier. Neither barcode nor SKU substitutes for the database foreign key `variant_id`.
+
+#### Corrected inventory schema
+
+The authoritative inventory summary is:
+
+| Column | Type | Rules |
+|---|---|---|
+| id | BIGINT | PK, auto-increment |
+| location_id | BIGINT | NOT NULL, FK to inventory_locations |
+| variant_id | BIGINT | NOT NULL, FK to product_variants |
+| on_hand_quantity | INT | NOT NULL, >= 0 |
+| reserved_quantity | INT | NOT NULL, >= 0 and <= on_hand_quantity |
+| version | BIGINT | NOT NULL, default 0; use where optimistic locking is selected |
+| updated_at | DATETIME(6) | NOT NULL |
+
+Unique constraint: `location_id + variant_id`. Compute `available_quantity = on_hand_quantity - reserved_quantity`; do not store a separately editable available balance. Reorder thresholds belong to a separate variant/location threshold record as specified by Section 10.23, not to a product-level inventory row.
+
+#### Corrected stock movement identity
+
+The append-only `stock_movements` ledger must include:
+
+- `variant_id` and `location_id` as mandatory foreign keys.
+- `quantity_delta`, `on_hand_after`, `reserved_delta` and `reserved_after` to describe the exact transition.
+- A controlled movement type, reference type/reference ID, idempotency key, actor, timestamp and reason where applicable.
+- Optional immutable product/variant/SKU description snapshots for readable audit history.
+
+The inventory summary update and corresponding movement insert must commit in the same transaction. Correct errors with compensating movements; never edit or delete historical movements.
+
+#### Corrected sale-item identity
+
+Each stock-tracked sale item must include:
+
+- `sale_id` FK to the POS sale.
+- `variant_id` FK to the exact sold variant.
+- Optional `product_id` FK for convenient parent reporting, validated against the variant.
+- Immutable product-name, variant-attribute, SKU/barcode, quantity, unit-price, discount, applicable tax-treatment and line-total snapshots.
+- Prescription linkage only through the separately authorized prescription-record model in Section 10.18; do not make unrestricted prescription contents part of the ordinary sale-item record.
+
+A historical sale item must remain understandable even if its product or variant is later renamed, deactivated or archived. Foreign-key deletion rules must preserve transaction history.
+
+#### Superseded baseline text and implementation rule
+
+- Section 3's product-level inventory description and Section 4's corresponding product-to-inventory relationship are conceptual history only; use the variant/location relationships above.
+- Section 9.5's one-row-per-product inventory definition and its `product_id + location_id` uniqueness are superseded.
+- Section 9.6's product-only stock-movement identity is superseded; movements are variant/location scoped.
+- Section 9.8's product-only sale-item identity is superseded; stock-tracked sale items reference a variant.
+- Section 10.1's variant model and Section 10.8's shared reservation lifecycle remain in force and are made explicit by this reconciliation.
+
+#### Migration safety requirements
+
+1. Create and validate variant mappings before migrating inventory balances. Do not infer that every existing product has only one physical variant if its current specifications or stock history indicate otherwise.
+2. Reconcile physical counts, current `products.stockQuantity`, active online reservations and pending/paid order state. The existing stock field currently behaves like available stock because reservation subtracts from it; it must not be copied directly into the new `on_hand_quantity` without calculating the corresponding reserved quantity.
+3. Backfill `variant_id` on online order items and all other existing stock references, preserving original order/payment identifiers and historical snapshots.
+4. Detect and resolve missing, ambiguous or duplicate mappings before cutover. Do not silently assign an order line to an arbitrary variant.
+5. Introduce additive, versioned database migrations and a controlled cutover. Keep the old checkout/reservation path operating until the new variant-aware path is deployed and tested end-to-end.
+6. Verify concurrent online reservations, payment success, uncertain Razorpay attempts, cancellation/expiry release, POS sale contention and idempotent retries against the same variant/location row.
+7. Do not remove or stop maintaining the legacy stock field until reconciliation, rollback criteria and production cutover have been approved and tested.
+
+This reconciliation is a design-document correction only. It does not create entities, change APIs, execute SQL, alter existing stock, or authorize a production migration.
