@@ -621,3 +621,41 @@ The current implementation treats each product row as one stock identity: `produ
 6. Verify existing online orders, pending reservations, duplicate payment verification, cancellation/expiry and POS sales against staging data before enabling variant-level stock in production.
 
 **Important:** this decision changes both customer catalogue behaviour and the stock identity used by checkout/POS. It is not merely a visual selector. No frontend or backend implementation is included in this Phase 1 document update.
+
+
+### 10.6 Initial POS staff roles and permissions
+
+The initial POS permission model uses three roles. These roles are a starting authorization policy for the first shop location; they do not imply that the existing admin authentication implementation already supports staff accounts or these permissions. Inspect and design the authentication/authorization integration before implementation.
+
+| Capability | OWNER_ADMIN | MANAGER | CASHIER |
+|---|---|---|---|
+| Access POS and create sales | Yes | Yes | Yes |
+| Accept and record POS tender | Yes | Yes | Yes |
+| View and reprint permitted invoices | Yes | Yes | Yes |
+| View customer information | Full access | Operational access | Minimum details needed for the sale |
+| View operational reports | Yes | Yes | No, unless explicitly permitted |
+| Manage staff accounts and roles | Yes | No | No |
+| Change business/POS settings | Yes | No | No |
+| Create/edit/deactivate catalogue products and variants | Yes | As explicitly granted | No |
+| Perform manual stock adjustments | Yes | Yes, with reason and audit record | No |
+| Apply discounts | Yes | Within configured policy; approve exceptions | Only within a configured cashier limit |
+| Approve discounts above cashier limit | Yes | Yes, within manager authority | No |
+| Void a completed sale | Yes, with reason and audit record | Yes, with reason and audit record | No |
+| Approve/perform returns and refunds | Yes, with reason and audit record | Yes, with reason and audit record | No |
+| Delete or rewrite completed sales/payment history | No routine deletion; preserve audit history | No | No |
+
+#### Authorization and audit requirements
+
+- Enforce every permission in the Spring Boot backend service/controller layer. Hiding or disabling a frontend button is not authorization.
+- Give every staff member an individual account. Do not use shared cashier or manager credentials. Staff identity must be attributable to every sale and sensitive action.
+- A staff account must have an assigned role, an active/disabled state and a controlled account lifecycle. Owner/Admin alone can create staff accounts, assign roles and disable accounts.
+- Cashiers may create and fully settle sales, record permitted tender types, and view/reprint invoices. They must not edit or delete completed sales, alter recorded payments, adjust stock, approve their own restricted actions, or issue refunds independently.
+- Managers may perform operational approvals within their assigned authority. Actions such as stock adjustments, voids, returns and refunds require a reason and an audit record. A manager must not grant themselves Owner/Admin privileges.
+- Discount limits must be configurable by the business; do not hardcode a percentage or amount in the schema. A discount exceeding the cashier's configured limit requires manager or Owner/Admin approval. Record the applied discount, approving staff member and reason when approval is required.
+- Record actor, timestamp, action, affected sale/payment/variant, before-and-after values where relevant, and reason for sensitive operations including price overrides, discounts, stock adjustments, voids, returns and refunds.
+- Never implement a permission path that silently deletes or rewrites completed financial history. Correct mistakes through explicit void, return, refund or reversing inventory transactions.
+- The exact mapping to existing admin authentication, JWT claims, staff identity tables and endpoint permissions must be reviewed before coding. Do not assume the current single-admin login can safely represent multiple staff roles.
+
+**Confirmed initial policy:** three roles — OWNER_ADMIN, MANAGER and CASHIER — with backend-enforced permissions, individual staff accounts and auditable sensitive actions. Exact discount thresholds and detailed endpoint-to-permission mapping remain implementation decisions.
+
+**Phase 1 remains a design document only.** This section does not implement staff accounts, authentication changes, authorization code, database tables or UI.
