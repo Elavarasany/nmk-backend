@@ -1144,3 +1144,159 @@ A historical sale item must remain understandable even if its product or variant
 7. Do not remove or stop maintaining the legacy stock field until reconciliation, rollback criteria and production cutover have been approved and tested.
 
 This reconciliation is a design-document correction only. It does not create entities, change APIs, execute SQL, alter existing stock, or authorize a production migration.
+
+## 10.26 Transaction schema reconciliation — sales, payments, fulfilment, invoices, returns and refunds
+
+This section consolidates the transaction model for the initial POS release. It is authoritative where earlier conceptual descriptions in Sections 3, 4 and 9 leave transaction ownership, status transitions or relationships incomplete. It must be implemented additively and must preserve the existing online order and Razorpay workflow. The POS sale model is separate from `customer_orders` and `order_items`; online orders must not be copied into POS sales merely to share reporting or invoice numbering.
+
+### Transaction ownership and core relationships
+
+1. A completed physical-store transaction is represented by one `sales` record. It has one or more `sale_items`, one or more successful tender allocations, one invoice identity/snapshot, and a fulfilment record when collection is not immediate.
+2. Every stock-tracked `sale_items` row references the exact `variant_id` and `location_id` as required by Section 10.25. It also retains immutable product name, variant description, SKU, quantity, unit price, discount allocation, applicable tax treatment and line-total snapshots. Historical rendering must not depend on the current catalogue.
+3. A POS sale may have a nullable `customer_id` for walk-in transactions. Customer name/contact details required on the invoice, where collected, are transaction-time snapshots and must not change when the customer profile is edited.
+4. Online orders remain in `customer_orders` and `order_items`, with their existing provider/payment identifiers and lifecycle. They share the customer, variant inventory, invoice-numbering policy and reporting dimensions where appropriate, but are not POS `sales`.
+5. Use a common invoice-number allocation mechanism scoped by location and Indian financial year for both online and POS documents if both channels issue invoices under the same business sequence. The allocator must be concurrency-safe and must not rely on `MAX(invoice_number) + 1`. A separate channel/document-type sequence is permissible only after the accountant/adviser confirms that policy. Financial-year boundaries and timezone are based on India Standard Time. Preserve issued numbers; void/cancelled documents remain auditable and numbers are never reused.
+6. The sale, sale items, inventory deduction, stock movement, tender records, invoice snapshot and initial fulfilment state must be committed atomically where they are part of one POS completion operation. A failed transaction must not leave a paid sale without its corresponding stock and audit records, or stock deducted without a sale.
+
+### Authoritative POS sales schema
+
+The logical `sales` record should include, at minimum:
+
+| Field | Purpose and rule |
+|---|---|
+| `id` | Primary key |
+| `sale_number` | Immutable internal sale reference, unique |
+| `invoice_number` | Issued invoice identifier; unique within the approved numbering scope |
+| `location_id` | Shop/location foreign key |
+| `customer_id` | Nullable customer foreign key |
+| `channel` | POS; online orders remain in their existing online tables |
+| `sale_status` | Controlled lifecycle status |
+| `currency_code` | INR for the initial release |
+| `subtotal_amount` | Sum of pre-discount item amounts |
+| `item_discount_amount` | Item-level discount total |
+| `bill_discount_amount` | Bill-level discount total |
+| `tax_amount` | Zero unless a legally applicable and approved tax treatment is introduced; NMK is currently not GST-registered |
+| `rounding_amount` | Explicit rounding adjustment, if used |
+| `total_amount` | Backend-calculated amount due |
+| `completed_at` | Set only when sale completion conditions are satisfied |
+| `created_by`, `created_at`, `updated_at` | Actor and audit timestamps |
+
+Initial POS status semantics:
+
+- `DRAFT`: mutable cart/checkout state; not an issued sale, invoice or stock deduction.
+- `COMPLETED`: fully paid sale, stock deduction and invoice issuance have committed.
+- `VOIDED`: only through a controlled, authorized void process with a reason and linked reversal/compensating records. Do not erase the original sale or pretend a completed transaction never occurred.
+- Returns and refunds are separate records and do not change a completed sale back into a draft or delete it.
+
+If the implementation needs an intermediate payment-attempt state, model it explicitly (or in a checkout/payment-attempt table); do not overload `COMPLETED`. A sale must not be marked completed merely because the browser submitted a payment form.
+
+### Sale items and calculation snapshots
+
+Each `sale_items` row must reference `sale_id`, `variant_id`, `location_id` (directly or through an unambiguous sale/location relationship), and retain:
+
+- Product name, variant attributes/description, SKU and optional barcode snapshots.
+- Quantity as a positive integer.
+- Unit price and gross line amount.
+- Item discount amount and discount type/value snapshots where needed for audit.
+- Allocated bill-level discount, so the historical net line value can be reconstructed.
+- Applicable tax rate/category and tax amount only if a lawful tax treatment is later configured; do not label ordinary amounts as GST collected.
+- Net line total and currency.
+- Prescription linkage only to the separately permissioned/versioned prescription record model in Section 10.18; do not copy prescription contents into ordinary sale rows.
+
+The backend is authoritative for price, discount allocation, rounding and totals. Recalculate from trusted catalogue/pricing data and approved discount rules; never trust client-supplied totals. Use DECIMAL precision consistently and define a single rounding policy before implementation. Enforce positive quantity, non-negative monetary components, and that line/bill totals reconcile to the sale total.
+
+### Payment and tender model
+
+A POS sale supports one or more tender allocations to support split tender (for example cash plus UPI). The logical payment/tender record should include:
+
+| Field | Purpose and rule |
+|---|---|
+| `id` | Primary key |
+| `sale_id` | POS sale foreign key |
+| `method` | CASH, UPI, CARD, or another explicitly enabled method |
+| `amount` | Positive amount allocated to this tender |
+| `status` | PENDING, CONFIRMED, FAILED, CANCELLED or REFUNDED/partially refunded as derived from refund records; define exact enum/check policy |
+| `provider` | Nullable provider identifier for electronic tender |
+| `provider_reference` | Nullable transaction/reference identifier |
+| `idempotency_key` | Unique operation key to prevent duplicate capture/recording |
+| `accepted_by`, `accepted_at` | Staff and timestamp |
+| `created_at`, `updated_at` | Audit timestamps |
+
+Rules:
+
+1. A sale is eligible for `COMPLETED` only when the sum of confirmed tender allocations equals the backend-calculated amount due, subject to the explicitly defined rounding rule. Do not allow underpayment or an unexplained overpayment.
+2. Split tender rows must be created and reconciled atomically with sale completion. Repeated submission with the same idempotency key must return the original result rather than create another tender, invoice or stock movement.
+3. For cash, confirmation means the cashier has accepted the cash and the operation has been committed. For UPI/card, confirmation must follow the configured provider/terminal verification process; a screenshot, client assertion or unverified reference is not proof of settlement.
+4. Distinguish payment acceptance at the shop from subsequent bank settlement. Reconciliation reports must not claim that UPI/card money has reached the bank solely because POS accepted the payment.
+5. Store no card number, CVV, UPI PIN, payment credentials or provider secrets. Preserve provider references and verified event/callback identifiers only.
+6. Refunds are separate linked records. Do not overwrite the original tender amount or mark a tender fully refunded until confirmed refund totals support that state.
+7. Existing Razorpay online payments remain under the current online payment/order model. Any future shared payment abstraction must preserve Razorpay order IDs, payment IDs, webhook event IDs, signature verification, amount/currency checks and current idempotency protections. Do not route online payment through POS tender tables as an unreviewed shortcut.
+
+### Fulfilment is separate from payment and sale completion
+
+The POS initial release supports immediate collection and fully paid collect-later only. Fulfilment must not be represented by payment status.
+
+A `sale_fulfilments` record (or equivalent one-to-one state record) should include:
+
+- `sale_id` unique foreign key.
+- `fulfilment_status`: `PENDING_PREPARATION`, `READY_FOR_COLLECTION`, `COLLECTED` or `CANCELLED`.
+- Expected collection time, ready time and collected time.
+- Staff identifiers for preparation/ready/collection actions.
+- Last update timestamp and optional customer-facing note that excludes sensitive prescription data.
+
+Record every status transition in an append-only `fulfilment_events` history with prior/new status, actor, timestamp and reason. Validate transitions on the backend. Immediate collection may transition to `COLLECTED` as part of the sale completion transaction; collect-later begins at `PENDING_PREPARATION`. A collect-later sale is still fully paid and its stock is deducted once at sale completion. Marking ready or collected must not deduct stock again. No home delivery or partial fulfilment is included in the initial release.
+
+### Invoice allocation and immutable invoice snapshots
+
+Use an invoice sequence/allocation table keyed by the approved combination of location, financial year and document sequence (and document type/channel only if the accountant approves separate sequences). Lock/update the sequence row transactionally to allocate the next number. Add a unique database constraint to the final invoice number and its scope. Do not derive the next number from existing invoice rows.
+
+Persist an immutable invoice snapshot at issuance, including:
+
+- Invoice number, issue timestamp and financial-year scope.
+- Seller legal/trading name and address details as approved for the invoice.
+- Customer details actually supplied for that transaction, if any.
+- Item descriptions, SKU, quantity, unit prices, discounts and totals.
+- Payment/tender summary and sale reference.
+- Applicable tax wording/fields only after professional confirmation. NMK is currently not GST-registered; the initial document must not state or imply GST was collected, and must not invent a GSTIN.
+- Any legally required terms or return information after adviser review.
+
+The snapshot is the source for historical reprints; never rebuild an old invoice from the current product/customer profile. Reprinting must not allocate a new invoice number, create a payment, change stock or alter the sale. Record reprint actor/time/reason in an invoice audit event. A voided invoice remains retained with its status and reason; never recycle its number. Support 80 mm thermal output as the primary layout, optional 58 mm and A4/PDF rendering without making printer model a database dependency. Prescription values/images must not appear on the ordinary invoice by default.
+
+Online invoice issuance must be integrated with the existing online order lifecycle without creating a duplicate POS sale. The exact event at which an online invoice is legally issued (for example, confirmed payment/dispatch as advised by the accountant) must be explicitly selected and consistently enforced.
+
+### Returns, inspection, stock disposition and refunds
+
+Returns must be independent transactions linked to the original completed sale and original sale item. Define at least:
+
+- `returns`: unique return reference, original sale, customer if applicable, reason, requested/approved/rejected status, requesting/approving staff, timestamps and notes.
+- `return_items`: original sale-item reference, requested quantity, approved quantity, unit refund basis and calculated amount. Enforce cumulative approved/returned quantity not exceeding the quantity sold less prior accepted returns.
+- `return_inspections`: inspection outcome, inspected quantity, inspector, time, condition and reason.
+- `return_stock_dispositions`: quantity and disposition such as RESTOCK_SELLABLE, DAMAGED, NON_SELLABLE or SUPPLIER_RETURN_PENDING. Only physically inspected and approved resale quantity may increase on-hand inventory; each restock writes a variant/location stock movement exactly once.
+- `refunds`: return reference, amount, method/provider, status, idempotency key, provider reference, initiator/approver, reason and timestamps.
+- `refund_allocations` (or equivalent): links refund amounts to the original tender/payment rows so the total refunded against a tender cannot exceed its confirmed captured/accepted amount, subject to approved policy.
+
+Keep return approval, inspection, stock disposition and refund confirmation as distinct states. A return request does not itself restock inventory or prove money was refunded. A refund request does not become successful until the provider confirms it or an authorized cash refund is recorded under policy. Preserve failed/pending refund attempts for reconciliation; never silently retry a non-idempotent provider operation.
+
+Initial permissions follow Section 10.12: manager approval within configured authority and owner override; cashier cannot independently approve refunds. Exchanges are represented as a linked return plus a new sale, with the difference collected or refunded through the corresponding tender/refund workflow. Do not mutate the original sale item or invoice to represent an exchange. Online returns remain linked to the original online order/payment and must not be treated as POS returns without a reviewed cross-channel workflow.
+
+### Voids, cancellations and compensating records
+
+1. A draft checkout may be abandoned without a financial transaction, invoice or stock movement.
+2. A completed POS sale cannot be physically deleted. A valid void requires authorization, reason, audit event and explicit compensating inventory/payment/invoice treatment. If money was captured, use the refund process; do not merely set a status to VOIDED.
+3. Do not release stock or increase inventory twice when a POS sale is voided or returned. Use idempotent compensating stock movements linked to the original movement and approved business event.
+4. A cancellation before completion must release any reservation/hold exactly once. The initial POS design does not require a persistent POS stock reservation unless a later approved workflow introduces one.
+5. Preserve immutable original sale, tender, invoice and stock-movement history. Corrections are new linked records.
+
+### Integrity, concurrency and acceptance criteria
+
+- Use InnoDB foreign keys and unique constraints for sale number, invoice number/scope, provider references where appropriate, idempotency keys and one fulfilment record per sale.
+- Lock the variant/location inventory row and verify available quantity immediately before sale completion. Commit stock decrement, stock movement, sale items, confirmed tenders, invoice snapshot and fulfilment state atomically.
+- Lock invoice sequence allocation within the same transaction as issuance. A failed transaction must not consume an invoice number unless the approved legal numbering policy requires retaining a voided number; in either case, never reuse an issued number.
+- Enforce payment total equals amount due before completion. Enforce refund totals do not exceed the refundable captured/accepted amount and cumulative returned quantities do not exceed sold quantities.
+- Use idempotency for sale submission, tender acceptance, online payment confirmation, invoice issuance, return restock and refund initiation/confirmation.
+- Apply backend authorization and audit logging to discounts, voids, returns, refunds, invoice reprints and fulfilment changes. Keep the existing admin login working during role migration, as required by Section 10.21.
+- Use IST consistently for financial-year and shop operational dates; store timestamps in the agreed database convention and convert at boundaries.
+- Define all status transitions and invalid-transition responses before API implementation. Never accept arbitrary status strings from the client.
+- Acceptance tests must cover split tender, under/overpayment rejection, duplicate submission, concurrent final-unit sales, rollback after tender/stock/invoice failure, immediate and collect-later fulfilment, reprint without side effects, partial and repeated returns, damaged versus sellable disposition, failed/pending/confirmed refunds, exchange difference collection/refund, online Razorpay success/duplicate webhook/uncertain state, financial-year invoice rollover and void-number handling.
+
+This section is a target design correction only. It does not create tables, alter existing online checkout/payment code, issue invoices, process refunds, change inventory, or authorize API/schema/application changes. Before implementation, confirm invoice legal wording and issuance timing with the accountant/adviser, select the final invoice sequence scope, define supported electronic POS payment verification, and approve the exact status/permission matrix.
