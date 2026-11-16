@@ -22,7 +22,7 @@
 - No production database changes.
 - No automatic conversion of existing orders into sales.
 - No destructive changes to existing tables.
-- No assumption about GST registration, GST rates or invoice compliance until the business confirms its status and requirements.
+- NMK is currently **not GST-registered**. The initial POS design must not assume a GSTIN or apply GST as though NMK were registered. Keep the sales and invoice model extensible so applicable tax handling can be introduced if registration status changes. Confirm the legally appropriate invoice format and other applicable obligations before launch.
 
 ## 2. Current implementation inspected
 
@@ -39,6 +39,10 @@ The following existing backend files were inspected on the `master` branch:
 - `service/PaymentVerificationService.java`
 - `service/RazorpayService.java`
 - `controller/RazorpayController.java`
+- `controller/OrderController.java`
+- `controller/AdminOrderController.java`
+- `controller/ProductController.java`
+- `service/StockReservationScheduler.java`
 - `src/main/resources/application.properties`
 
 ### Existing product and stock behaviour
@@ -68,7 +72,18 @@ Therefore, the current `stockQuantity` should not be assumed to mean the shop's 
 4. Paid/fulfilled order history and any pending cleanup work.
 5. Any manual stock adjustments not represented in the database.
 
-The exact scheduled reservation-cleanup entry point still needs to be located and reviewed before implementation.
+The scheduled cleanup entry point has now been located in `service/StockReservationScheduler.java`. It runs every 60 seconds, queries expired reservation IDs, checks the corresponding Razorpay order/payment attempts before releasing stock, and retains the reservation if the payment state is unsettled, successful or cannot be established. Before release it locks the order and rechecks `stockReserved`, pending payment status and expiry, then calls the existing order-service release path. Preserve this fail-closed behaviour during the inventory migration.
+
+### Additional stock and transaction audit findings
+
+- `controller/OrderController.java` creates a pending order/reserves stock before creating the Razorpay order. If payment-order creation fails, it attempts to release the reservation. The failure path should remain idempotent and be covered by integration tests.
+- `controller/AdminOrderController.java` routes cancellation of eligible unpaid pending orders through `OrderService`, but paid-order cancellation is rejected because a refund workflow is not implemented. Preserve this restriction until returns/refunds are built.
+- `controller/ProductController.java` exposes product creation that saves directly through `ProductRepository`, bypassing `ProductService` validation. Product creation should eventually be routed through one validated service path.
+- Product administration currently allows stock quantity to be changed through product updates. This is not an adequate long-term inventory workflow: stock changes must become explicit, authorized adjustments with a reason and a stock-movement record.
+- The inspected admin order controller includes a clear-all-orders operation. Historical financial/order records should not be routinely deleted; replace destructive history-clearing workflows with controlled retention/archival and auditable operations before production POS history is introduced.
+- No dedicated stock movement ledger exists in the inspected entity set. The new ledger must be written atomically with every inventory change.
+
+The scheduler checks Razorpay before releasing stock, but it is not a substitute for reconciliation. Monitoring and operational handling are still needed for reservations that remain held because Razorpay is unavailable or the payment state is ambiguous.
 
 ## 3. Target conceptual model
 
@@ -262,7 +277,7 @@ Receiving stock should increase on-hand inventory and write stock movements in t
 
 ## 6. Safe migration sequence — proposed, not executed
 
-1. Confirm GST registration and invoice requirements.
+1. Confirm the invoice format and applicable legal requirements for a business that is currently not GST-registered. Do not calculate or represent GST as collected unless the business becomes registered and the rules are updated.
 2. Finish auditing the online reservation cleanup/scheduler path and all stock-changing code paths.
 3. Back up the current database and verify that a restore is possible.
 4. Take a physical stock count and reconcile it against database stock and active online reservations.
@@ -285,12 +300,12 @@ Receiving stock should increase on-hand inventory and write stock movements in t
 
 ## 7. Open decisions before implementation
 
-- Is NMK GST-registered? What GSTIN and invoice rules should apply? Do not infer GST registration or tax rates.
+- NMK is currently not GST-registered. Confirm the required non-GST invoice wording/format with the business's accountant or appropriate adviser; revisit tax configuration if registration status changes.
 - Should customer phone numbers be mandatory for creating a saved customer profile? Walk-in sales should still be possible without one.
 - What is the desired invoice prefix and numbering policy?
 - Which staff roles are required initially, and how do they map to the existing admin authentication model?
 - What are the physical stock count and outstanding online reservations at cutover?
-- What is the actual scheduled cleanup component for expired reservations?
+- The expired-reservation scheduler is `StockReservationScheduler`; verify its runtime scheduling configuration and add monitoring/test coverage before production cutover.
 - Are multiple branches/locations required? Initial design assumes one shop location but should avoid blocking future expansion.
 
 ## 8. Immediate next audit task
