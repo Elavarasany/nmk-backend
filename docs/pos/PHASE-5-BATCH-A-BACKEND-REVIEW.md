@@ -1,6 +1,6 @@
 # Phase 5 — Batch A Backend Review
 
-**Status:** Inspection complete; implementation intentionally held pending baseline and compatibility checks.  
+**Status:** Flyway dependencies added and locally build-tested; activation intentionally held pending baseline and compatibility checks.  
 **Repository:** `Elavarasany/nmk-backend`, branch `master`  
 **Inspected files:** `nmk-backend/pom.xml`, `nmk-backend/src/main/resources/application.properties`  
 **Inspection source:** GitHub `master` at the time of this review.
@@ -14,7 +14,7 @@
 - MySQL Connector/J: present, runtime scope.
 - Spring Data JPA: present.
 - H2: present for tests.
-- Flyway: no Flyway dependency is currently declared.
+- Flyway: `spring-boot-starter-flyway` and `flyway-mysql` are now declared using Spring Boot dependency management.
 - No explicit Flyway version or MySQL Flyway database module is present.
 
 ### Application configuration
@@ -113,3 +113,33 @@ The repository's `src/main/resources` directory currently contains `application.
 
 The current `ddl-auto=update` setting remains a release blocker for production Flyway activation. The intended target is a controlled Hibernate validation mode after schema parity is proven on staging, but no mode change is authorized by this review.
 
+
+
+## 9. Dependency implementation and local verification (2026-11-16)
+
+The following code-only changes were committed to `master`:
+
+- Commit `aedad3b9c6940ffde62224ed1cfa25ac8069f742`: added `spring-boot-starter-flyway` and `flyway-mysql` without explicit versions, using Spring Boot 4.1.2 dependency management.
+- Commit `a7675abcc2b5648dddd996e5615416e7866e8d0c`: added `spring.flyway.enabled=false` to `application.properties`.
+
+The user confirmed both standalone Maven dependency-resolution checks succeeded and then confirmed `mvn clean test` completed successfully after pulling these changes.
+
+**Interpretation:** dependency resolution and the current backend test/build lifecycle pass locally. This does not prove that Flyway can baseline the existing Aiven schema, that the deployed environment uses the same configuration, or that the application is safe to migrate.
+
+Flyway remains explicitly disabled. `spring.jpa.hibernate.ddl-auto=update` remains unchanged. No migration scripts were added and no database was changed.
+
+## 10. Next required work — complete live schema metadata capture
+
+Before selecting a Flyway baseline version, capture the complete DDL and metadata for every existing application table on a sanitized staging copy (or use read-only metadata access for the live schema). The earlier Phase 1 transcript truncated some `SHOW CREATE TABLE` output and did not establish all table engines/collations.
+
+Required capture:
+- Full `SHOW CREATE TABLE` for all ten application tables.
+- For each table: engine, table collation, row format, and create options.
+- Database and server character set/collation.
+- SQL mode and timezone relevant to the application connection.
+- Confirm whether `flyway_schema_history` already exists; do not create or modify it during inspection.
+- Confirm all active deployment profiles and externally supplied Spring configuration without exposing credentials.
+
+Use metadata-only/read-only inspection. Do not export customer/order rows, prescription JSON, payment payloads, credentials, or secrets. Do not run `flyway baseline`, `migrate`, `repair`, or any DDL against Aiven.
+
+After capture, compare the actual schema against entity mappings and decide the baseline strategy on a disposable restored staging database.
