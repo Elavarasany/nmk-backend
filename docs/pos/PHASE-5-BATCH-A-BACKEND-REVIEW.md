@@ -78,3 +78,38 @@ Batch A is accepted only when:
 - No Aiven production migration has been executed as part of this review.
 
 **Current result:** inspection only. No code, dependency, configuration or database changes were made in this review.
+
+
+## 7. Verified Spring Boot 4.1.2 Flyway dependency guidance
+
+The official Spring Boot 4.1.2 dependency coordinates list both:
+- `org.springframework.boot:spring-boot-starter-flyway`
+- `org.flywaydb:flyway-mysql`
+
+The Spring Boot 4.1.2 managed dependency coordinates list Flyway `12.4.0`, including `flyway-mysql`. Therefore the preferred initial dependency approach, subject to a local Maven resolution/build check, is to use the Spring Boot-managed versions rather than hardcoding an unrelated Flyway version.
+
+For this MySQL application, the intended dependency pair is:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-flyway</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.flywaydb</groupId>
+    <artifactId>flyway-mysql</artifactId>
+</dependency>
+```
+
+Do not add a separate `flyway-core` dependency unless the resolved dependency graph proves it is needed; avoid redundant declarations. Do not commit these dependencies yet: first run Maven dependency resolution/build locally and verify the project's exact Boot 4.1.2 dependency management.
+
+Official references:
+- Spring Boot 4.1.2 managed coordinates: https://docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html
+- Spring Boot database initialization guidance: https://docs.spring.io/spring-boot/4.2/how-to/data-initialization.html
+
+## 8. Configuration and profile inspection
+
+The repository's `src/main/resources` directory currently contains `application.properties` and a `static` directory; no `application-<profile>.properties` file was listed there. The active deployment environment and any externally supplied configuration still need checking before a migration feature is enabled.
+
+The current `ddl-auto=update` setting remains a release blocker for production Flyway activation. The intended target is a controlled Hibernate validation mode after schema parity is proven on staging, but no mode change is authorized by this review.
+
