@@ -755,3 +755,19 @@ Do not switch the source of truth by copying `products.stockQuantity` directly i
 9. Retain a documented rollback point and compatibility plan. Do not remove or stop maintaining the legacy stock field until every application path has been migrated and verified.
 
 **Confirmed Phase 1 policy:** website orders and POS sales share one variant/location inventory system; online checkout reserves available stock; verified payment converts the reservation into a stock deduction; safe failure/expiry releases only the reservation; POS deducts unreserved stock immediately on fully paid sale completion; and approved returns restock only after inspection. This is a target design, not a claim that the current implementation already behaves this way. No application code, SQL migration, database record or production configuration is changed by this section.
+
+### 10.9 SKU and barcode strategy
+
+Every sellable product variant must have an internal NMK SKU. The SKU is the primary human-readable stock identifier used by POS, inventory operations, stock movements and reporting.
+
+1. **SKU generation:** Generate SKUs within NMK using a controlled, collision-safe sequence (for example, `NMK-000001`). Enforce global uniqueness across the catalogue. Do not derive the canonical SKU solely from product name, colour, size or other mutable attributes; changing a product label or variant attribute must not change its SKU.
+2. **Required per variant:** Every active sellable variant, including a product with no selectable options (its default variant), must have one SKU before it can be sold through POS or online checkout.
+3. **Barcode is optional:** Store a manufacturer barcode when one is available and verified. A variant can be sold without a barcode. Do not assume every supplier barcode is present, valid or unique.
+4. **Barcode uniqueness and normalization:** Normalize barcode values consistently before comparison and storage. Enforce uniqueness for non-empty normalized barcode values across the catalogue. Keep missing barcodes as NULL rather than empty strings. Reject duplicate or invalid barcode assignments instead of silently assigning them to another variant.
+5. **POS product lookup:** Support scanning a barcode as keyboard input. Also allow staff to find a variant by exact SKU and search by product name or variant attributes (such as colour and size). Barcode scanning must not be the only way to find or sell an item.
+6. **NMK-generated barcodes:** The data model may support an NMK-generated barcode later if operationally required, but do not assume that one is required for the initial release. The internal SKU remains mandatory regardless.
+7. **Controlled legacy assignment:** During migration, review the existing product catalogue and map each sellable variant to a stable SKU. Identify and resolve duplicate or malformed existing barcode values before enforcing uniqueness. Do not blindly generate variants or identifiers without reconciling the catalogue and existing online order references.
+8. **Audit and immutability:** Do not silently change or reuse an SKU after sales or stock movements reference it. Any exceptional correction or barcode reassignment must be authorized and auditable, preserving historical transaction snapshots.
+
+This is a logical design rule only. It does not authorize immediate schema migration, automatic SKU assignment, barcode printing, or application-code changes. Those require a separately reviewed implementation and migration plan.
+
