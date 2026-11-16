@@ -1471,3 +1471,194 @@ Supplier payments/settlements should be recorded separately from goods receipts,
 10. Acceptance tests must cover concurrent shift opening, sale during close, cash-in/out approval, cash refund reconciliation, cash shortage/excess review, electronic tender reconciliation, role-denied operations, disabled staff sessions, approval expiry/reuse, partial purchase receipts, over-receipt rejection, damaged/rejected stock, duplicate receipt retries, purchase returns, supplier credits and full rollback when ledger insertion fails.
 
 This section defines the target operational schema only. It does not create staff accounts, alter JWT/authentication behaviour, configure register hardware, post cash movements, create purchase orders, receive goods, change inventory or execute migrations. Before implementation, approve the exact permission matrix and approval limits, opening/closing policy, cash discrepancy threshold, supplier payment workflow, landed-cost allocation and final inventory valuation method.
+
+## 10.28 Final Phase 1 database consistency review — authoritative rules, gaps and implementation gates
+
+This review checks Sections 1–10.27 as one proposed design against the inspected current backend and the confirmed NMK business decisions. It does not certify executable DDL, replace a database-engine review, or authorize implementation. Where earlier sections conflict with this section, apply the precedence rules below. The most recent detailed reconciliations in Sections 10.25–10.28 take precedence over the earlier conceptual and baseline material.
+
+### A. Document precedence and canonical ownership
+
+Use this authority order when translating the document into a physical schema:
+
+1. Confirmed business decisions in Sections 10.1–10.24 remain the business-policy source unless explicitly revised by a later confirmed decision.
+2. Section 10.25 is authoritative for product variant identity, inventory identity and stock-movement identity.
+3. Section 10.26 is authoritative for POS sales, sale items, tender allocation, fulfilment, invoice snapshots, returns and refunds.
+4. Section 10.27 is authoritative for staff/permissions, register shifts, cash movements, suppliers, purchasing and goods receipts.
+5. This Section 10.28 resolves cross-section contradictions and lists remaining implementation blockers.
+6. Earlier Sections 3–4 and 9 are historical design baselines wherever later sections explicitly supersede them. Do not copy their superseded product-level inventory or payment definitions into migrations.
+
+The canonical transaction ownership is:
+
+- Existing `customer_orders` and `order_items` remain the online order/payment records and retain Razorpay identifiers and lifecycle.
+- `sales`, `sale_items`, POS tenders and POS fulfilment records represent physical-store sales only.
+- Both channels use the same authoritative variant/location inventory and append-only stock ledger.
+- Customer identity may be shared, but each transaction preserves its own customer and item snapshots.
+- Supplier purchases and receipts are procurement records, never POS sales or customer orders.
+
+### B. Cross-section corrections that must be applied before DDL
+
+#### 1. Inventory and variant foreign-key consistency
+
+The only valid stock identity is `(location_id, variant_id)`. The product-level inventory model in Sections 3, 4 and 9.5–9.6 is superseded.
+
+- `inventory` has a foreign key to `product_variants.id`, a foreign key to `inventory_locations.id`, and a unique constraint on `(location_id, variant_id)`.
+- `stock_movements`, reorder thresholds, POS sale items, online order-item mappings, purchase-order lines, goods-receipt lines, purchase returns, stock counts and adjustments all resolve to that same variant/location identity.
+- Parent `product_id` may be retained as a reporting snapshot or validated convenience reference, but never as the stock key.
+- Any table storing both `sale_id` and `location_id`, or both `variant_id` and parent `product_id`, must enforce that the redundant values agree with their parent records. Prefer deriving location from the sale where a duplicate column is not operationally required.
+- Enforce `on_hand_quantity >= 0`, `reserved_quantity >= 0` and `reserved_quantity <= on_hand_quantity`. `available_quantity` is derived only.
+- Inventory summary changes and their stock-ledger movements commit in one transaction. Ledger rows are append-only and corrections use compensating movements.
+
+The existing `products.stockQuantity` is not a safe migration source by itself. The cutover must reconcile physical count, active online reservations, paid/pending orders, manual changes and the current available-stock-like meaning of the legacy field. Do not enable variant-aware POS and online stock paths until every active order line has an unambiguous variant mapping and both paths use the same inventory row.
+
+#### 2. Reservation and sale movement semantics
+
+Use one signed movement convention throughout. For the canonical ledger, `quantity_delta` changes on-hand quantity and `reserved_delta` changes reserved quantity; each row records resulting balances. The following semantics are mandatory:
+
+| Event | on-hand delta | reserved delta | Result |
+|---|---:|---:|---|
+| Online reservation created | 0 | +Q | Available decreases; physical on-hand is unchanged |
+| Online reservation safely released | 0 | -Q | Available increases; physical on-hand is unchanged |
+| Online payment/order confirmed against reservation | -Q | -Q | Held units become sold; no second on-hand deduction |
+| POS sale completed | -Q | 0 | Only unreserved available units can be sold |
+| Approved return restock | +Q | 0 | Only inspected resale quantity is restored |
+| Accepted purchase receipt | +Q | 0 | Only physically accepted sellable units enter stock |
+| Purchase return physically dispatched | -Q | 0 | Stock leaves when handed back, not when requested |
+| Damage/write-off | -Q | 0 | Authorized physical loss from sellable on-hand |
+
+Every event must be idempotent and linked to its source record. A payment callback, scheduler retry, receipt retry or return retry must not apply the same quantity transition twice. If Razorpay status is unsettled or cannot be established, preserve the reservation as required by Sections 2 and 10.8; do not release it speculatively.
+
+#### 3. Tender, refund and cash-drawer accounting
+
+Section 10.26's tender records and refund records are authoritative. Section 10.27's cash movements are only for independent drawer movements and must not duplicate tender/refund effects.
+
+- A completed POS sale has confirmed tender allocations totaling exactly the backend-calculated amount due. Initial policy remains fully paid only; split tender is allowed. No customer credit or partially paid completed sale is introduced.
+- Cash tender affects drawer cash once through the original confirmed tender.
+- A confirmed cash refund reduces drawer cash once through its refund allocation/record.
+- `cash_movements` must represent non-sale CASH_IN/CASH_OUT and any separately approved opening-float correction only. Do not create a second `CASH_REFUND` cash movement for a refund already included from the refund table when calculating expected cash.
+- Opening float must have one authoritative source. Prefer `pos_shifts.opening_cash_amount` as the opening balance and exclude a duplicate OPENING_FLOAT movement from the expected-cash formula. If implementation instead chooses an opening-float movement, do not also add the shift opening amount. Never count both.
+- Expected cash = opening float + confirmed cash tenders + approved cash-in - approved cash-out - confirmed cash refunds, each counted exactly once.
+- UPI/card accepted at POS is not proof of bank settlement. Electronic tender reconciliation is separate from cash drawer closing.
+- Supplier cash payments from the drawer must be linked to the relevant shift and counted as cash-out once. Supplier payable/settlement records remain distinct from customer POS tenders.
+
+#### 4. Purchase receipt quantity semantics
+
+The phrase “missing quantity” in Section 10.27 must not be treated as goods physically received. Each receipt line must distinguish:
+
+- `delivered_quantity`: units physically present at the shop.
+- `accepted_quantity`: delivered units inspected and accepted into sellable inventory.
+- `rejected_quantity`: delivered units physically present but rejected/damaged and not added to sellable inventory.
+- `quarantined_quantity`: delivered units held pending inspection/disposition and not sellable.
+- `short_quantity`: ordered remaining units not delivered, calculated against the remaining order quantity and not part of delivered quantity.
+
+Require `delivered_quantity = accepted_quantity + rejected_quantity + quarantined_quantity` for a fully inspected receipt line. If inspection is incomplete, keep the line/receipt in a pending-inspection state and do not post uninspected units as sellable. Prevent cumulative delivered quantity from exceeding the approved outstanding ordered quantity unless an owner-authorized over-receipt exception is recorded. A later quarantine-to-sellable decision is a separately authorized stock movement.
+
+#### 5. Invoice numbering and channel scope
+
+Section 9.10's initial sequence key and Section 10.26's shared online/POS sequence requirement must be implemented as one approved policy, not two competing allocators.
+
+- Default design: one shared sequence per `location_id + financial_year + prefix` across online and POS invoices, with a unique constraint on the final invoice number.
+- If the accountant/adviser requires separate document-type or channel sequences, add the approved document-type/channel dimension to the sequence key before implementation and document the legal reason. Do not silently allocate independent online and POS counters.
+- Allocate under a row lock; never use `MAX(invoice_number) + 1`.
+- Financial year is India financial year and calculated in IST. Store the issuance timestamp consistently in the agreed database timezone convention.
+- Issued numbers are never reused. The policy for a failed transaction after number reservation, voided invoices and invoice issue timing must be finalized with the accountant/adviser. The implementation must preserve an auditable void/gap record if the approved numbering policy requires it.
+- An online invoice must remain attached to its online order and must not create a duplicate POS `sales` row.
+
+#### 6. Prescription ownership and private-file separation
+
+Prescription data must not be duplicated into sale-item JSON and a separate prescription record as two competing sources of truth.
+
+- Use a dedicated versioned prescription record with private object metadata and controlled access as required by Section 10.18.
+- A prescription record must have one unambiguous owner context: customer/prescription history and, where applicable, a specific online order item or POS sale item. If a single table supports both channels, enforce exactly one transaction-item owner (XOR rule) or use explicit linking tables with constraints that prevent ambiguous ownership.
+- Preserve the prescription snapshot/version used for a particular order or sale; later edits to a customer's reusable prescription must not rewrite historical transaction context.
+- MySQL stores structured values and private object keys/metadata only. Object storage remains private; access is backend-authorized and audited. Do not put prescription values or object URLs into ordinary invoices, barcode labels, logs or broad cashier responses.
+- Do not complete a transaction that requires a prescription if required data/file persistence has failed.
+
+#### 7. Staff, approval and audit consistency
+
+- Section 10.27's `staff_accounts` and Section 10.21's existing-admin migration must be treated as one staged identity migration. Do not create parallel, unlinked admin and staff identities that produce ambiguous actors.
+- Every new POS/purchasing/stock/cash/audit record must resolve to a staff actor. Nullable legacy actor columns may remain for historical backfill, but new privileged operations require a verified actor.
+- Role and permission checks occur in backend services/controllers. A role change or disabled account must invalidate/re-evaluate existing sessions promptly.
+- Approval requests are bound to exact target, amount/quantity, requested operation, requester, approver, expiry and one-time consumption. They cannot be replayed or altered after approval.
+- Audit events are append-only and must capture actor, action, target, timestamp, outcome, reason and approval linkage as applicable. Do not log credentials, tokens, prescription contents or private object URLs.
+- Reopening a closed shift, approving a refund, changing stock, receiving/returning goods or changing permissions must create explicit audit history; never rewrite the original business event.
+
+### C. Required logical constraints and indexes before implementation
+
+The physical DDL review must translate the following into actual MySQL foreign keys, unique keys, indexes, CHECK constraints where enforced by the selected MySQL version, and service-level transactional guards:
+
+| Area | Required constraint/index |
+|---|---|
+| Product variants | FK to parent product; stable unique SKU; normalized non-empty barcode uniqueness; active/default variant rules |
+| Inventory | Unique `(location_id, variant_id)`; non-negative on-hand/reserved; reserved not greater than on-hand |
+| Stock ledger | FK variant/location; index by variant/location/time and reference; unique idempotency key when supplied |
+| Online order items | Explicit variant mapping before cutover; index/FK to variant; preserve legacy product and order references |
+| POS sales | Unique sale number; unique final invoice number; FK location/customer/staff; indexes for location/date/status and customer/date |
+| Sale items | FK sale/variant; positive quantity; immutable snapshots; index by sale and variant |
+| POS tenders | FK sale/shift/staff; positive amount; idempotency uniqueness; provider reference uniqueness scoped to provider where appropriate |
+| Refunds | FK original sale/return/tender; idempotency; cumulative refund cap enforced transactionally |
+| Fulfilment | One state record per sale; append-only event history; actor/time/status indexes |
+| Invoice sequence | Unique approved sequence scope; transactional row lock; final invoice unique |
+| Registers/shifts | Unique register code per location; at most one OPEN/CLOSING shift per register enforced using a DB-compatible strategy plus row locking |
+| Cash movements | FK shift/staff/approver; idempotency; positive amount; controlled direction/type |
+| Suppliers/purchases | Supplier and location FKs; unique purchase/receipt numbers in scope; variant-level lines; receipt idempotency |
+| Goods receipts | Delivered disposition math; cumulative ordered quantity guard; accepted stock update and ledger insert atomic |
+| Purchase returns/settlements | Link to original receipt/order; idempotency; dispatch and financial settlement remain separate |
+| Customers | Non-unique normalized phone index initially; no automatic merge; optional unique policy only after duplicate analysis |
+| Prescriptions/files | Explicit owner relationship; private object key; access/audit indexes; no public URL |
+| Staff/permissions | Unique normalized username and stable codes; unique role-permission pair; session revocation/version mechanism |
+| Audit events | Actor/time/action/target indexes; append-only access policy; avoid sensitive payloads |
+
+MySQL partial unique indexes are not generally available in the same way as some other databases. For “unique only while active” requirements, use a reviewed MySQL-compatible design (for example, a generated nullable key or a locked parent-row guard) rather than assuming a filtered unique index exists. The selected MySQL version must be confirmed before relying on CHECK constraint enforcement or generated-column behaviour.
+
+### D. Current-backend compatibility and safe cutover gates
+
+The existing backend audit identified these compatibility risks:
+
+1. `Product` currently has one `stockQuantity` and no variant entity/SKU/barcode model. `ProductService` writes stock through product add/update; `ProductController` also has a direct repository-save creation path. Both must be reviewed and consolidated so product edits cannot bypass the inventory ledger.
+2. `OrderItem` and `OrderItemRequest` currently store product identity without a variant reference. Existing online cart/order requests, historical rows and Razorpay payment lifecycle need a deterministic variant mapping before variant stock is authoritative.
+3. `ProductRepository.reserveStock/releaseStock` and the existing 60-second reservation scheduler currently operate on product stock. Preserve the current fail-closed Razorpay checks while designing and testing a variant/location replacement. Do not run old and new reservation deductions simultaneously.
+4. Existing admin authentication has an `Admin` entity and JWT path without role authorities. Additive staff/role migration must be tested with the current login and bootstrap initializer before enforcing the new permission matrix.
+5. Existing product deletion and product-update stock editing are incompatible with an append-only inventory ledger and historical sale/purchase references. Replace with controlled lifecycle/adjustment operations before production POS history is created.
+6. Existing Hibernate `ddl-auto=update` is not the production migration plan. Select Flyway or Liquibase, pin the deployed MySQL version, review generated DDL and run migrations against a sanitized production-like copy.
+7. Prescription image storage, access authorization, object retention and backup integration must be implemented before POS/online prescription workflows depend on the new records.
+8. The POS is online-first. No offline sale or offline inventory mutation may be introduced by the database migration.
+
+Cutover must be staged: verified backup and restore; schema-only additive migration; variant/catalogue mapping; inventory reconciliation; online-order variant backfill; dual-read/controlled validation where safe; staging tests; a controlled write-path switch; reconciliation monitoring; and a documented rollback that does not lose orders, payments or stock movements. Do not dual-write both legacy and new stock balances without a specifically designed reconciliation protocol.
+
+### E. Decisions still requiring explicit approval before executable DDL
+
+The database model is now sufficiently reconciled for a physical-schema design pass, but the following are not silently decided by this document:
+
+1. Final customer phone policy, duplicate matching and profile merge rules.
+2. Final variant option model and migration mapping for existing products/specifications; ambiguous legacy products require manual resolution.
+3. Exact POS electronic payment verification method/provider/terminal process for UPI and card.
+4. Accountant-approved invoice wording, online invoice issuance timing, sequence scope, prefix and void/gap treatment.
+5. Final discount limits and manager/owner approval thresholds.
+6. Cash opening/closing procedure, cash discrepancy review threshold and permitted shift-reopen authority.
+7. Supplier payment terms, supplier invoice matching and whether supplier payments are recorded in POS cash shifts or through a separate bank/cash workflow.
+8. Final purchase over-receipt tolerance and handling of quarantined/damaged goods.
+9. Weighted-average cost formula, landed-cost allocation and valuation treatment for purchase returns, discounts and freight.
+10. Exact prescription structured fields, versioning/retention period, object-storage configuration and access roles.
+11. Final stock-count cutoff and reconciliation process, including the online orders/reservations active at cutover.
+12. Deployed MySQL version, collation, SQL mode, timezone convention, CHECK constraint behaviour and Flyway/Liquibase choice.
+13. Backup RPO/RTO targets and verified database/object restore procedure.
+14. Whether the first release remains one active location in the UI while retaining location-scoped schema support.
+
+These decisions should be resolved in the relevant implementation-specific design task before writing migration SQL. If an item is not relevant to the first release, record it as explicitly deferred with a safe default; do not leave an ambiguous schema branch.
+
+### F. Phase 1 review conclusion and acceptance gate
+
+**Review conclusion:** The conceptual design and later reconciliations are aligned around separate online/POS transactions, shared variant-level inventory, fully paid POS sales with split tender, immutable transaction snapshots, auditable returns/refunds, controlled staff permissions and receipt-driven purchasing. The older product-level inventory and early payment baselines are explicitly superseded.
+
+**Not yet approved for executable DDL:** The unresolved decisions in Section E, the exact deployed MySQL capabilities, and the migration/backfill plan must be confirmed. This document alone is not sufficient authorization to modify the database or application.
+
+Before Phase 1 can be marked implementation-ready, produce and review:
+
+- A canonical table/column/FK/index dictionary with no duplicate sources of truth.
+- An entity-relationship diagram matching that dictionary.
+- A migration/backfill and rollback plan mapped to the actual current entities and rows.
+- A MySQL-version-specific DDL review.
+- A transaction/invariant test matrix for online reservations, POS sale, tender/refund, shift closing, goods receipt and return.
+- Written sign-off for the remaining business/accounting decisions that affect schema behaviour.
+
+This section is a documentation review only. It does not create or alter Java code, SQL migrations, database tables/data, authentication, inventory, payments or production configuration.
