@@ -659,3 +659,42 @@ The initial POS permission model uses three roles. These roles are a starting au
 **Confirmed initial policy:** three roles — OWNER_ADMIN, MANAGER and CASHIER — with backend-enforced permissions, individual staff accounts and auditable sensitive actions. Exact discount thresholds and detailed endpoint-to-permission mapping remain implementation decisions.
 
 **Phase 1 remains a design document only.** This section does not implement staff accounts, authentication changes, authorization code, database tables or UI.
+
+
+### 10.7 POS fulfilment and collection workflow
+
+The initial POS release supports both immediate take-away and paid sales collected later. Payment settlement and physical fulfilment are separate concepts: a sale may be fully paid while still awaiting preparation or customer collection.
+
+#### Fulfilment data and statuses
+
+Add a distinct `fulfilment_status` to the proposed `sales` record; do not overload `sale_status` or `payment_status`.
+
+Initial fulfilment statuses:
+
+- `PENDING_PREPARATION`: the sale is fully paid and recorded, but the items are not yet ready for handover.
+- `READY_FOR_COLLECTION`: preparation is complete and the customer can collect the items.
+- `COLLECTED`: the items have been handed over to the customer.
+- `CANCELLED`: fulfilment has been cancelled. This status does not itself mean that payment has been refunded; any eligible refund must be a separate, recorded and idempotent refund transaction.
+
+Add or provide equivalent auditable fields on the sale:
+
+- `expected_collection_at DATETIME(6) NULL`
+- `ready_for_collection_at DATETIME(6) NULL`
+- `collected_at DATETIME(6) NULL`
+- `collected_by BIGINT NULL` — staff actor who confirms handover
+- `fulfilment_updated_at DATETIME(6) NOT NULL`
+
+The sale's existing `created_by` identifies the staff member who records the sale. Record the staff actor and timestamp for every fulfilment status transition in an audit history; do not rely only on the latest status field.
+
+#### Workflow rules
+
+1. **Immediate collection:** after full payment is successfully recorded and the sale is committed, set fulfilment status to `COLLECTED` and record the handover timestamp and staff actor.
+2. **Collect later:** after full payment and sale commit, set fulfilment status to `PENDING_PREPARATION`. An expected collection date/time may be recorded. When preparation is complete, an authorized staff member changes the status to `READY_FOR_COLLECTION`. At handover, staff confirm `COLLECTED` and the system records who handed over the items and when.
+3. **Payment is independent:** every POS sale must still be fully settled before it is committed as a sale. Phase 1 continues to exclude partial payment, customer credit and outstanding balances. A paid sale awaiting collection is not an unpaid sale.
+4. **Stock is deducted once:** decrement the relevant variant's on-hand inventory and write the corresponding stock movement atomically when the fully paid POS sale is recorded. Changing fulfilment status to ready or collected must never deduct stock again.
+5. **Cancellation and refunds:** do not erase the sale, payment or stock movement. A cancellation after sale completion requires an explicit authorized cancellation/return decision and a separately recorded refund where applicable. Restock only after physical inspection and approval, using a reversing/return stock movement. Never infer that a cancelled fulfilment automatically restores stock or refunds money.
+6. **Authorization and audit:** only authorized staff may change fulfilment status. Record actor, timestamp and reason for cancellation or exceptional status changes. Cashiers may confirm ordinary handover if permitted by the role policy; exceptions require manager or Owner/Admin authority.
+
+Home delivery is deferred from the initial POS release. The initial workflow covers immediate handover at the shop and later customer collection at the shop. Partial fulfilment of individual lines is also deferred unless a later workflow decision explicitly requires it.
+
+**Confirmed initial policy:** support immediate collection and fully paid collect-later sales; keep payment and fulfilment statuses separate; deduct stock once at sale recording; defer home delivery and partial payment/credit. No Java implementation, SQL migration or UI is included in this document update.
