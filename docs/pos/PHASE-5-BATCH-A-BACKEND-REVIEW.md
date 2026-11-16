@@ -100,7 +100,7 @@ For this MySQL application, the intended dependency pair is:
 </dependency>
 ```
 
-Do not add a separate `flyway-core` dependency unless the resolved dependency graph proves it is needed; avoid redundant declarations. Do not commit these dependencies yet: first run Maven dependency resolution/build locally and verify the project's exact Boot 4.1.2 dependency management.
+Do not add a separate `flyway-core` dependency unless the resolved dependency graph proves it is needed; avoid redundant declarations. These dependencies were subsequently committed using Spring Boot 4.1.2 dependency management, and the user confirmed Maven dependency resolution plus `mvn clean test` succeeded locally. Flyway remains disabled pending the baseline and staging gates below.
 
 Official references:
 - Spring Boot 4.1.2 managed coordinates: https://docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html
