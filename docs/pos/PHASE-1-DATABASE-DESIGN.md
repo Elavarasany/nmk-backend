@@ -771,3 +771,18 @@ Every sellable product variant must have an internal NMK SKU. The SKU is the pri
 
 This is a logical design rule only. It does not authorize immediate schema migration, automatic SKU assignment, barcode printing, or application-code changes. Those require a separately reviewed implementation and migration plan.
 
+### 10.10 Product and variant pricing
+
+Use parent-product pricing as the default and allow an explicit selling-price override on an individual variant. This supports a simple catalogue while allowing variants with genuinely different prices.
+
+1. **Parent default:** The parent product stores the default selling price used by its variants unless a variant has its own override.
+2. **Variant override:** A variant may define an explicit selling-price override. When present, that override is the effective selling price for that variant; otherwise, use the current parent-product default.
+3. **Single effective price:** POS and online product flows must resolve and display the effective price for the selected variant. The customer must see the selected variant's price before adding it to the cart or completing checkout.
+4. **Server-side authority:** The backend must resolve and validate the applicable price when creating a sale or order. Never trust a price supplied by the browser or POS client as authoritative. Any authorized discount must be represented separately and validated against the staff member's permissions and configured limits.
+5. **Historical sale snapshot:** Each completed sale item must preserve the actual unit price, discount and applicable price/tax calculation inputs or snapshots used at the time of sale. Later parent or variant price changes must never alter existing invoices, reports or return calculations.
+6. **Price changes:** Updating a parent default may affect variants that inherit the parent price, but must not overwrite explicit variant overrides. Updating a variant override must affect only that variant. Record who made a price change and when; apply the appropriate authorization and audit rules.
+7. **Money representation:** Store monetary values using fixed-precision decimal types, not floating-point types. Define currency consistently as INR for the initial NMK deployment. GST is not to be represented as collected while NMK is not GST-registered; invoice/tax wording remains subject to professional confirmation.
+8. **Migration and compatibility:** Before implementation, audit existing product price fields and frontend/backend payloads. Preserve current customer-facing prices during migration, resolve invalid or inconsistent values, and ensure online orders and POS use the same effective-price rule. Do not silently reprice existing carts or confirmed orders.
+
+This is a logical design decision only. It does not authorize immediate schema migration, price updates, or application-code changes. Implementation requires a separately reviewed migration and compatibility plan.
+
