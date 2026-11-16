@@ -186,3 +186,45 @@ The export uses a mysqldump client older than the server. The DDL was readable a
 - The earlier requirements for schema/entity parity, sanitized staging restore, baseline proof, application regression tests, active deployment configuration inspection, and backup/restore verification remain open.
 
 **Next step:** prepare a disposable staging restore from a proper backup (not by executing the supplied schema-only files against Aiven), compare Hibernate entity mappings with the captured DDL, and test the baseline procedure there. Keep Flyway disabled and production `ddl-auto=update` unchanged until those gates pass.
+
+
+## 12. Hibernate entity-to-DDL comparison (2026-11-16)
+
+The ten current entity classes under `nmk-backend/src/main/java/nmk_backend/entity` were inspected on GitHub `master` and compared with the ten schema-only table definitions supplied from the live database.
+
+### Entity coverage
+
+The existing ten tables each have a corresponding JPA entity:
+- `Admin` → `admins`
+- `AdminActionAuthorization` → `admin_action_authorizations`
+- `Appointment` → `appointments`
+- `Order` → `customer_orders`
+- `OrderItem` → `order_items`
+- `Product` → `products`
+- `MarketingBanner` → `marketing_banners`
+- `OfferBar` → `offer_bars`
+- `RazorpayWebhookEvent` → `razorpay_webhook_events`
+- `WebsiteImage` → `website_images`
+
+The `Customer.java` file currently contains no mapped entity definition and does not correspond to an existing customer table.
+
+### Main mapping checks
+
+- All ten entities use identity-generated BIGINT identifiers, matching the exported primary keys.
+- The `Order` ↔ `OrderItem` association maps to the existing `order_items.order_id` foreign key. `OrderItem.productId` is a scalar Long, not a JPA relationship, consistent with the absence of a product FK in the current schema.
+- `Product.specifications` uses Hibernate JSON typing and a JSON column definition, matching the live JSON column.
+- `RazorpayWebhookEvent.rawPayload` maps to LONGTEXT, matching the live table.
+- The explicit varchar lengths and decimal precision on Product, Order, OrderItem, MarketingBanner, OfferBar, WebsiteImage, and authorization/webhook fields are broadly consistent with the exported DDL. Default JPA string lengths and implicit snake_case naming account for several columns without explicit annotations.
+- Nullable legacy order/customer fields remain nullable in the schema; do not tighten them as part of this POS migration.
+
+### Items requiring a controlled Hibernate schema-validation test
+
+1. `AdminActionAuthorization.tokenHash` declares `unique = true` on the field and also declares a named table-level unique constraint for the same column. This duplicates uniqueness metadata in the entity mapping. The live database has one named unique index. Do not run Hibernate schema update to "fix" this; verify the mapping with Hibernate validation and, if needed, remove the redundant declaration in a separately tested code change.
+2. `RazorpayWebhookEvent.eventId` has the same pattern: field-level `unique = true` plus a named table-level unique constraint. The live database has one named unique index. Validate and clean up the redundant mapping separately if required.
+3. Entity lifecycle callbacks use `LocalDateTime.now()` for several timestamps, while the database server/session was previously observed to use UTC. Confirm the deployed JVM timezone is UTC or standardize timestamp creation to an explicit UTC clock in a separately tested change. Do not alter stored timestamps during this migration.
+4. `Admin.createdAt` is initialized when the entity object is instantiated, rather than in a persistence callback; this is existing application behavior and is not a reason to alter the database schema.
+5. The appointment entity leaves slot uniqueness to application logic. The database currently has no unique constraint on appointment date/time. Review concurrency and real booking rules before considering a database constraint.
+
+### Result
+
+This source review found no reason to recreate or directly alter the ten existing tables. It is not yet a formal schema-parity pass: the next proof must be a staging-only Hibernate `validate` run against a sanitized restored schema, plus application startup and regression checks. Keep Flyway disabled, keep production `ddl-auto=update` unchanged for now, and do not execute migrations or DDL against Aiven.
