@@ -593,3 +593,31 @@ Confirmed: variant-level stock, full settlement with split tender, and financial
 Still requiring review before implementation: exact product/variant mapping from the current catalogue, staff roles and permissions, online reservation-to-fulfilment stock lifecycle, physical stock reconciliation, migration strategy, and accountant review of invoice format and wording.
 
 **Phase 1 remains a design document only.** No application code, SQL migration, live database or production configuration is changed by these decisions.
+
+
+### 10.5 Customer catalogue and variant selection
+
+The confirmed storefront behaviour is **one product listing per parent product, with selectable variants** (colour/size) on the product detail or selection flow. Do not create a separate customer-facing product card for every colour/size combination by default.
+
+- The parent product remains the catalogue and marketing identity (name, description, brand, category and shared imagery).
+- Each sellable combination of attributes is a distinct `product_variants` row. Its attributes identify the exact option combination (for example, colour = Black and size = Medium).
+- Each variant owns its own SKU/barcode and location-specific inventory balance. A customer must select an available variant before adding the item to the cart.
+- The cart line, checkout request, online order item and POS sale item must carry the selected `variant_id`. Stock validation, reservation, release, fulfilment and deduction must all use that same variant ID.
+- The product page should show only valid combinations that actually exist. Do not let the UI construct an unconfigured colour/size combination from independent option lists.
+- Availability shown to customers must reflect sellable available quantity (on-hand minus active reservations), not raw on-hand quantity. The backend remains authoritative and must revalidate stock during reservation and sale completion.
+- Products without selectable options receive one default variant, so every stock-controlled cart/order/sale line still resolves to a variant.
+- The admin catalogue workflow must allow staff with appropriate permissions to create, edit, deactivate and identify variants, and to maintain stock per variant through auditable inventory operations. Ordinary product edits must not overwrite variant inventory.
+- Barcode/SKU lookup in POS resolves directly to the exact variant. Searching by parent product may show its available variants for cashier selection.
+
+#### Existing catalogue and online-order migration
+
+The current implementation treats each product row as one stock identity: `products.stockQuantity` is stored on the parent product, size/colour are ordinary specification attributes, and existing `order_items` refer to `product_id` only. The migration must therefore be explicit and staged:
+
+1. Create a default variant for each existing product as the safe initial mapping. Do not split a legacy product into multiple variants merely because its JSON specifications mention colour or size; first review catalogue data and determine whether those combinations are truly separately stocked.
+2. For products confirmed to have multiple separately stocked combinations, create the required variant rows and map each physical quantity only after a physical count and reservation reconciliation.
+3. Add a nullable variant reference to existing order items first. Backfill historical/current order lines to the appropriate default or reviewed variant while preserving their original product IDs and sale-time snapshots.
+4. Update cart, checkout, order creation, stock reservation, reservation expiry/release, payment confirmation and fulfilment paths to use variant-level inventory consistently. Preserve the current Razorpay fail-closed reservation cleanup behaviour and ensure payment confirmation does not deduct reserved stock a second time.
+5. Keep compatibility during rollout: do not remove or stop maintaining the legacy stock field until all application paths are migrated, reconciled and verified. Define a rollback point before switching the source of truth.
+6. Verify existing online orders, pending reservations, duplicate payment verification, cancellation/expiry and POS sales against staging data before enabling variant-level stock in production.
+
+**Important:** this decision changes both customer catalogue behaviour and the stock identity used by checkout/POS. It is not merely a visual selector. No frontend or backend implementation is included in this Phase 1 document update.
