@@ -1,3 +1,4 @@
+
 package nmk_backend.repository;
 
 import nmk_backend.entity.RazorpayWebhookEvent;
@@ -17,6 +18,7 @@ public interface RazorpayWebhookEventRepository
 
     boolean existsByEventId(String eventId);
 
+    // Existing query: events ready for their first attempt or retry.
     @Query("""
             SELECT e.id
             FROM RazorpayWebhookEvent e
@@ -29,11 +31,39 @@ public interface RazorpayWebhookEventRepository
             Pageable pageable
     );
 
+    // Finds both due events and PROCESSING events whose worker lease expired.
+    // A PROCESSING event with no start timestamp is also eligible for recovery.
+    @Query("""
+            SELECT e.id
+            FROM RazorpayWebhookEvent e
+            WHERE (
+                e.status IN ('RECEIVED', 'RETRY')
+                AND (e.nextAttemptAt IS NULL OR e.nextAttemptAt <= :now)
+            )
+            OR (
+                e.status = 'PROCESSING'
+                AND (
+                    e.processingStartedAt IS NULL
+                    OR e.processingStartedAt <= :leaseCutoff
+                )
+            )
+            ORDER BY e.receivedAt ASC
+            """)
+    List<Long> findDueEventIdsIncludingStale(
+            @Param("now") LocalDateTime now,
+            @Param("leaseCutoff") LocalDateTime leaseCutoff,
+            Pageable pageable
+    );
+
+    // Locks one event row while a short database transaction claims or
+    // finalizes that event. Do not hold this lock during external API calls.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT e
             FROM RazorpayWebhookEvent e
             WHERE e.id = :id
             """)
-    Optional<RazorpayWebhookEvent> findByIdForUpdate(@Param("id") Long id);
+    Optional<RazorpayWebhookEvent> findByIdForUpdate(
+            @Param("id") Long id
+    );
 }
