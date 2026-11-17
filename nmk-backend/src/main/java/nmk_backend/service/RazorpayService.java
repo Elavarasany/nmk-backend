@@ -94,9 +94,11 @@ public class RazorpayService {
         String actualOrderId = payment.get("order_id");
 
         Number actualAmount = (Number) payment.get("amount");
+        String actualCurrency = payment.get("currency");
 
         return "captured".equals(status)
                 && expectedOrderId.equals(actualOrderId)
+                && "INR".equalsIgnoreCase(actualCurrency)
                 && actualAmount.intValue() == expectedAmountPaise;
     }
 
@@ -153,7 +155,8 @@ public class RazorpayService {
             String rawBody,
             String signature) throws Exception {
 
-        if (rawBody == null || signature == null) {
+        if (rawBody == null || signature == null
+                || webhookSecret == null || webhookSecret.isBlank()) {
             return false;
         }
 
