@@ -5,6 +5,7 @@ import nmk_backend.repository.OrderRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ public class PaymentVerificationService {
         this.orderRepository = orderRepository;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ConfirmationResult confirmPayment(
             String razorpayOrderId,
             String razorpayPaymentId) {
