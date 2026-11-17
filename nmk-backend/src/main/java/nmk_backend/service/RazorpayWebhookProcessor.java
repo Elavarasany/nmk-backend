@@ -72,7 +72,7 @@ public class RazorpayWebhookProcessor {
         } catch (Exception retryable) {
             if (event.getAttemptCount() >= MAX_ATTEMPTS) {
                 event.setStatus("MANUAL_REVIEW");
-                event.setProcessingError("Retry limit reached: " + safeMessage(retryable));
+                event.setProcessingError("Retry limit reached: " + retryable.getClass().getSimpleName());
             } else {
                 event.setStatus("RETRY");
                 long delaySeconds = Math.min(
@@ -80,7 +80,7 @@ public class RazorpayWebhookProcessor {
                         15L << Math.min(event.getAttemptCount() - 1, 8)
                 );
                 event.setNextAttemptAt(LocalDateTime.now().plusSeconds(delaySeconds));
-                event.setProcessingError(safeMessage(retryable));
+                event.setProcessingError("Retryable processing error: " + retryable.getClass().getSimpleName());
             }
         }
 
