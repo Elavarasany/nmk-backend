@@ -22,20 +22,44 @@ public class PaymentVerificationService {
             String razorpayOrderId,
             String razorpayPaymentId) {
 
-        // Lock this order so concurrent verification requests
-        // cannot confirm it at the same time.
+        if (razorpayOrderId == null || razorpayOrderId.isBlank()
+                || razorpayPaymentId == null || razorpayPaymentId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Razorpay order ID and payment ID are required."
+            );
+        }
+
+        // Serialize every confirmation for this Razorpay order.
         Order order = orderRepository
                 .findByRazorpayOrderIdForUpdate(razorpayOrderId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("Order not found")
                 );
 
-        // Idempotency: never process an already-paid order again.
+        // A repeated callback for the SAME captured payment is safe.
+        // A different captured payment is not a retry: it is a second charge.
         if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+            String recordedPaymentId = order.getRazorpayPaymentId();
+
+            if (recordedPaymentId == null || recordedPaymentId.isBlank()) {
+                throw new IllegalStateException(
+                        "This order is marked PAID but has no recorded payment ID. " +
+                                "Payment requires manual reconciliation."
+                );
+            }
+
+            if (!recordedPaymentId.equals(razorpayPaymentId)) {
+                throw new IllegalStateException(
+                        "A different payment is already recorded for this order. " +
+                                "The additional captured payment requires refund " +
+                                "and manual reconciliation."
+                );
+            }
+
             return new ConfirmationResult(order, false);
         }
 
-        // Checkout must have reserved stock before payment confirmation.
+        // Checkout must still own an active stock reservation.
         if (!order.isStockReserved()) {
             throw new IllegalStateException(
                     "Stock reservation is no longer active. " +
@@ -57,8 +81,8 @@ public class PaymentVerificationService {
             );
         }
 
-        // Stock was already deducted at checkout.
-        // Mark the reservation as consumed; DO NOT deduct stock again.
+        // Existing checkout code has already deducted legacy product stock.
+        // This flag records that the reservation is consumed; do not deduct twice.
         order.setStockReserved(false);
 
         Order savedOrder = orderRepository.save(order);
