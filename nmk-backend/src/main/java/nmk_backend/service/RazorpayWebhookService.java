@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nmk_backend.entity.RazorpayWebhookEvent;
 import nmk_backend.repository.RazorpayWebhookEventRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,8 @@ public class RazorpayWebhookService {
             event.setRawPayload(rawPayload);
             event.setStatus("RECEIVED");
             eventRepository.saveAndFlush(event);
+        } catch (DataIntegrityViolationException duplicate) {
+            throw duplicate;
         } catch (IllegalArgumentException error) {
             throw error;
         } catch (Exception error) {
