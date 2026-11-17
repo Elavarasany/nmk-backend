@@ -154,6 +154,15 @@ public class RazorpayService {
     public boolean verifyWebhookSignature(
             String rawBody,
             String signature) throws Exception {
+        return rawBody != null && verifyWebhookSignature(
+                rawBody.getBytes(StandardCharsets.UTF_8),
+                signature
+        );
+    }
+
+    public boolean verifyWebhookSignature(
+            byte[] rawBody,
+            String signature) throws Exception {
 
         if (rawBody == null || signature == null
                 || webhookSecret == null || webhookSecret.isBlank()) {
@@ -169,10 +178,7 @@ public class RazorpayService {
 
         mac.init(secretKey);
 
-        byte[] expected = mac.doFinal(
-                rawBody.getBytes(StandardCharsets.UTF_8)
-        );
-
+        byte[] expected = mac.doFinal(rawBody);
         byte[] actual;
 
         try {
