@@ -359,4 +359,38 @@ class RazorpayWebhookProcessorTest {
                 12500
         );
     }
+    @Test
+    void retryLimitMovesEventToManualReview() throws Exception {
+
+        RazorpayWebhookEvent event =
+                event(capturedPayload(12500));
+
+        // Seven previous attempts; this claim becomes attempt eight.
+        event.setAttemptCount(7);
+
+        when(eventRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(event));
+
+        when(orderRepository.findByRazorpayOrderId("order_123"))
+                .thenReturn(Optional.of(order()));
+
+        when(razorpayService.isPaymentCapturedForOrder(
+                "pay_123",
+                "order_123",
+                12500
+        )).thenReturn(false);
+
+        processor.processOne(1L);
+
+        assertEquals(8, event.getAttemptCount());
+        assertEquals("MANUAL_REVIEW", event.getStatus());
+        assertTrue(
+                event.getProcessingError().contains("Retry limit reached")
+        );
+        assertNull(event.getNextAttemptAt());
+        assertNull(event.getClaimToken());
+        assertNull(event.getProcessingStartedAt());
+
+        verifyNoInteractions(paymentVerificationService);
+    }
 }
