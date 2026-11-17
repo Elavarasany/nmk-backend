@@ -1,6 +1,7 @@
 package nmk_backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.mockito.Spy;
 import nmk_backend.entity.Order;
 import nmk_backend.entity.RazorpayWebhookEvent;
 import nmk_backend.repository.OrderRepository;
@@ -29,6 +30,9 @@ class RazorpayWebhookProcessorTest {
     private RazorpayService razorpayService;
     @Mock
     private PaymentVerificationService paymentVerificationService;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private RazorpayWebhookProcessor processor;
