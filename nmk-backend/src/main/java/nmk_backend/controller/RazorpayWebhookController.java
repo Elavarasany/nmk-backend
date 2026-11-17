@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/payment")
@@ -28,13 +29,19 @@ public class RazorpayWebhookController {
             String signature,
             @RequestHeader(value = "X-Razorpay-Event-Id", required = false)
             String eventId,
-            @RequestBody(required = false) String rawBody) {
+            @RequestBody(required = false) byte[] rawBody) {
 
         if (signature == null || signature.isBlank()
                 || eventId == null || eventId.isBlank()
-                || rawBody == null || rawBody.isBlank()) {
+                || rawBody == null || rawBody.length == 0) {
             return ResponseEntity.badRequest().body(
                     Map.of("received", false, "message", "Missing webhook headers or body")
+            );
+        }
+
+        if (rawBody.length > 1_048_576) {
+            return ResponseEntity.status(413).body(
+                    Map.of("received", false, "message", "Webhook body exceeds the size limit")
             );
         }
 
@@ -45,7 +52,10 @@ public class RazorpayWebhookController {
                 );
             }
 
-            webhookService.storeEvent(eventId.trim(), rawBody);
+            webhookService.storeEvent(
+                    eventId.trim(),
+                    new String(rawBody, StandardCharsets.UTF_8)
+            );
             return ResponseEntity.ok(
                     Map.of("received", true, "message", "Webhook event stored")
             );
