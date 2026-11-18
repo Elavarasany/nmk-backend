@@ -11,10 +11,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("""
         UPDATE Product p
-        SET p.stockQuantity = p.stockQuantity - :quantity
+        SET p.stockQuantity = p.stockQuantity - :quantity,
+            p.version = p.version + 1
         WHERE p.id = :productId
           AND p.active = true
           AND p.stockQuantity >= :quantity
@@ -24,10 +25,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("quantity") Integer quantity
     );
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("""
         UPDATE Product p
-        SET p.stockQuantity = p.stockQuantity + :quantity
+        SET p.stockQuantity = p.stockQuantity + :quantity,
+            p.version = p.version + 1
         WHERE p.id = :productId
     """)
     int releaseStock(
