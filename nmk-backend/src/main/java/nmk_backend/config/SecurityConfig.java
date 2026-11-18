@@ -50,25 +50,46 @@ public class SecurityConfig {
                         // Allow browser CORS preflight requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                                // Password verification requires JWT authentication
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/api/admin/auth/verify-password",
-                                        "/api/admin/auth/authorize-action"
-                                ).authenticated()
+                        // Admin login remains public
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/admin/auth/login"
+                        ).permitAll()
 
-// Admin login remains public
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/api/admin/auth/login"
-                                ).permitAll()
+                        // Every admin endpoint requires an admin JWT
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // Public product GET APIs
+                        // Customer product reads remain public
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/products",
                                 "/api/products/**"
                         ).permitAll()
+
+                        // Product writes require an admin JWT
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/products",
+                                "/api/products/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/products",
+                                "/api/products/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/products",
+                                "/api/products/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/products",
+                                "/api/products/**"
+                        ).hasRole("ADMIN")
 
                         // Public marketing and website image GET APIs
                         .requestMatchers(
@@ -95,7 +116,10 @@ public class SecurityConfig {
 
                         // Public customer checkout API
                         .requestMatchers("/api/orders/checkout").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/orders/track/**").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/orders/track/**"
+                        ).permitAll()
 
                         // Public appointment booking
                         .requestMatchers(
@@ -103,7 +127,7 @@ public class SecurityConfig {
                                 "/api/appointments"
                         ).permitAll()
 
-                        // Everything else requires JWT authentication
+                        // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
 
