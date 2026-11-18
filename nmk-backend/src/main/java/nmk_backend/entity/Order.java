@@ -1,5 +1,6 @@
 
 package nmk_backend.entity;
+
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -29,6 +30,10 @@ public class Order {
     private BigDecimal totalAmount;
 
     private String paymentStatus;
+
+    @Column(name = "payment_creation_status", length = 30)
+    private String paymentCreationStatus = "NOT_STARTED";
+
     private String orderStatus = "PENDING";
 
     @Column(name = "reservation_expires_at")
@@ -63,6 +68,11 @@ public class Order {
 
         if (orderStatus == null) {
             orderStatus = "PENDING";
+        }
+
+        if (paymentCreationStatus == null
+                || paymentCreationStatus.isBlank()) {
+            paymentCreationStatus = "NOT_STARTED";
         }
 
         if (trackingToken == null) {
@@ -148,6 +158,16 @@ public class Order {
         this.paymentStatus = paymentStatus;
     }
 
+    public String getPaymentCreationStatus() {
+        return paymentCreationStatus == null
+                ? "NOT_STARTED"
+                : paymentCreationStatus;
+    }
+
+    public void setPaymentCreationStatus(String paymentCreationStatus) {
+        this.paymentCreationStatus = paymentCreationStatus;
+    }
+
     public String getOrderStatus() {
         return orderStatus == null ? "PENDING" : orderStatus;
     }
@@ -207,6 +227,7 @@ public class Order {
     public void setItems(List<OrderItem> items) {
         this.items = items;
     }
+
     public LocalDateTime getReservationExpiresAt() {
         return reservationExpiresAt;
     }

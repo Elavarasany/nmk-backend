@@ -21,10 +21,37 @@ public class RazorpayService {
 
     @Value("${razorpay.key.secret}")
     private String keySecret;
+
     @Value("${razorpay.webhook.secret}")
     private String webhookSecret;
 
+    /**
+     * Check whether payment credentials are configured.
+     * Call this before creating an order or reserving stock.
+     */
+    public void requirePaymentCredentials() {
+
+        if (keyId == null || keyId.isBlank()
+                || keySecret == null || keySecret.isBlank()) {
+
+            throw new IllegalStateException(
+                    "Razorpay payment credentials are not configured"
+            );
+        }
+    }
+
+    /**
+     * Create a Razorpay payment order.
+     */
     public Order createOrder(int amount) throws Exception {
+
+        requirePaymentCredentials();
+
+        if (amount <= 0) {
+            throw new IllegalArgumentException(
+                    "Payment amount must be greater than zero"
+            );
+        }
 
         RazorpayClient client =
                 new RazorpayClient(keyId, keySecret);
@@ -37,10 +64,20 @@ public class RazorpayService {
         return client.orders.create(options);
     }
 
+    /**
+     * Verify Razorpay checkout payment signature.
+     */
     public boolean verifySignature(
             String orderId,
             String paymentId,
             String signature) throws Exception {
+
+        requirePaymentCredentials();
+
+        if (orderId == null || orderId.isBlank()
+                || paymentId == null || paymentId.isBlank()) {
+            return false;
+        }
 
         String payload = orderId + "|" + paymentId;
 
@@ -57,11 +94,20 @@ public class RazorpayService {
                 payload.getBytes(StandardCharsets.UTF_8)
         );
 
-        byte[] actual = hexToBytes(signature);
+        byte[] actual;
+
+        try {
+            actual = hexToBytes(signature);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
 
         return MessageDigest.isEqual(expected, actual);
     }
 
+    /**
+     * Convert a hexadecimal signature into bytes.
+     */
     private byte[] hexToBytes(String hex) {
 
         if (hex == null || !hex.matches("[0-9a-fA-F]{64}")) {
@@ -72,20 +118,33 @@ public class RazorpayService {
 
         for (int i = 0; i < bytes.length; i++) {
             bytes[i] = (byte) Integer.parseInt(
-                    hex.substring(i * 2, i * 2 + 2), 16
+                    hex.substring(i * 2, i * 2 + 2),
+                    16
             );
         }
 
         return bytes;
     }
 
-
+    /**
+     * Verify that a Razorpay payment is captured,
+     * belongs to the expected order, and has the expected amount.
+     */
     public boolean isPaymentCapturedForOrder(
             String paymentId,
             String expectedOrderId,
             int expectedAmountPaise) throws Exception {
 
-        RazorpayClient client = new RazorpayClient(keyId, keySecret);
+        requirePaymentCredentials();
+
+        if (paymentId == null || paymentId.isBlank()
+                || expectedOrderId == null || expectedOrderId.isBlank()
+                || expectedAmountPaise <= 0) {
+            return false;
+        }
+
+        RazorpayClient client =
+                new RazorpayClient(keyId, keySecret);
 
         com.razorpay.Payment payment =
                 client.payments.fetch(paymentId);
@@ -99,15 +158,36 @@ public class RazorpayService {
         return "captured".equals(status)
                 && expectedOrderId.equals(actualOrderId)
                 && "INR".equalsIgnoreCase(actualCurrency)
+                && actualAmount != null
                 && actualAmount.intValue() == expectedAmountPaise;
     }
 
-
+    /**
+     * Return the public Razorpay key ID for frontend checkout.
+     */
     public String getKeyId() {
+
+        requirePaymentCredentials();
+
         return keyId;
     }
+
+    /**
+     * Check whether a Razorpay order has a successful,
+     * pending, or otherwise unsettled payment attempt.
+     *
+     * Failures in this method must not cause stock release.
+     */
     public boolean hasUnsettledOrSuccessfulPayment(
             String razorpayOrderId) throws Exception {
+
+        requirePaymentCredentials();
+
+        if (razorpayOrderId == null || razorpayOrderId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Razorpay order ID is missing"
+            );
+        }
 
         RazorpayClient client =
                 new RazorpayClient(keyId, keySecret);
@@ -151,15 +231,23 @@ public class RazorpayService {
 
         return false;
     }
+
+    /**
+     * Verify webhook signature using the raw request body.
+     */
     public boolean verifyWebhookSignature(
             String rawBody,
             String signature) throws Exception {
+
         return rawBody != null && verifyWebhookSignature(
                 rawBody.getBytes(StandardCharsets.UTF_8),
                 signature
         );
     }
 
+    /**
+     * Verify webhook HMAC-SHA256 signature.
+     */
     public boolean verifyWebhookSignature(
             byte[] rawBody,
             String signature) throws Exception {
