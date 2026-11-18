@@ -152,14 +152,50 @@ public class RazorpayService {
         String status = payment.get("status");
         String actualOrderId = payment.get("order_id");
 
-        Number actualAmount = (Number) payment.get("amount");
+        Object amountValue = payment.get("amount");
         String actualCurrency = payment.get("currency");
+
+        Integer actualAmount = parseExactPaiseAmount(amountValue);
 
         return "captured".equals(status)
                 && expectedOrderId.equals(actualOrderId)
                 && "INR".equalsIgnoreCase(actualCurrency)
                 && actualAmount != null
-                && actualAmount.intValue() == expectedAmountPaise;
+                && actualAmount == expectedAmountPaise;
+    }
+    private Integer parseExactPaiseAmount(Object value) {
+
+        if (value == null) {
+            return null;
+        }
+
+        try {
+            if (value instanceof Number number) {
+                long amount = new java.math.BigDecimal(number.toString())
+                        .longValueExact();
+
+                if (amount <= 0 || amount > Integer.MAX_VALUE) {
+                    return null;
+                }
+
+                return (int) amount;
+            }
+
+            if (value instanceof String string) {
+                long amount = Long.parseLong(string);
+
+                if (amount <= 0 || amount > Integer.MAX_VALUE) {
+                    return null;
+                }
+
+                return (int) amount;
+            }
+
+        } catch (NumberFormatException | ArithmeticException ignored) {
+            return null;
+        }
+
+        return null;
     }
 
     /**

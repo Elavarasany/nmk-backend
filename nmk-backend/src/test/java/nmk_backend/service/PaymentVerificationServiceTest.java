@@ -83,4 +83,47 @@ class PaymentVerificationServiceTest {
 
         verifyNoInteractions(orderRepository);
     }
+    @Test
+void paymentCannotBeConfirmedWithoutActiveStockReservation() {
+    Order order = new Order();
+    order.setPaymentStatus("CREATED");
+    order.setStockReserved(false);
+
+    when(orderRepository.findByRazorpayOrderIdForUpdate("order_1"))
+            .thenReturn(Optional.of(order));
+
+    assertThrows(
+            IllegalStateException.class,
+            () -> service.confirmPayment("order_1", "pay_123")
+    );
+
+    assertNotEquals("PAID", order.getPaymentStatus());
+    verify(orderRepository, never()).save(any());
+}
+
+@Test
+void successfulConfirmationConsumesStockReservation() {
+    Order order = new Order();
+    order.setPaymentStatus("CREATED");
+    order.setStockReserved(true);
+    order.setTotalAmount(new java.math.BigDecimal("125.00"));
+
+    when(orderRepository.findByRazorpayOrderIdForUpdate("order_1"))
+            .thenReturn(Optional.of(order));
+
+    when(orderRepository.save(any(Order.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+    PaymentVerificationService.ConfirmationResult result =
+            service.confirmPayment("order_1", "pay_123");
+
+    assertTrue(result.newlyConfirmed());
+    assertEquals("PAID", order.getPaymentStatus());
+    assertEquals("CONFIRMED", order.getOrderStatus());
+    assertFalse(order.isStockReserved());
+    assertEquals("pay_123", order.getRazorpayPaymentId());
+    assertNotNull(order.getTrackingToken());
+
+    verify(orderRepository, times(1)).save(order);
+}
 }
