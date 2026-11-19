@@ -1,0 +1,214 @@
+package nmk_backend.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import nmk_backend.dto.PosCheckoutRequest;
+import nmk_backend.dto.PosPaymentRequest;
+import nmk_backend.dto.PosSaleItemRequest;
+import nmk_backend.entity.*;
+import nmk_backend.repository.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class PosCheckoutServiceTest {
+
+    private PosSaleRepository saleRepository;
+    private ProductRepository productRepository;
+    private ProductVariantRepository variantRepository;
+    private InventoryLocationRepository locationRepository;
+    private AdminRepository adminRepository;
+    private InventoryService inventoryService;
+    private ObjectMapper objectMapper;
+    private PosCheckoutService service;
+
+    private Product product;
+    private ProductVariant variant;
+    private InventoryLocation location;
+    private Admin cashier;
+
+    @BeforeEach
+    void setUp() {
+        saleRepository = mock(PosSaleRepository.class);
+        productRepository = mock(ProductRepository.class);
+        variantRepository = mock(ProductVariantRepository.class);
+        locationRepository = mock(InventoryLocationRepository.class);
+        adminRepository = mock(AdminRepository.class);
+        inventoryService = mock(InventoryService.class);
+        objectMapper = new ObjectMapper();
+
+        service = new PosCheckoutService(
+                saleRepository,
+                productRepository,
+                variantRepository,
+                locationRepository,
+                adminRepository,
+                inventoryService,
+                objectMapper
+        );
+
+        product = new Product();
+        product.setId(10L);
+        product.setName("Classic Frame");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setActive(true);
+
+        variant = new ProductVariant();
+        variant.setId(20L);
+        variant.setProduct(product);
+        variant.setSku("FRAME-BLK");
+        variant.setVariantName("Black");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setActive(true);
+
+        location = new InventoryLocation();
+        location.setId(1L);
+        location.setActive(true);
+
+        cashier = new Admin();
+        cashier.setId(7L);
+        cashier.setUsername("admin");
+
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
+        when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(cashier));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(variantRepository.findById(20L)).thenReturn(Optional.of(variant));
+        when(saleRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
+        doAnswer(invocation -> {
+            PosSale sale = invocation.getArgument(0);
+            ReflectionTestUtils.setField(sale, "id", 123L);
+            return sale;
+        }).when(saleRepository).saveAndFlush(any(PosSale.class));
+    }
+
+    @Test
+    void checkoutUsesServerPriceAndDeductsInventoryWithinSale() {
+        PosCheckoutRequest request = validRequest();
+
+        var response = service.checkout(request, "admin");
+
+        assertEquals("100.00", response.grandTotal().toPlainString());
+        assertEquals("100.00", response.items().get(0).unitPrice().toPlainString());
+        assertEquals("NMK", response.invoiceNumber().substring(0, 3));
+        assertEquals(123L, response.id());
+
+        verify(inventoryService).sellStock(
+                eq(1L),
+                eq(20L),
+                eq(1),
+                eq("POS:key-1:20"),
+                eq(7L),
+                startsWith("POS sale "),
+                eq("POS_SALE"),
+                eq(123L)
+        );
+        verify(saleRepository).saveAndFlush(any(PosSale.class));
+    }
+
+    @Test
+    void sameIdempotencyKeyAndSameRequestReturnsExistingSaleWithoutSellingAgain() throws Exception {
+        PosCheckoutRequest request = validRequest();
+        String fingerprint = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256")
+                        .digest(objectMapper.writeValueAsBytes(request))
+        );
+
+        PosSale existing = new PosSale();
+        ReflectionTestUtils.setField(existing, "id", 456L);
+        existing.setInvoiceNumber("NMK-20261119-EXISTING");
+        existing.setIdempotencyKey("key-1");
+        existing.setRequestFingerprint(fingerprint);
+        existing.setSubtotal(new BigDecimal("100.00"));
+        existing.setDiscountAmount(new BigDecimal("0.00"));
+        existing.setGrandTotal(new BigDecimal("100.00"));
+        existing.setLocationId(1L);
+        existing.setCashierUsername("admin");
+
+        when(saleRepository.findByIdempotencyKey("key-1"))
+                .thenReturn(Optional.of(existing));
+
+        var response = service.checkout(request, "admin");
+
+        assertEquals(456L, response.id());
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    void reusingIdempotencyKeyWithDifferentRequestIsRejected() {
+        PosSale existing = new PosSale();
+        existing.setIdempotencyKey("key-1");
+        existing.setRequestFingerprint("different-fingerprint");
+        when(saleRepository.findByIdempotencyKey("key-1"))
+                .thenReturn(Optional.of(existing));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(validRequest(), "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("different checkout details"));
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    void paymentTotalMustEqualGrandTotal() {
+        PosCheckoutRequest request = validRequest();
+        request.getPayments().get(0).setAmount(new BigDecimal("99.00"));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(request, "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("exactly equal"));
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    void variantMustBelongToRequestedProduct() {
+        Product anotherProduct = new Product();
+        anotherProduct.setId(999L);
+        variant.setProduct(anotherProduct);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(validRequest(), "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("does not belong"));
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    private PosCheckoutRequest validRequest() {
+        PosCheckoutRequest request = new PosCheckoutRequest();
+        request.setLocationId(1L);
+        request.setIdempotencyKey("key-1");
+        request.setDiscountAmount(new BigDecimal("0.00"));
+
+        PosSaleItemRequest item = new PosSaleItemRequest();
+        item.setProductId(10L);
+        item.setVariantId(20L);
+        item.setQuantity(1);
+        request.setItems(List.of(item));
+
+        PosPaymentRequest payment = new PosPaymentRequest();
+        payment.setPaymentMethod("CASH");
+        payment.setAmount(new BigDecimal("100.00"));
+        payment.setTenderedAmount(new BigDecimal("120.00"));
+        request.setPayments(List.of(payment));
+        return request;
+    }
+}
