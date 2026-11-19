@@ -30,7 +30,11 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
-		<!-- Jackson version is managed by the Spring Boot parent -->
+		<!-- Jackson 2 compatibility: PosCheckoutService and JJWT currently use Jackson 2 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jackson2</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
@@ -115,14 +119,12 @@
 			<scope>test</scope>
 		</dependency>
 
-
 		<!-- Spring Security Testing -->
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-
 
 		<!-- Razorpay -->
 		<dependency>
