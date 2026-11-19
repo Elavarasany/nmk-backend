@@ -17,7 +17,7 @@ CREATE TABLE pos_sales (
     grand_total DECIMAL(12,2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'COMPLETED',
     idempotency_key VARCHAR(150) NOT NULL,
-    request_fingerprint CHAR(64) NOT NULL,
+    request_fingerprint VARCHAR(64) NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
     PRIMARY KEY (id),
