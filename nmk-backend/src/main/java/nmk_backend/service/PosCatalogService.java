@@ -7,6 +7,7 @@ import nmk_backend.entity.InventoryLocation;
 import nmk_backend.entity.Product;
 import nmk_backend.entity.ProductVariant;
 import nmk_backend.exception.InventoryNotFoundException;
+import nmk_backend.exception.InvalidInventoryOperationException;
 import nmk_backend.repository.InventoryBalanceRepository;
 import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.ProductRepository;
@@ -52,7 +53,7 @@ public class PosCatalogService {
     @Transactional(readOnly = true)
     public PosCatalogResponse getCatalog(Long locationId) {
         if (locationId == null || locationId <= 0) {
-            throw new IllegalArgumentException("A valid inventory location is required");
+            throw new InvalidInventoryOperationException("A valid inventory location is required");
         }
 
         InventoryLocation location = locationRepository.findById(locationId)
@@ -60,7 +61,7 @@ public class PosCatalogService {
                         "Inventory location was not found"
                 ));
         if (!location.isActive()) {
-            throw new IllegalArgumentException("Inventory location is inactive");
+            throw new InvalidInventoryOperationException("Inventory location is inactive");
         }
 
         Map<Long, InventoryBalance> balances = balanceRepository.findByLocationId(locationId)
