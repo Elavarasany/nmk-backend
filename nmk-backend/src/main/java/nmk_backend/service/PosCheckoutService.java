@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -59,7 +58,6 @@ public class PosCheckoutService {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
     @Transactional(readOnly = true)
     public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable) {
         Page<PosSale> sales = locationId == null
@@ -75,6 +73,7 @@ public class PosCheckoutService {
         return PosSaleResponse.from(sale);
     }
 
+    @Transactional
     public PosSaleResponse checkout(
             PosCheckoutRequest request,
             String authenticatedUsername
@@ -84,6 +83,16 @@ public class PosCheckoutService {
         }
         if (authenticatedUsername == null || authenticatedUsername.isBlank()) {
             throw new IllegalArgumentException("Authenticated cashier is required");
+        }
+
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("At least one sale item is required");
+        }
+        if (request.getPayments() == null || request.getPayments().isEmpty()) {
+            throw new IllegalArgumentException("At least one payment is required");
+        }
+        if (request.getItems().stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("Sale items cannot be null");
         }
 
         String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
