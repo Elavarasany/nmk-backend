@@ -1,6 +1,7 @@
 package nmk_backend.service;
 
 import nmk_backend.entity.*;
+import nmk_backend.exception.InvalidInventoryOperationException;
 import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,7 +90,7 @@ class PosCatalogServiceTest {
         location.setActive(false);
         when(locationRepository.findById(1L)).thenReturn(java.util.Optional.of(location));
 
-        assertThrows(IllegalArgumentException.class, () -> service.getCatalog(1L));
+        assertThrows(InvalidInventoryOperationException.class, () -> service.getCatalog(1L));
         verifyNoInteractions(balanceRepository, productRepository, variantRepository);
     }
 }
