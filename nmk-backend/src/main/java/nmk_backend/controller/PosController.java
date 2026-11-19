@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.Map;
 
@@ -20,6 +23,33 @@ public class PosController {
 
     public PosController(PosCheckoutService checkoutService) {
         this.checkoutService = checkoutService;
+    }
+
+    @GetMapping("/sales")
+    public ResponseEntity<?> getSales(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Long locationId
+    ) {
+        if (page < 0 || size < 1 || size > 100
+                || (locationId != null && locationId <= 0)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative, size must be 1-100, and locationId must be positive"
+            ));
+        }
+        PageRequest pageable = PageRequest.of(
+                page, size, Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+        Page<PosSaleResponse> result = checkoutService.getSales(locationId, pageable);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/sales/{saleId}")
+    public ResponseEntity<PosSaleResponse> getSale(@PathVariable Long saleId) {
+        if (saleId <= 0) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(checkoutService.getSale(saleId));
     }
 
     @PostMapping("/checkout")
