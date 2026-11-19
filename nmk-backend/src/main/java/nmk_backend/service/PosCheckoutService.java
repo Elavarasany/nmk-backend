@@ -1,0 +1,332 @@
+package nmk_backend.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import nmk_backend.dto.PosCheckoutRequest;
+import nmk_backend.dto.PosPaymentRequest;
+import nmk_backend.dto.PosSaleItemRequest;
+import nmk_backend.dto.PosSaleResponse;
+import nmk_backend.entity.*;
+import nmk_backend.exception.InventoryNotFoundException;
+import nmk_backend.repository.AdminRepository;
+import nmk_backend.repository.InventoryLocationRepository;
+import nmk_backend.repository.PosSaleRepository;
+import nmk_backend.repository.ProductRepository;
+import nmk_backend.repository.ProductVariantRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Set;
+
+@Service
+public class PosCheckoutService {
+
+    private static final BigDecimal ZERO = new BigDecimal("0.00");
+    private static final Set<String> PAYMENT_METHODS = Set.of("CASH", "UPI", "CARD");
+
+    private final PosSaleRepository saleRepository;
+    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
+    private final InventoryLocationRepository locationRepository;
+    private final AdminRepository adminRepository;
+    private final InventoryService inventoryService;
+    private final ObjectMapper objectMapper;
+
+    public PosCheckoutService(
+            PosSaleRepository saleRepository,
+            ProductRepository productRepository,
+            ProductVariantRepository variantRepository,
+            InventoryLocationRepository locationRepository,
+            AdminRepository adminRepository,
+            InventoryService inventoryService,
+            ObjectMapper objectMapper
+    ) {
+        this.saleRepository = saleRepository;
+        this.productRepository = productRepository;
+        this.variantRepository = variantRepository;
+        this.locationRepository = locationRepository;
+        this.adminRepository = adminRepository;
+        this.inventoryService = inventoryService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Transactional
+    public PosSaleResponse checkout(
+            PosCheckoutRequest request,
+            String authenticatedUsername
+    ) {
+        if (request == null) {
+            throw new IllegalArgumentException("Checkout request is required");
+        }
+        if (authenticatedUsername == null || authenticatedUsername.isBlank()) {
+            throw new IllegalArgumentException("Authenticated cashier is required");
+        }
+
+        String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
+        String fingerprint = fingerprint(request);
+
+        var previousSale = saleRepository.findByIdempotencyKey(idempotencyKey);
+        if (previousSale.isPresent()) {
+            PosSale existing = previousSale.get();
+            if (!fingerprint.equals(existing.getRequestFingerprint())) {
+                throw new IllegalArgumentException(
+                        "This idempotency key was already used with different checkout details"
+                );
+            }
+            return PosSaleResponse.from(existing);
+        }
+
+        InventoryLocation location = locationRepository.findById(request.getLocationId())
+                .orElseThrow(() -> new InventoryNotFoundException(
+                        "Inventory location was not found"
+                ));
+        if (!location.isActive()) {
+            throw new IllegalArgumentException("Inventory location is inactive");
+        }
+
+        Admin cashier = adminRepository.findByUsername(authenticatedUsername)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Authenticated admin account was not found"
+                ));
+
+        validateCustomer(request);
+        BigDecimal discount = money(request.getDiscountAmount(), "Discount");
+        if (discount.compareTo(ZERO) < 0) {
+            throw new IllegalArgumentException("Discount cannot be negative");
+        }
+
+        PosSale sale = new PosSale();
+        sale.setLocationId(location.getId());
+        sale.setCashierUsername(authenticatedUsername);
+        sale.setCustomerName(trimToNull(request.getCustomerName()));
+        sale.setCustomerPhone(trimToNull(request.getCustomerPhone()));
+        sale.setDiscountAmount(discount);
+        sale.setIdempotencyKey(idempotencyKey);
+        sale.setRequestFingerprint(fingerprint);
+
+        BigDecimal subtotal = ZERO;
+        Set<Long> seenVariantIds = new HashSet<>();
+
+        for (PosSaleItemRequest itemRequest : request.getItems()) {
+            if (itemRequest == null
+                    || itemRequest.getProductId() == null
+                    || itemRequest.getVariantId() == null
+                    || itemRequest.getQuantity() == null
+                    || itemRequest.getQuantity() <= 0) {
+                throw new IllegalArgumentException("Every sale item needs valid product, variant and quantity values");
+            }
+            if (!seenVariantIds.add(itemRequest.getVariantId())) {
+                throw new IllegalArgumentException(
+                        "A product variant can appear only once in a checkout"
+                );
+            }
+
+            Product product = productRepository.findById(itemRequest.getProductId())
+                    .orElseThrow(() -> new InventoryNotFoundException(
+                            "Product " + itemRequest.getProductId() + " was not found"
+                    ));
+            ProductVariant variant = variantRepository.findById(itemRequest.getVariantId())
+                    .orElseThrow(() -> new InventoryNotFoundException(
+                            "Product variant " + itemRequest.getVariantId() + " was not found"
+                    ));
+
+            if (!variant.getProduct().getId().equals(product.getId())) {
+                throw new IllegalArgumentException(
+                        "The selected variant does not belong to the selected product"
+                );
+            }
+            if (!product.isActive() || !variant.isActive()) {
+                throw new IllegalArgumentException(
+                        "Inactive products or variants cannot be sold"
+                );
+            }
+
+            BigDecimal unitPrice = variant.getSellingPriceOverride() != null
+                    ? variant.getSellingPriceOverride()
+                    : product.getPrice();
+            if (unitPrice == null || unitPrice.compareTo(ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                        "Product has no valid selling price: " + product.getName()
+                );
+            }
+            unitPrice = unitPrice.setScale(2);
+            BigDecimal lineTotal = unitPrice.multiply(
+                    BigDecimal.valueOf(itemRequest.getQuantity())
+            ).setScale(2);
+            subtotal = subtotal.add(lineTotal);
+
+            PosSaleItem saleItem = new PosSaleItem();
+            saleItem.setSale(sale);
+            saleItem.setProductId(product.getId());
+            saleItem.setVariantId(variant.getId());
+            saleItem.setSku(variant.getSku());
+            saleItem.setProductName(product.getName());
+            saleItem.setVariantName(variant.getVariantName());
+            saleItem.setVariantAttributesJson(serializeAttributes(variant));
+            saleItem.setQuantity(itemRequest.getQuantity());
+            saleItem.setUnitPrice(unitPrice);
+            saleItem.setLineTotal(lineTotal);
+            sale.getItems().add(saleItem);
+        }
+
+        if (discount.compareTo(subtotal) > 0) {
+            throw new IllegalArgumentException("Discount cannot exceed the sale subtotal");
+        }
+
+        BigDecimal grandTotal = subtotal.subtract(discount).setScale(2);
+        if (grandTotal.compareTo(ZERO) < 0) {
+            throw new IllegalArgumentException("Sale total cannot be negative");
+        }
+
+        validateAndAttachPayments(request, sale, grandTotal);
+
+        sale.setSubtotal(subtotal.setScale(2));
+        sale.setGrandTotal(grandTotal);
+
+        // Flush first to obtain the immutable sale ID used by the stock movement audit trail.
+        saleRepository.saveAndFlush(sale);
+
+        for (PosSaleItem item : sale.getItems()) {
+            String movementKey = "POS:" + idempotencyKey + ":" + item.getVariantId();
+            inventoryService.sellStock(
+                    location.getId(),
+                    item.getVariantId(),
+                    item.getQuantity(),
+                    movementKey,
+                    cashier.getId(),
+                    "POS sale " + sale.getInvoiceNumber(),
+                    "POS_SALE",
+                    sale.getId()
+            );
+        }
+
+        return PosSaleResponse.from(sale);
+    }
+
+    private void validateAndAttachPayments(
+            PosCheckoutRequest request,
+            PosSale sale,
+            BigDecimal grandTotal
+    ) {
+        BigDecimal paymentTotal = ZERO;
+
+        for (PosPaymentRequest paymentRequest : request.getPayments()) {
+            if (paymentRequest == null || paymentRequest.getPaymentMethod() == null) {
+                throw new IllegalArgumentException("Every payment needs a payment method");
+            }
+
+            String method = paymentRequest.getPaymentMethod()
+                    .trim().toUpperCase(Locale.ROOT);
+            if (!PAYMENT_METHODS.contains(method)) {
+                throw new IllegalArgumentException(
+                        "Payment method must be CASH, UPI or CARD. Use multiple payment rows for split payments."
+                );
+            }
+
+            BigDecimal amount = money(paymentRequest.getAmount(), "Payment amount");
+            if (amount.compareTo(ZERO) <= 0) {
+                throw new IllegalArgumentException("Payment amount must be greater than zero");
+            }
+
+            BigDecimal tendered = paymentRequest.getTenderedAmount();
+            BigDecimal change = ZERO;
+            if ("CASH".equals(method)) {
+                if (tendered == null || tendered.compareTo(amount) < 0) {
+                    throw new IllegalArgumentException(
+                            "Cash tendered must be greater than or equal to the cash payment amount"
+                    );
+                }
+                tendered = money(tendered, "Cash tendered");
+                change = tendered.subtract(amount).setScale(2);
+            } else if (tendered != null) {
+                throw new IllegalArgumentException(
+                        "Tendered amount is only supported for cash payments"
+                );
+            }
+
+            String reference = trimToNull(paymentRequest.getTransactionReference());
+            if (reference != null && reference.length() > 150) {
+                throw new IllegalArgumentException("Payment reference cannot exceed 150 characters");
+            }
+
+            PosPayment payment = new PosPayment();
+            payment.setSale(sale);
+            payment.setPaymentMethod(method);
+            payment.setAmount(amount);
+            payment.setTenderedAmount(tendered);
+            payment.setChangeAmount(change);
+            payment.setTransactionReference(reference);
+            sale.getPayments().add(payment);
+
+            paymentTotal = paymentTotal.add(amount);
+        }
+
+        if (paymentTotal.compareTo(grandTotal) != 0) {
+            throw new IllegalArgumentException(
+                    "Payment amounts must exactly equal the sale total"
+            );
+        }
+    }
+
+    private void validateCustomer(PosCheckoutRequest request) {
+        String name = trimToNull(request.getCustomerName());
+        String phone = trimToNull(request.getCustomerPhone());
+        if (name != null && name.length() > 150) {
+            throw new IllegalArgumentException("Customer name cannot exceed 150 characters");
+        }
+        if (phone != null && phone.length() > 30) {
+            throw new IllegalArgumentException("Customer phone cannot exceed 30 characters");
+        }
+    }
+
+    private BigDecimal money(BigDecimal value, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        try {
+            return value.setScale(2, java.math.RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(field + " can have at most 2 decimal places");
+        }
+    }
+
+    private String normalizeIdempotencyKey(String key) {
+        if (key == null || key.isBlank() || key.trim().length() > 100) {
+            throw new IllegalArgumentException(
+                    "A checkout idempotency key of 1 to 100 characters is required"
+            );
+        }
+        return key.trim();
+    }
+
+    private String fingerprint(PosCheckoutRequest request) {
+        try {
+            byte[] bytes = objectMapper.writeValueAsBytes(request);
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            return HexFormat.of().formatHex(digest);
+        } catch (JsonProcessingException | java.security.NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Unable to fingerprint POS checkout request", exception);
+        }
+    }
+
+    private String serializeAttributes(ProductVariant variant) {
+        try {
+            return objectMapper.writeValueAsString(variant.getAttributes());
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to snapshot product variant attributes", exception);
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+}
