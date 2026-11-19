@@ -2,6 +2,9 @@ package nmk_backend.controller;
 
 import nmk_backend.dto.PosCheckoutRequest;
 import nmk_backend.dto.PosSaleResponse;
+import nmk_backend.dto.PosCatalogResponse;
+import nmk_backend.dto.PosLocationResponse;
+import nmk_backend.service.PosCatalogService;
 import nmk_backend.service.PosCheckoutService;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,9 +23,29 @@ import java.util.Map;
 public class PosController {
 
     private final PosCheckoutService checkoutService;
+    private final PosCatalogService catalogService;
 
-    public PosController(PosCheckoutService checkoutService) {
+    public PosController(
+            PosCheckoutService checkoutService,
+            PosCatalogService catalogService
+    ) {
         this.checkoutService = checkoutService;
+        this.catalogService = catalogService;
+    }
+
+    @GetMapping("/locations")
+    public ResponseEntity<?> getLocations() {
+        return ResponseEntity.ok(catalogService.getActiveLocations());
+    }
+
+    @GetMapping("/catalog")
+    public ResponseEntity<?> getCatalog(@RequestParam Long locationId) {
+        if (locationId == null || locationId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "A positive locationId is required"
+            ));
+        }
+        return ResponseEntity.ok(catalogService.getCatalog(locationId));
     }
 
     @GetMapping("/sales")
