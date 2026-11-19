@@ -6,6 +6,7 @@ import nmk_backend.entity.ProductVariant;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 public record PosCatalogResponse(
         Long locationId,
@@ -59,7 +60,7 @@ public record PosCatalogResponse(
                 variant.getSku(),
                 variant.getBarcode(),
                 variant.getVariantName(),
-                Map.copyOf(variant.getAttributes()),
+                new LinkedHashMap<>(variant.getAttributes()),
                 price,
                 onHand,
                 reserved,
