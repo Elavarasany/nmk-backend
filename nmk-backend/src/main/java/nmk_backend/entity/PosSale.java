@@ -34,7 +34,7 @@ public class PosSale {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "invoice_number", nullable = false, unique = true, length = 80)
+    @Column(name = "invoice_number", nullable = false, length = 80)
     private String invoiceNumber;
 
     @Column(name = "customer_name", length = 150)
@@ -61,7 +61,7 @@ public class PosSale {
     @Column(nullable = false, length = 20)
     private String status = "COMPLETED";
 
-    @Column(name = "idempotency_key", nullable = false, unique = true, length = 150)
+    @Column(name = "idempotency_key", nullable = false, length = 150)
     private String idempotencyKey;
 
     @Column(name = "request_fingerprint", nullable = false, length = 64)
