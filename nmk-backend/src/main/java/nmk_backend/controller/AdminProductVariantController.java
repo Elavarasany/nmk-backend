@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import nmk_backend.dto.ProductVariantRequest;
 import nmk_backend.dto.ProductVariantResponse;
 import nmk_backend.service.ProductVariantService;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -49,10 +48,6 @@ public class AdminProductVariantController {
             return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
                     "message",
                     exception.getReason() == null ? "Invalid variant request" : exception.getReason()
-            ));
-        } catch (DataIntegrityViolationException exception) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                    "message", "SKU or barcode already exists"
             ));
         }
     }
