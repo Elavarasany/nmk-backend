@@ -4,6 +4,7 @@
 -- MANUAL MIGRATION. Review and test against a disposable staging database first.
 -- DO NOT execute against the client's live database without an approved migration plan.
 -- This migration creates POS transaction tables only. It does not create opening stock.
+-- MySQL DDL implicitly commits; take a database backup before running it.
 
 CREATE TABLE pos_sales (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -27,7 +28,8 @@ CREATE TABLE pos_sales (
         FOREIGN KEY (location_id) REFERENCES inventory_locations (id),
     CONSTRAINT chk_pos_sales_amounts
         CHECK (subtotal >= 0 AND discount_amount >= 0
-            AND discount_amount <= subtotal AND grand_total >= 0),
+            AND discount_amount <= subtotal AND grand_total >= 0
+            AND grand_total = subtotal - discount_amount),
     INDEX idx_pos_sales_created_at (created_at),
     INDEX idx_pos_sales_location (location_id),
     INDEX idx_pos_sales_cashier (cashier_username)
