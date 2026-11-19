@@ -13,6 +13,8 @@ import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.PosSaleRepository;
 import nmk_backend.repository.ProductRepository;
 import nmk_backend.repository.ProductVariantRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Comparator;
 import java.util.Set;
 
 @Service
@@ -57,6 +60,21 @@ public class PosCheckoutService {
     }
 
     @Transactional
+    @Transactional(readOnly = true)
+    public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable) {
+        Page<PosSale> sales = locationId == null
+                ? saleRepository.findAll(pageable)
+                : saleRepository.findByLocationIdOrderByCreatedAtDesc(locationId, pageable);
+        return sales.map(PosSaleResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public PosSaleResponse getSale(Long saleId) {
+        PosSale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new InventoryNotFoundException("POS sale was not found"));
+        return PosSaleResponse.from(sale);
+    }
+
     public PosSaleResponse checkout(
             PosCheckoutRequest request,
             String authenticatedUsername
@@ -82,7 +100,7 @@ public class PosCheckoutService {
             return PosSaleResponse.from(existing);
         }
 
-        InventoryLocation location = locationRepository.findById(request.getLocationId())
+        InventoryLocation location = locationRepository.findByIdForUpdate(request.getLocationId())
                 .orElseThrow(() -> new InventoryNotFoundException(
                         "Inventory location was not found"
                 ));
@@ -113,7 +131,12 @@ public class PosCheckoutService {
         BigDecimal subtotal = ZERO;
         Set<Long> seenVariantIds = new HashSet<>();
 
-        for (PosSaleItemRequest itemRequest : request.getItems()) {
+        var sortedItems = request.getItems().stream()
+                .sorted(Comparator.comparing(PosSaleItemRequest::getProductId)
+                        .thenComparing(PosSaleItemRequest::getVariantId))
+                .toList();
+
+        for (PosSaleItemRequest itemRequest : sortedItems) {
             if (itemRequest == null
                     || itemRequest.getProductId() == null
                     || itemRequest.getVariantId() == null
@@ -127,11 +150,11 @@ public class PosCheckoutService {
                 );
             }
 
-            Product product = productRepository.findById(itemRequest.getProductId())
+            Product product = productRepository.findByIdForUpdate(itemRequest.getProductId())
                     .orElseThrow(() -> new InventoryNotFoundException(
                             "Product " + itemRequest.getProductId() + " was not found"
                     ));
-            ProductVariant variant = variantRepository.findById(itemRequest.getVariantId())
+            ProductVariant variant = variantRepository.findByIdForUpdate(itemRequest.getVariantId())
                     .orElseThrow(() -> new InventoryNotFoundException(
                             "Product variant " + itemRequest.getVariantId() + " was not found"
                     ));
