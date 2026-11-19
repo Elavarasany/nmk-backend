@@ -70,6 +70,10 @@ public class PosCatalogService {
                         Function.identity()
                 ));
 
+        Map<Long, List<ProductVariant>> variantsByProduct = variantRepository.findAll().stream()
+                .filter(ProductVariant::isActive)
+                .collect(Collectors.groupingBy(variant -> variant.getProduct().getId()));
+
         List<Product> products = productRepository.findAll().stream()
                 .filter(Product::isActive)
                 .sorted(Comparator.comparing(Product::getName,
@@ -79,7 +83,7 @@ public class PosCatalogService {
         List<PosCatalogResponse.ProductItem> catalog = products.stream()
                 .map(product -> {
                     List<PosCatalogResponse.VariantItem> variants =
-                            variantRepository.findByProductIdAndActiveTrue(product.getId())
+                            variantsByProduct.getOrDefault(product.getId(), List.of())
                                     .stream()
                                     .sorted(Comparator.comparing(ProductVariant::getSku))
                                     .map(variant -> {
