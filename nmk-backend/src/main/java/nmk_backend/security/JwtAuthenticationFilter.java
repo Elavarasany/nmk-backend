@@ -66,10 +66,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String username = jwtService.extractUsername(token);
 
-            if (username != null &&
-                    SecurityContextHolder.getContext().getAuthentication() == null &&
-                    jwtService.isTokenValid(token, username) &&
-                    adminRepository.existsByUsername(username)) {
+            if (username != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null
+                    && jwtService.isTokenValid(token, username)
+                    && adminRepository.existsByUsername(username)) {
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -91,6 +91,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
             response.getWriter().write(
                     "{\"message\":\"Invalid or expired token\"}"
             );

@@ -3,6 +3,7 @@ package nmk_backend.config;
 
 import nmk_backend.security.JwtAuthenticationFilter;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,6 +50,11 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+
+                        // Permit Spring's error dispatch so the original
+                        // validation or application error can be returned.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers("/error").permitAll()
 
                         // Allow browser CORS preflight requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -119,6 +125,7 @@ public class SecurityConfig {
 
                         // Public customer checkout API
                         .requestMatchers("/api/orders/checkout").permitAll()
+
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/orders/track/**"
