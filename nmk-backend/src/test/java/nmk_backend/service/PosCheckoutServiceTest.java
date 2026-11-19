@@ -16,6 +16,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -79,14 +80,20 @@ class PosCheckoutServiceTest {
         cashier.setId(7L);
         cashier.setUsername("admin");
 
-        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
         when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(cashier));
-        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
-        when(variantRepository.findById(20L)).thenReturn(Optional.of(variant));
+        when(productRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(product));
+        when(variantRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(variant));
         when(saleRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
         doAnswer(invocation -> {
             PosSale sale = invocation.getArgument(0);
             ReflectionTestUtils.setField(sale, "id", 123L);
+            if (sale.getInvoiceNumber() == null) {
+                sale.setInvoiceNumber("NMK-20261119-TEST123456");
+            }
+            if (sale.getCreatedAt() == null) {
+                ReflectionTestUtils.setField(sale, "createdAt", LocalDateTime.now());
+            }
             return sale;
         }).when(saleRepository).saveAndFlush(any(PosSale.class));
     }
@@ -188,6 +195,58 @@ class PosCheckoutServiceTest {
         );
 
         assertTrue(exception.getMessage().contains("does not belong"));
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+
+    @Test
+    void supportsSplitPaymentsAndCalculatesCashChange() {
+        PosCheckoutRequest request = validRequest();
+        request.setDiscountAmount(new BigDecimal("10.00"));
+
+        PosPaymentRequest cash = new PosPaymentRequest();
+        cash.setPaymentMethod("CASH");
+        cash.setAmount(new BigDecimal("40.00"));
+        cash.setTenderedAmount(new BigDecimal("50.00"));
+
+        PosPaymentRequest upi = new PosPaymentRequest();
+        upi.setPaymentMethod("UPI");
+        upi.setAmount(new BigDecimal("50.00"));
+        request.setPayments(List.of(cash, upi));
+
+        var response = service.checkout(request, "admin");
+
+        assertEquals("90.00", response.grandTotal().toPlainString());
+        assertEquals(2, response.payments().size());
+        assertEquals("10.00", response.payments().get(0).changeAmount().toPlainString());
+        assertEquals("0.00", response.payments().get(1).changeAmount().toPlainString());
+    }
+
+    @Test
+    void rejectsDiscountGreaterThanSubtotalBeforePersisting() {
+        PosCheckoutRequest request = validRequest();
+        request.setDiscountAmount(new BigDecimal("101.00"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.checkout(request, "admin"));
+
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    void rejectsDuplicateVariantLines() {
+        PosCheckoutRequest request = validRequest();
+        PosSaleItemRequest duplicate = new PosSaleItemRequest();
+        duplicate.setProductId(10L);
+        duplicate.setVariantId(20L);
+        duplicate.setQuantity(2);
+        request.setItems(List.of(request.getItems().get(0), duplicate));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.checkout(request, "admin"));
+
         verify(saleRepository, never()).saveAndFlush(any());
         verifyNoInteractions(inventoryService);
     }
