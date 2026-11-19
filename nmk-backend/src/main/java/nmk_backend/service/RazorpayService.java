@@ -34,7 +34,7 @@ public class RazorpayService {
         if (keyId == null || keyId.isBlank()
                 || keySecret == null || keySecret.isBlank()) {
 
-            throw new IllegalStateException(
+            throw new nmk_backend.exception.PaymentConfigurationException(
                     "Razorpay payment credentials are not configured"
             );
         }

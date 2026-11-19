@@ -98,6 +98,35 @@ class OrderControllerTest {
         verify(razorpayService, never())
                 .createOrder(anyInt());
     }
+    @Test
+    void checkoutReleasesStockWhenAmountHasFractionalPaise()
+            throws Exception {
+
+        when(orderService.createPendingOrder(request))
+                .thenReturn(pendingOrder);
+
+        when(pendingOrder.getTotalAmount())
+                .thenReturn(new BigDecimal("100.001"));
+
+        when(pendingOrder.getId())
+                .thenReturn(11L);
+
+        ResponseEntity<?> response =
+                orderController.createCheckout(request);
+
+        assertEquals(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                response.getStatusCode()
+        );
+
+        verify(orderService).releaseReservation(11L);
+
+        verify(orderRepository, never())
+                .saveAndFlush(any());
+
+        verify(razorpayService, never())
+                .createOrder(anyInt());
+    }
 
     @Test
     void checkoutReleasesStockWhenInProgressStatusCannotBeSaved()

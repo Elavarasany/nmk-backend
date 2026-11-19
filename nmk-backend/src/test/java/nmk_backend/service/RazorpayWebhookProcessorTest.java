@@ -3,6 +3,7 @@ package nmk_backend.service;
 
 import tools.jackson.databind.ObjectMapper;
 
+import nmk_backend.exception.PaymentConfirmationConflictException;
 import nmk_backend.entity.Order;
 import nmk_backend.entity.RazorpayWebhookEvent;
 import nmk_backend.repository.OrderRepository;
@@ -196,6 +197,56 @@ class RazorpayWebhookProcessorTest {
     }
 
     @Test
+    void paymentConfirmationConflictGoesDirectlyToManualReview()
+            throws Exception {
+
+        RazorpayWebhookEvent event =
+                event(capturedPayload(12500));
+
+        Order order = order();
+
+        when(eventRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(event));
+
+        when(orderRepository.findByRazorpayOrderId("order_123"))
+                .thenReturn(Optional.of(order));
+
+        when(razorpayService.isPaymentCapturedForOrder(
+                "pay_123",
+                "order_123",
+                12500
+        )).thenReturn(true);
+
+        when(paymentVerificationService.confirmPayment(
+                "order_123",
+                "pay_123"
+        )).thenThrow(
+                new PaymentConfirmationConflictException(
+                        "A different payment is already recorded"
+                )
+        );
+
+        processor.processOne(1L);
+
+        assertEquals("MANUAL_REVIEW", event.getStatus());
+        assertEquals(1, event.getAttemptCount());
+
+        assertTrue(
+                event.getProcessingError().contains(
+                        "A different payment is already recorded"
+                )
+        );
+
+        assertNull(event.getNextAttemptAt());
+        assertNull(event.getClaimToken());
+        assertNull(event.getProcessingStartedAt());
+        assertNull(event.getProcessedAt());
+
+        verify(paymentVerificationService)
+                .confirmPayment("order_123", "pay_123");
+    }
+
+    @Test
     void providerNotYetReportingCaptureSchedulesRetry() throws Exception {
 
         RazorpayWebhookEvent event =
@@ -247,6 +298,38 @@ class RazorpayWebhookProcessorTest {
         assertTrue(
                 event.getProcessingError().contains("amount")
         );
+        assertNull(event.getClaimToken());
+        assertNull(event.getProcessingStartedAt());
+
+        verifyNoInteractions(
+                razorpayService,
+                paymentVerificationService
+        );
+    }
+    @Test
+    void fractionalPaiseOrderAmountIsSentToManualReview()
+            throws Exception {
+
+        RazorpayWebhookEvent event =
+                event(capturedPayload(12500));
+
+        Order order = order();
+        order.setTotalAmount(new BigDecimal("125.001"));
+
+        when(eventRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(event));
+
+        when(orderRepository.findByRazorpayOrderId("order_123"))
+                .thenReturn(Optional.of(order));
+
+        processor.processOne(1L);
+
+        assertEquals("MANUAL_REVIEW", event.getStatus());
+
+        assertTrue(
+                event.getProcessingError().toLowerCase().contains("amount")
+        );
+
         assertNull(event.getClaimToken());
         assertNull(event.getProcessingStartedAt());
 

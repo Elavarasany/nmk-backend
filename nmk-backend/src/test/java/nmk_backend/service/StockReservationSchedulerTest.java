@@ -163,6 +163,25 @@ class StockReservationSchedulerTest {
         verify(orderRepository).findByIdForUpdate(10L);
         verify(orderService, never()).releaseReservation(anyLong());
     }
+    @Test
+    void shouldNotReleaseWhenLockedPaymentCreationIsNoLongerCreated()
+            throws Exception {
+        Order snapshot = expiredOrder("CREATED", "order_123");
+        arrangeExpiredOrder(snapshot);
+
+        when(razorpayService.hasUnsettledOrSuccessfulPayment("order_123"))
+                .thenReturn(false);
+
+        Order lockedOrder = expiredOrder("IN_PROGRESS", "order_123");
+
+        when(orderRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(lockedOrder));
+
+        scheduler.expireReservations();
+
+        verify(orderRepository).findByIdForUpdate(10L);
+        verify(orderService, never()).releaseReservation(anyLong());
+    }
     private void stubTransactionManager() {
     when(transactionManager.getTransaction(
             any(TransactionDefinition.class)

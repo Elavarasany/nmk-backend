@@ -40,6 +40,9 @@ public class SecurityConfig {
         http
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
+                .httpBasic(basic -> basic.disable())
+                .formLogin(form -> form.disable())
+                .logout(logout -> logout.disable())
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -126,6 +129,23 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/appointments"
                         ).permitAll()
+
+                        // Appointment management requires an admin JWT
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/appointments",
+                                "/api/appointments/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/appointments/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/appointments/**"
+                        ).hasRole("ADMIN")
 
                         // Everything else requires authentication
                         .anyRequest().authenticated()

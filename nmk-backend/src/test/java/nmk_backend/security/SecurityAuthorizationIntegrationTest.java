@@ -4,6 +4,9 @@ import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.security.JwtService;
 
+import nmk_backend.repository.AppointmentRepository;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +78,74 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
     void publicProductListCanBeAccessedWithoutToken() throws Exception {
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk());
+    }
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    @Test
+    void clearingAppointmentsWithoutActionAuthorizationReturnsForbidden()
+            throws Exception {
+
+        String username = "appointment-security-test-admin";
+
+        adminRepository.findByUsername(username)
+                .ifPresent(adminRepository::delete);
+
+        Admin admin = new Admin();
+        admin.setUsername(username);
+        admin.setPassword(passwordEncoder.encode("TestOnlyPassword123!"));
+
+        adminRepository.saveAndFlush(admin);
+
+        try {
+            String token = jwtService.generateToken(username);
+
+            long appointmentsBefore = appointmentRepository.count();
+
+            mockMvc.perform(delete("/api/appointments/clear")
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.message")
+                            .value("Fresh password authorization is required"));
+
+            assertEquals(appointmentsBefore, appointmentRepository.count());
+
+        } finally {
+            adminRepository.findByUsername(username)
+                    .ifPresent(adminRepository::delete);
+        }
+    }
+
+    @Test
+    void clearingAppointmentsWithInvalidActionAuthorizationReturnsForbidden()
+            throws Exception {
+
+        String username = "appointment-invalid-token-test-admin";
+
+        Admin admin = new Admin();
+        admin.setUsername(username);
+        admin.setPassword(passwordEncoder.encode("TestOnlyPassword123!"));
+
+        adminRepository.saveAndFlush(admin);
+
+        try {
+            String token = jwtService.generateToken(username);
+            long appointmentsBefore = appointmentRepository.count();
+
+            mockMvc.perform(delete("/api/appointments/clear")
+                            .header("Authorization", "Bearer " + token)
+                            .header("X-Admin-Action-Authorization", "invalid-test-token"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.message")
+                            .value("Invalid or expired authorization"));
+
+            assertEquals(appointmentsBefore, appointmentRepository.count());
+
+        } finally {
+            adminRepository.findByUsername(username)
+                    .ifPresent(adminRepository::delete);
+        }
     }
 
     @Test

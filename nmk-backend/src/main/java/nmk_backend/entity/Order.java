@@ -31,7 +31,7 @@ public class Order {
 
     private String paymentStatus;
 
-    @Column(name = "payment_creation_status", length = 30)
+    @Column(name = "payment_creation_status", length = 30, nullable = false)
     private String paymentCreationStatus = "NOT_STARTED";
 
     private String orderStatus = "PENDING";
@@ -41,6 +41,14 @@ public class Order {
 
     @Column(name = "stock_reserved", nullable = false)
     private boolean stockReserved = false;
+
+    // Null on existing orders; new orders identify their reservation system.
+    @Column(name = "reservation_type", length = 30)
+    private String reservationType;
+
+    // Snapshot of the inventory location used for this order.
+    @Column(name = "inventory_location_id")
+    private Long inventoryLocationId;
 
     private String razorpayOrderId;
     private String razorpayPaymentId;
@@ -64,7 +72,9 @@ public class Order {
 
     @PrePersist
     public void prePersist() {
-        orderDate = LocalDateTime.now();
+        if (orderDate == null) {
+            orderDate = LocalDateTime.now();
+        }
 
         if (orderStatus == null) {
             orderStatus = "PENDING";
@@ -176,6 +186,38 @@ public class Order {
         this.orderStatus = orderStatus;
     }
 
+    public LocalDateTime getReservationExpiresAt() {
+        return reservationExpiresAt;
+    }
+
+    public void setReservationExpiresAt(LocalDateTime reservationExpiresAt) {
+        this.reservationExpiresAt = reservationExpiresAt;
+    }
+
+    public boolean isStockReserved() {
+        return stockReserved;
+    }
+
+    public void setStockReserved(boolean stockReserved) {
+        this.stockReserved = stockReserved;
+    }
+
+    public String getReservationType() {
+        return reservationType;
+    }
+
+    public void setReservationType(String reservationType) {
+        this.reservationType = reservationType;
+    }
+
+    public Long getInventoryLocationId() {
+        return inventoryLocationId;
+    }
+
+    public void setInventoryLocationId(Long inventoryLocationId) {
+        this.inventoryLocationId = inventoryLocationId;
+    }
+
     public String getRazorpayOrderId() {
         return razorpayOrderId;
     }
@@ -226,21 +268,5 @@ public class Order {
 
     public void setItems(List<OrderItem> items) {
         this.items = items;
-    }
-
-    public LocalDateTime getReservationExpiresAt() {
-        return reservationExpiresAt;
-    }
-
-    public void setReservationExpiresAt(LocalDateTime reservationExpiresAt) {
-        this.reservationExpiresAt = reservationExpiresAt;
-    }
-
-    public boolean isStockReserved() {
-        return stockReserved;
-    }
-
-    public void setStockReserved(boolean stockReserved) {
-        this.stockReserved = stockReserved;
     }
 }

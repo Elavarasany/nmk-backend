@@ -1,3 +1,4 @@
+
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
@@ -11,6 +12,10 @@ public class OrderItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
+
     private Long productId;
 
     private String productName;
@@ -18,25 +23,42 @@ public class OrderItem {
     private Integer quantity;
 
     private BigDecimal price;
-    @Column(name = "prescription_type")
+
     private String prescriptionType;
 
-    @Column(name = "lens_type")
     private String lensType;
 
-    @Column(name = "photochromic")
     private Boolean photochromic;
 
-    // Prescription saved at checkout as JSON (mode, eyes, image link); null when none was given
-    @Column(name = "prescription_json", length = 4000)
+    @Column(name = "prescription_json", columnDefinition = "TEXT")
     private String prescriptionJson;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    // Selected product variant snapshots
+    @Column(name = "variant_id")
+    private Long variantId;
+
+    @Column(name = "variant_sku", length = 100)
+    private String variantSku;
+
+    @Column(name = "variant_name", length = 150)
+    private String variantName;
+
+    @Column(name = "variant_attributes_json", length = 4000)
+    private String variantAttributesJson;
+
+    public OrderItem() {
+    }
 
     public Long getId() {
         return id;
+    }
+
+    public Order getOrder() {
+        return order;
+    }
+
+    public void setOrder(Order order) {
+        this.order = order;
     }
 
     public Long getProductId() {
@@ -71,13 +93,6 @@ public class OrderItem {
         this.price = price;
     }
 
-    public Order getOrder() {
-        return order;
-    }
-
-    public void setOrder(Order order) {
-        this.order = order;
-    }
     public String getPrescriptionType() {
         return prescriptionType;
     }
@@ -108,5 +123,37 @@ public class OrderItem {
 
     public void setPrescriptionJson(String prescriptionJson) {
         this.prescriptionJson = prescriptionJson;
+    }
+
+    public Long getVariantId() {
+        return variantId;
+    }
+
+    public void setVariantId(Long variantId) {
+        this.variantId = variantId;
+    }
+
+    public String getVariantSku() {
+        return variantSku;
+    }
+
+    public void setVariantSku(String variantSku) {
+        this.variantSku = variantSku;
+    }
+
+    public String getVariantName() {
+        return variantName;
+    }
+
+    public void setVariantName(String variantName) {
+        this.variantName = variantName;
+    }
+
+    public String getVariantAttributesJson() {
+        return variantAttributesJson;
+    }
+
+    public void setVariantAttributesJson(String variantAttributesJson) {
+        this.variantAttributesJson = variantAttributesJson;
     }
 }

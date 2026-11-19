@@ -109,6 +109,8 @@ public class StockReservationScheduler {
                 if (!lockedOrder.isStockReserved()
                         || !"PENDING".equalsIgnoreCase(
                         lockedOrder.getPaymentStatus())
+                        || !"CREATED".equalsIgnoreCase(
+                        lockedOrder.getPaymentCreationStatus())
                         || lockedOrder.getReservationExpiresAt() == null
                         || lockedOrder.getReservationExpiresAt()
                         .isAfter(LocalDateTime.now())) {

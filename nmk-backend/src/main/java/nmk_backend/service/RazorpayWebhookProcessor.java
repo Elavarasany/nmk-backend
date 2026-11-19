@@ -4,6 +4,8 @@ package nmk_backend.service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import nmk_backend.exception.PaymentConfirmationConflictException;
+
 import nmk_backend.entity.Order;
 import nmk_backend.entity.RazorpayWebhookEvent;
 import nmk_backend.repository.OrderRepository;
@@ -204,7 +206,7 @@ public class RazorpayWebhookProcessor {
 
         try {
             expectedPaise = order.getTotalAmount()
-                    .setScale(2, RoundingMode.HALF_UP)
+                    .setScale(2, RoundingMode.UNNECESSARY)
                     .movePointRight(2)
                     .intValueExact();
 
@@ -246,7 +248,9 @@ public class RazorpayWebhookProcessor {
                     paymentId
             );
 
-        } catch (IllegalStateException | IllegalArgumentException conflict) {
+        } catch (PaymentConfirmationConflictException
+                 | IllegalStateException
+                 | IllegalArgumentException conflict) {
 
             throw new ManualReviewException(
                     safeMessage(conflict)

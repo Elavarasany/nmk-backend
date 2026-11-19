@@ -5,7 +5,7 @@ import nmk_backend.entity.Admin;
 import nmk_backend.entity.AdminActionAuthorization;
 import nmk_backend.repository.AdminActionAuthorizationRepository;
 import nmk_backend.repository.AdminRepository;
-
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,9 @@ public class AdminActionAuthorizationService {
 
     private static final Set<String> ALLOWED_ACTIONS = Set.of(
             "CLEAR_ORDERS",
-            "CLEAR_APPOINTMENTS"
+            "CLEAR_APPOINTMENTS",
+            "INVENTORY_RECEIPT",
+            "INVENTORY_ADJUSTMENT"
     );
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -81,7 +83,7 @@ public class AdminActionAuthorizationService {
         return rawToken;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void consumeAuthorization(
             String username,
             String rawToken,

@@ -60,7 +60,7 @@ public class OrderController {
             order = orderService.createPendingOrder(request);
 
             amountInPaise = order.getTotalAmount()
-                    .setScale(2, RoundingMode.HALF_UP)
+                    .setScale(2, RoundingMode.UNNECESSARY)
                     .movePointRight(2)
                     .intValueExact();
 

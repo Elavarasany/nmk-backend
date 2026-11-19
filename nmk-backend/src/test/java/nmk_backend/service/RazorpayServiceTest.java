@@ -33,7 +33,7 @@ class RazorpayServiceTest {
         ReflectionTestUtils.setField(razorpayService, "keyId", "");
 
         assertThrows(
-                IllegalStateException.class,
+                nmk_backend.exception.PaymentConfigurationException.class,
                 () -> razorpayService.requirePaymentCredentials()
         );
     }
@@ -43,7 +43,7 @@ class RazorpayServiceTest {
         ReflectionTestUtils.setField(razorpayService, "keySecret", "");
 
         assertThrows(
-                IllegalStateException.class,
+                nmk_backend.exception.PaymentConfigurationException.class,
                 () -> razorpayService.requirePaymentCredentials()
         );
     }
@@ -60,7 +60,7 @@ class RazorpayServiceTest {
         ReflectionTestUtils.setField(razorpayService, "keyId", "");
 
         assertThrows(
-                IllegalStateException.class,
+                nmk_backend.exception.PaymentConfigurationException.class,
                 () -> razorpayService.createOrder(10000)
         );
     }
