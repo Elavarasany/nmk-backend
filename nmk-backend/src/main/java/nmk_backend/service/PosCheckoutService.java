@@ -91,6 +91,12 @@ public class PosCheckoutService {
         if (request.getPayments() == null || request.getPayments().isEmpty()) {
             throw new IllegalArgumentException("At least one payment is required");
         }
+        if (request.getItems().size() > 100) {
+            throw new IllegalArgumentException("A checkout cannot contain more than 100 item lines");
+        }
+        if (request.getPayments().size() > 3) {
+            throw new IllegalArgumentException("A checkout can contain at most three payment methods");
+        }
         if (request.getItems().stream().anyMatch(item ->
                 item == null || item.getProductId() == null || item.getProductId() <= 0
                         || item.getVariantId() == null || item.getVariantId() <= 0
@@ -265,6 +271,7 @@ public class PosCheckoutService {
             BigDecimal grandTotal
     ) {
         BigDecimal paymentTotal = ZERO;
+        Set<String> seenPaymentMethods = new HashSet<>();
 
         for (PosPaymentRequest paymentRequest : request.getPayments()) {
             if (paymentRequest == null || paymentRequest.getPaymentMethod() == null) {
@@ -276,6 +283,11 @@ public class PosCheckoutService {
             if (!PAYMENT_METHODS.contains(method)) {
                 throw new IllegalArgumentException(
                         "Payment method must be CASH, UPI or CARD. Use multiple payment rows for split payments."
+                );
+            }
+            if (!seenPaymentMethods.add(method)) {
+                throw new IllegalArgumentException(
+                        "Each payment method can appear only once in a split payment"
                 );
             }
 
