@@ -91,8 +91,13 @@ public class PosCheckoutService {
         if (request.getPayments() == null || request.getPayments().isEmpty()) {
             throw new IllegalArgumentException("At least one payment is required");
         }
-        if (request.getItems().stream().anyMatch(java.util.Objects::isNull)) {
-            throw new IllegalArgumentException("Sale items cannot be null");
+        if (request.getItems().stream().anyMatch(item ->
+                item == null || item.getProductId() == null || item.getProductId() <= 0
+                        || item.getVariantId() == null || item.getVariantId() <= 0
+                        || item.getQuantity() == null || item.getQuantity() <= 0)) {
+            throw new IllegalArgumentException(
+                    "Every sale item needs positive product, variant and quantity values"
+            );
         }
 
         String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
@@ -115,6 +120,19 @@ public class PosCheckoutService {
                 ));
         if (!location.isActive()) {
             throw new IllegalArgumentException("Inventory location is inactive");
+        }
+
+        // Recheck after acquiring the location lock. This closes the common
+        // same-location race where two retries both initially observed no sale.
+        var saleAfterLock = saleRepository.findByIdempotencyKey(idempotencyKey);
+        if (saleAfterLock.isPresent()) {
+            PosSale existing = saleAfterLock.get();
+            if (!fingerprint.equals(existing.getRequestFingerprint())) {
+                throw new IllegalArgumentException(
+                        "This idempotency key was already used with different checkout details"
+                );
+            }
+            return PosSaleResponse.from(existing);
         }
 
         Admin cashier = adminRepository.findByUsername(authenticatedUsername)
