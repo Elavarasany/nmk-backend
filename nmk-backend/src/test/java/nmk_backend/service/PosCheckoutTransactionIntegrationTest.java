@@ -195,6 +195,56 @@ class PosCheckoutTransactionIntegrationTest {
         }
     }
 
+    @Test
+    void retryingSameCheckoutKeyReturnsOriginalSaleWithoutSellingStockAgain() {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+
+        PosCheckoutRequest request = buildCheckoutRequest("POS-IDEMPOTENT-REPLAY-IT");
+        request.setCustomerName("  Test Customer  ");
+
+        var first = checkoutService.checkout(request, "pos-rollback-test-cashier");
+
+        request.setCustomerName("Test Customer");
+        var retry = checkoutService.checkout(request, "pos-rollback-test-cashier");
+
+        assertEquals(first.id(), retry.id(),
+                "A retry with the same key and equivalent normalized details must return the original sale");
+        assertEquals(1, saleRepository.count());
+        assertEquals(1, movementRepository.count());
+
+        InventoryBalance finalBalance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        assertEquals(0, finalBalance.getOnHandQuantity());
+        assertEquals(0, finalBalance.getReservedQuantity());
+    }
+
+    @Test
+    void reusingCheckoutKeyWithChangedDetailsIsRejected() {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+
+        PosCheckoutRequest request = buildCheckoutRequest("POS-IDEMPOTENCY-MISMATCH-IT");
+        checkoutService.checkout(request, "pos-rollback-test-cashier");
+
+        request.setCustomerName("Different Customer");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> checkoutService.checkout(request, "pos-rollback-test-cashier"));
+
+        assertEquals(1, saleRepository.count(),
+                "A mismatched retry must not create another sale");
+        assertEquals(1, movementRepository.count(),
+                "A mismatched retry must not create another stock movement");
+    }
+
     private CheckoutOutcome performConcurrentCheckout(
             String idempotencyKey,
             java.util.concurrent.CountDownLatch ready,
