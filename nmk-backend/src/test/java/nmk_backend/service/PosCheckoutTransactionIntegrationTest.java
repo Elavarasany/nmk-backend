@@ -1,0 +1,144 @@
+package nmk_backend.service;
+
+import nmk_backend.dto.PosCheckoutRequest;
+import nmk_backend.dto.PosPaymentRequest;
+import nmk_backend.dto.PosSaleItemRequest;
+import nmk_backend.entity.Admin;
+import nmk_backend.entity.InventoryBalance;
+import nmk_backend.entity.InventoryLocation;
+import nmk_backend.entity.Product;
+import nmk_backend.entity.ProductVariant;
+import nmk_backend.exception.InsufficientStockException;
+import nmk_backend.repository.AdminRepository;
+import nmk_backend.repository.InventoryBalanceRepository;
+import nmk_backend.repository.InventoryLocationRepository;
+import nmk_backend.repository.PosSaleRepository;
+import nmk_backend.repository.ProductRepository;
+import nmk_backend.repository.ProductVariantRepository;
+import nmk_backend.repository.StockMovementRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@SpringBootTest
+@ActiveProfiles("test")
+class PosCheckoutTransactionIntegrationTest {
+
+    @Autowired
+    private PosCheckoutService checkoutService;
+
+    @Autowired
+    private AdminRepository adminRepository;
+
+    @Autowired
+    private InventoryLocationRepository locationRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private ProductVariantRepository variantRepository;
+
+    @Autowired
+    private InventoryBalanceRepository balanceRepository;
+
+    @Autowired
+    private StockMovementRepository movementRepository;
+
+    @Autowired
+    private PosSaleRepository saleRepository;
+
+    private InventoryLocation location;
+    private Product product;
+    private ProductVariant variant;
+
+    @BeforeEach
+    void setUp() {
+        movementRepository.deleteAll();
+        balanceRepository.deleteAll();
+        saleRepository.deleteAll();
+        variantRepository.deleteAll();
+        productRepository.deleteAll();
+        locationRepository.deleteAll();
+        adminRepository.deleteAll();
+
+        Admin cashier = new Admin();
+        cashier.setUsername("pos-rollback-test-cashier");
+        cashier.setPassword("test-only-password");
+        adminRepository.saveAndFlush(cashier);
+
+        location = new InventoryLocation();
+        location.setCode("POS-ROLLBACK-TEST");
+        location.setName("POS Rollback Test Location");
+        location.setActive(true);
+        location = locationRepository.saveAndFlush(location);
+
+        product = new Product();
+        product.setName("POS Rollback Test Frame");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setStockQuantity(0);
+        product.setActive(true);
+        product = productRepository.saveAndFlush(product);
+
+        variant = new ProductVariant();
+        variant.setProduct(product);
+        variant.setSku("POS-ROLLBACK-TEST-SKU");
+        variant.setVariantName("Test Black");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setActive(true);
+        variant = variantRepository.saveAndFlush(variant);
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(0);
+        balance.setReservedQuantity(0);
+        balance.setReorderLevel(0);
+        balanceRepository.saveAndFlush(balance);
+    }
+
+    @Test
+    void insufficientStockRollsBackSaleAndPaymentRecords() {
+        PosCheckoutRequest request = new PosCheckoutRequest();
+        request.setLocationId(location.getId());
+        request.setIdempotencyKey("POS-ROLLBACK-IT-" + System.nanoTime());
+        request.setDiscountAmount(new BigDecimal("0.00"));
+
+        PosSaleItemRequest item = new PosSaleItemRequest();
+        item.setProductId(product.getId());
+        item.setVariantId(variant.getId());
+        item.setQuantity(1);
+        request.setItems(List.of(item));
+
+        PosPaymentRequest payment = new PosPaymentRequest();
+        payment.setPaymentMethod("CASH");
+        payment.setAmount(new BigDecimal("100.00"));
+        payment.setTenderedAmount(new BigDecimal("100.00"));
+        request.setPayments(List.of(payment));
+
+        assertThrows(
+                InsufficientStockException.class,
+                () -> checkoutService.checkout(request, "pos-rollback-test-cashier")
+        );
+
+        assertEquals(0, saleRepository.count(),
+                "The sale and its cascading payment/item records must roll back");
+        assertEquals(0, movementRepository.count(),
+                "A failed checkout must not leave a stock movement");
+
+        InventoryBalance unchanged = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+
+        assertEquals(0, unchanged.getOnHandQuantity());
+        assertEquals(0, unchanged.getReservedQuantity());
+    }
+}
