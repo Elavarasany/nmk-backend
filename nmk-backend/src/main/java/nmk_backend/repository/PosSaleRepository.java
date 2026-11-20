@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +18,10 @@ public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
     Optional<PosSale> findByIdempotencyKey(String idempotencyKey);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<PosSale> findByIdempotencyKeyForUpdate(String idempotencyKey);
+    @Query("SELECT s FROM PosSale s WHERE s.idempotencyKey = :idempotencyKey")
+    Optional<PosSale> findByIdempotencyKeyForUpdate(
+            @Param("idempotencyKey") String idempotencyKey
+    );
 
     boolean existsByIdempotencyKey(String idempotencyKey);
 
