@@ -141,4 +141,100 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(0, unchanged.getOnHandQuantity());
         assertEquals(0, unchanged.getReservedQuantity());
     }
+    @Test
+    void concurrentCheckoutsCannotSellTheSameLastUnitTwice() throws Exception {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        try {
+            var first = executor.submit(() -> performConcurrentCheckout(
+                    "POS-CONCURRENT-IT-A-" + System.nanoTime(), ready, start
+            ));
+            var second = executor.submit(() -> performConcurrentCheckout(
+                    "POS-CONCURRENT-IT-B-" + System.nanoTime(), ready, start
+            ));
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "Both checkout workers should be ready");
+            start.countDown();
+
+            CheckoutOutcome firstOutcome = first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            CheckoutOutcome secondOutcome = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+
+            long successfulCheckouts = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(CheckoutOutcome::successful)
+                    .count();
+            long rejectedCheckouts = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(outcome -> outcome.failure() instanceof InsufficientStockException)
+                    .count();
+
+            assertEquals(1, successfulCheckouts,
+                    "Exactly one checkout may consume the only available unit");
+            assertEquals(1, rejectedCheckouts,
+                    "The competing checkout must fail for insufficient stock");
+            assertEquals(1, saleRepository.count(),
+                    "Only one sale may be persisted");
+            assertEquals(1, movementRepository.count(),
+                    "Only one stock movement may be persisted");
+
+            InventoryBalance finalBalance = balanceRepository
+                    .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                    .orElseThrow();
+            assertEquals(0, finalBalance.getOnHandQuantity());
+            assertEquals(0, finalBalance.getReservedQuantity());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private CheckoutOutcome performConcurrentCheckout(
+            String idempotencyKey,
+            java.util.concurrent.CountDownLatch ready,
+            java.util.concurrent.CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                return new CheckoutOutcome(false,
+                        new IllegalStateException("Timed out waiting to start checkout"));
+            }
+            checkoutService.checkout(buildCheckoutRequest(idempotencyKey),
+                    "pos-rollback-test-cashier");
+            return new CheckoutOutcome(true, null);
+        } catch (Throwable failure) {
+            return new CheckoutOutcome(false, failure);
+        }
+    }
+
+    private PosCheckoutRequest buildCheckoutRequest(String idempotencyKey) {
+        PosCheckoutRequest request = new PosCheckoutRequest();
+        request.setLocationId(location.getId());
+        request.setIdempotencyKey(idempotencyKey);
+        request.setDiscountAmount(new BigDecimal("0.00"));
+
+        PosSaleItemRequest item = new PosSaleItemRequest();
+        item.setProductId(product.getId());
+        item.setVariantId(variant.getId());
+        item.setQuantity(1);
+        request.setItems(List.of(item));
+
+        PosPaymentRequest payment = new PosPaymentRequest();
+        payment.setPaymentMethod("CASH");
+        payment.setAmount(new BigDecimal("100.00"));
+        payment.setTenderedAmount(new BigDecimal("100.00"));
+        request.setPayments(List.of(payment));
+        return request;
+    }
+
+    private record CheckoutOutcome(boolean successful, Throwable failure) {
+    }
+
 }
