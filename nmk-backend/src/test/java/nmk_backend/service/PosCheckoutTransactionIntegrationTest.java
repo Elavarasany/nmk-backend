@@ -292,6 +292,84 @@ class PosCheckoutTransactionIntegrationTest {
         }
     }
 
+    @Test
+    void concurrentSameIdempotencyKeyAcrossDifferentLocationsCreatesOnlyOneSale() throws Exception {
+        InventoryBalance firstBalance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        firstBalance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(firstBalance);
+
+        InventoryLocation secondLocation = new InventoryLocation();
+        secondLocation.setCode("POS-ROLLBACK-TEST-2");
+        secondLocation.setName("POS Rollback Test Location 2");
+        secondLocation.setActive(true);
+        secondLocation = locationRepository.saveAndFlush(secondLocation);
+
+        InventoryBalance secondBalance = new InventoryBalance();
+        secondBalance.setLocation(secondLocation);
+        secondBalance.setVariant(variant);
+        secondBalance.setOnHandQuantity(1);
+        secondBalance.setReservedQuantity(0);
+        secondBalance.setReorderLevel(0);
+        balanceRepository.saveAndFlush(secondBalance);
+
+        String sharedKey = "POS-CROSS-LOCATION-SAME-KEY-" + System.nanoTime();
+        PosCheckoutRequest firstRequest = buildCheckoutRequest(sharedKey);
+        PosCheckoutRequest secondRequest = buildCheckoutRequest(sharedKey);
+        secondRequest.setLocationId(secondLocation.getId());
+
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        try {
+            var first = executor.submit(() ->
+                    performConcurrentCheckout(firstRequest, ready, start));
+            var second = executor.submit(() ->
+                    performConcurrentCheckout(secondRequest, ready, start));
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "Both cross-location checkout workers should be ready");
+            start.countDown();
+
+            CheckoutOutcome firstOutcome = first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            CheckoutOutcome secondOutcome = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+
+            long successfulCheckouts = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(CheckoutOutcome::successful)
+                    .count();
+            long rejectedCheckouts = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(outcome -> !outcome.successful())
+                    .count();
+
+            assertEquals(1, successfulCheckouts,
+                    "Only one location may create a sale for a globally unique idempotency key");
+            assertEquals(1, rejectedCheckouts,
+                    "The competing location must reject reuse of the same key");
+            assertEquals(1, saleRepository.count(),
+                    "Cross-location retries must create exactly one sale");
+            assertEquals(1, movementRepository.count(),
+                    "Cross-location retries must create exactly one stock movement");
+
+            InventoryBalance finalFirstBalance = balanceRepository
+                    .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                    .orElseThrow();
+            InventoryBalance finalSecondBalance = balanceRepository
+                    .findByLocationIdAndVariantId(secondLocation.getId(), variant.getId())
+                    .orElseThrow();
+
+            assertEquals(1, finalFirstBalance.getOnHandQuantity()
+                            + finalSecondBalance.getOnHandQuantity(),
+                    "Exactly one location should have consumed its unit");
+            assertEquals(0, finalFirstBalance.getReservedQuantity());
+            assertEquals(0, finalSecondBalance.getReservedQuantity());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private CheckoutOutcome performConcurrentCheckout(
             String idempotencyKey,
             java.util.concurrent.CountDownLatch ready,
@@ -305,6 +383,24 @@ class PosCheckoutTransactionIntegrationTest {
             }
             checkoutService.checkout(buildCheckoutRequest(idempotencyKey),
                     "pos-rollback-test-cashier");
+            return new CheckoutOutcome(true, null);
+        } catch (Throwable failure) {
+            return new CheckoutOutcome(false, failure);
+        }
+    }
+
+    private CheckoutOutcome performConcurrentCheckout(
+            PosCheckoutRequest request,
+            java.util.concurrent.CountDownLatch ready,
+            java.util.concurrent.CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                return new CheckoutOutcome(false,
+                        new IllegalStateException("Timed out waiting to start checkout"));
+            }
+            checkoutService.checkout(request, "pos-rollback-test-cashier");
             return new CheckoutOutcome(true, null);
         } catch (Throwable failure) {
             return new CheckoutOutcome(false, failure);
