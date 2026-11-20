@@ -23,5 +23,5 @@ public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
 
     List<PosSale> findByCashierUsernameOrderByCreatedAtDesc(String cashierUsername);
 
-    Page<PosSale> findByLocationIdOrderByCreatedAtDesc(Long locationId, Pageable pageable);
+    Page<PosSale> findByLocationId(Long locationId, Pageable pageable);
 }
