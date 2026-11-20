@@ -6,6 +6,7 @@ import nmk_backend.dto.InventoryReceiptRequest;
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.service.InventoryService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -48,16 +49,26 @@ public class InventoryController {
             );
         }
 
-        var balance = inventoryService.receiveStock(
-                request.getLocationId(),
-                request.getVariantId(),
-                request.getQuantity(),
-                request.getIdempotencyKey(),
-                admin.getId(),
-                request.getReason().trim()
-        );
+        try {
+            var balance = inventoryService.receiveStock(
+                    request.getLocationId(),
+                    request.getVariantId(),
+                    request.getQuantity(),
+                    request.getIdempotencyKey(),
+                    admin.getId(),
+                    request.getReason().trim()
+            );
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(InventoryBalanceResponse.from(balance));
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(InventoryBalanceResponse.from(balance));
+
+        } catch (DataIntegrityViolationException exception) {
+            // A concurrent request may win the globally unique movement-key insert.
+            // The service transaction is rolled back before control reaches this catch.
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "message",
+                    "An inventory operation with this idempotency key conflicts with an existing operation. Verify the key and request details before retrying."
+            ));
+        }
     }
 }
