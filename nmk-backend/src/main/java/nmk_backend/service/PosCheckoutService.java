@@ -133,7 +133,7 @@ public class PosCheckoutService {
 
         // Recheck after acquiring the location lock. This closes the common
         // same-location race where two retries both initially observed no sale.
-        var saleAfterLock = saleRepository.findByIdempotencyKey(idempotencyKey);
+        var saleAfterLock = saleRepository.findByIdempotencyKeyForUpdate(idempotencyKey);
         if (saleAfterLock.isPresent()) {
             PosSale existing = saleAfterLock.get();
             if (!fingerprint.equals(existing.getRequestFingerprint())) {
