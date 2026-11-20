@@ -2,9 +2,11 @@
 package nmk_backend.repository;
 
 import nmk_backend.entity.PosSale;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +14,9 @@ import java.util.Optional;
 public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
 
     Optional<PosSale> findByIdempotencyKey(String idempotencyKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<PosSale> findByIdempotencyKeyForUpdate(String idempotencyKey);
 
     boolean existsByIdempotencyKey(String idempotencyKey);
 
