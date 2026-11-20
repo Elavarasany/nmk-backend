@@ -62,7 +62,7 @@ public class PosCheckoutService {
     public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable) {
         Page<PosSale> sales = locationId == null
                 ? saleRepository.findAll(pageable)
-                : saleRepository.findByLocationIdOrderByCreatedAtDesc(locationId, pageable);
+                : saleRepository.findByLocationId(locationId, pageable);
         return sales.map(PosSaleResponse::from);
     }
 
