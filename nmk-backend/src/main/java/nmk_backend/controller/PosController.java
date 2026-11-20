@@ -62,6 +62,7 @@ public class PosController {
         }
         PageRequest pageable = PageRequest.of(
                 page, size, Sort.by(Sort.Direction.DESC, "createdAt")
+                        .and(Sort.by(Sort.Direction.DESC, "id"))
         );
         Page<PosSaleResponse> result = checkoutService.getSales(locationId, pageable);
         return ResponseEntity.ok(result);
