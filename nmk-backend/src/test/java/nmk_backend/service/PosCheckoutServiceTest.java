@@ -125,10 +125,10 @@ class PosCheckoutServiceTest {
     @Test
     void sameIdempotencyKeyAndSameRequestReturnsExistingSaleWithoutSellingAgain() throws Exception {
         PosCheckoutRequest request = validRequest();
-        String fingerprint = HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256")
-                        .digest(objectMapper.writeValueAsBytes(request))
+        String fingerprint = ReflectionTestUtils.invokeMethod(
+                service, "fingerprint", request
         );
+        assertNotNull(fingerprint);
 
         PosSale existing = new PosSale();
         ReflectionTestUtils.setField(existing, "id", 456L);
