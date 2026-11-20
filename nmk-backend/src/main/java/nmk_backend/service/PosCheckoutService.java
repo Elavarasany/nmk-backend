@@ -91,6 +91,9 @@ public class PosCheckoutService {
         if (request.getPayments() == null || request.getPayments().isEmpty()) {
             throw new IllegalArgumentException("At least one payment is required");
         }
+        if (request.getPayments().stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("Payment rows cannot be null");
+        }
         if (request.getItems().size() > 100) {
             throw new IllegalArgumentException("A checkout cannot contain more than 100 item lines");
         }
@@ -369,12 +372,80 @@ public class PosCheckoutService {
 
     private String fingerprint(PosCheckoutRequest request) {
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(request);
+            var items = request.getItems().stream()
+                    .sorted(Comparator.comparing(PosSaleItemRequest::getProductId)
+                            .thenComparing(PosSaleItemRequest::getVariantId))
+                    .map(item -> new CheckoutFingerprintItem(
+                            item.getProductId(),
+                            item.getVariantId(),
+                            item.getQuantity()
+                    ))
+                    .toList();
+
+            var payments = request.getPayments().stream()
+                    .map(payment -> new CheckoutFingerprintPayment(
+                            payment.getPaymentMethod() == null
+                                    ? null
+                                    : payment.getPaymentMethod().trim().toUpperCase(Locale.ROOT),
+                            canonicalAmount(payment.getAmount()),
+                            canonicalAmount(payment.getTenderedAmount()),
+                            trimToNull(payment.getTransactionReference())
+                    ))
+                    .sorted(Comparator
+                            .comparing(CheckoutFingerprintPayment::paymentMethod,
+                                    Comparator.nullsFirst(String::compareTo))
+                            .thenComparing(CheckoutFingerprintPayment::amount,
+                                    Comparator.nullsFirst(BigDecimal::compareTo))
+                            .thenComparing(CheckoutFingerprintPayment::tenderedAmount,
+                                    Comparator.nullsFirst(BigDecimal::compareTo))
+                            .thenComparing(CheckoutFingerprintPayment::transactionReference,
+                                    Comparator.nullsFirst(String::compareTo)))
+                    .toList();
+
+            CheckoutFingerprint canonicalRequest = new CheckoutFingerprint(
+                    request.getLocationId(),
+                    trimToNull(request.getCustomerName()),
+                    trimToNull(request.getCustomerPhone()),
+                    canonicalAmount(request.getDiscountAmount()),
+                    items,
+                    payments
+            );
+
+            byte[] bytes = objectMapper.writeValueAsBytes(canonicalRequest);
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
             return HexFormat.of().formatHex(digest);
         } catch (JsonProcessingException | java.security.NoSuchAlgorithmException exception) {
             throw new IllegalStateException("Unable to fingerprint POS checkout request", exception);
         }
+    }
+
+    private BigDecimal canonicalAmount(BigDecimal value) {
+        return value == null ? null : value.stripTrailingZeros();
+    }
+
+    private record CheckoutFingerprint(
+            Long locationId,
+            String customerName,
+            String customerPhone,
+            BigDecimal discountAmount,
+            java.util.List<CheckoutFingerprintItem> items,
+            java.util.List<CheckoutFingerprintPayment> payments
+    ) {
+    }
+
+    private record CheckoutFingerprintItem(
+            Long productId,
+            Long variantId,
+            Integer quantity
+    ) {
+    }
+
+    private record CheckoutFingerprintPayment(
+            String paymentMethod,
+            BigDecimal amount,
+            BigDecimal tenderedAmount,
+            String transactionReference
+    ) {
     }
 
     private String serializeAttributes(ProductVariant variant) {
