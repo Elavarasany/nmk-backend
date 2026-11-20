@@ -245,6 +245,53 @@ class PosCheckoutTransactionIntegrationTest {
                 "A mismatched retry must not create another stock movement");
     }
 
+    @Test
+    void concurrentRequestsWithSameIdempotencyKeyReturnOneSale() throws Exception {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+
+        String sharedKey = "POS-CONCURRENT-SAME-KEY-" + System.nanoTime();
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        try {
+            var first = executor.submit(() ->
+                    performConcurrentCheckout(sharedKey, ready, start));
+            var second = executor.submit(() ->
+                    performConcurrentCheckout(sharedKey, ready, start));
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "Both checkout workers should be ready");
+            start.countDown();
+
+            CheckoutOutcome firstOutcome = first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            CheckoutOutcome secondOutcome = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+
+            assertTrue(firstOutcome.successful(),
+                    "First same-key checkout should succeed: " + firstOutcome.failure());
+            assertTrue(secondOutcome.successful(),
+                    "Concurrent retry with the same key should return the original sale: "
+                            + secondOutcome.failure());
+            assertEquals(1, saleRepository.count(),
+                    "Concurrent requests with one idempotency key must create one sale");
+            assertEquals(1, movementRepository.count(),
+                    "Concurrent retries must create one stock movement");
+
+            InventoryBalance finalBalance = balanceRepository
+                    .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                    .orElseThrow();
+            assertEquals(0, finalBalance.getOnHandQuantity());
+            assertEquals(0, finalBalance.getReservedQuantity());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private CheckoutOutcome performConcurrentCheckout(
             String idempotencyKey,
             java.util.concurrent.CountDownLatch ready,
