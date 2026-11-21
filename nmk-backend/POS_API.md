@@ -43,6 +43,7 @@ Example cash sale:
 ```json
 {
   "locationId": 1,
+  "shiftId": 12,
   "customerName": "Walk-in Customer",
   "customerPhone": null,
   "discountAmount": 50.00,
@@ -63,7 +64,7 @@ Example cash sale:
 
 Supported payment methods are `CASH`, `UPI`, and `CARD`. For split tender, send multiple payment rows, one per method, and ensure their amounts add up exactly to the grand total. Cash rows require `tenderedAmount`; non-cash rows must omit it.
 
-The client must generate a fresh idempotency key for each new checkout and reuse that same key when retrying the same checkout after a network timeout. Do not reuse a key for a different sale.
+Every new checkout must reference the authenticated cashier's OPEN shift at the same location. The client must generate a fresh idempotency key for each new checkout and reuse that same key when retrying the same checkout after a network timeout. Do not reuse a key for a different sale.
 
 The server calculates prices from product and variant records, validates discounts and payment totals, locks inventory in a stable order, writes sale/item/payment snapshots, deducts stock and appends stock movements in one transaction. Failed stock deduction rolls back the sale and payments.
 
@@ -93,7 +94,34 @@ Use only for verified physical count corrections, damage/write-offs, loss or doc
 
 Positive `quantityDelta` adds stock; negative removes it. Zero is rejected. Adjustments cannot reduce on-hand below reserved stock. The balance update and append-only stock movement are transactional. A retry must reuse the exact payload and key.
 
-## 7. Staff accounts and roles
+## 8. Registers, cashier shifts and cash drawer reconciliation
+
+The migration provisions one `MAIN` register for each active inventory location. Additional registers can be created by an ADMIN.
+
+- `GET /api/admin/pos/registers?locationId=1` — list active registers.
+- `POST /api/admin/pos/registers` — ADMIN only; body: `{"locationId":1,"registerCode":"MAIN-2","name":"Second Register"}`.
+- `GET /api/admin/pos/shifts/current?registerId=1` — current open shift visible to its cashier, ADMIN or MANAGER.
+- `POST /api/admin/pos/shifts/open` — open a shift.
+
+```json
+{
+  "registerId": 1,
+  "openingFloat": 1500.00,
+  "idempotencyKey": "shift-open-device-generated-key"
+}
+```
+
+- `POST /api/admin/pos/shifts/{shiftId}/cash-movements` — record `CASH_IN` or `CASH_OUT`, with positive amount, unique idempotency key and mandatory reason.
+- `GET /api/admin/pos/shifts/{shiftId}/cash-movements` — view the append-only drawer ledger (cashier's own shift; ADMIN/MANAGER can review any shift).
+- `POST /api/admin/pos/shifts/{shiftId}/close` — body: `{"closingCashCount":1475.00,"reason":"Short by ₹25 after recount"}`.
+
+Expected drawer cash is calculated from opening float + cash sale tender allocations + cash-in − cash-out. Cash sales add the allocated payment amount, not the higher tendered amount; change returned to the customer is therefore not counted as drawer income. Cash-out cannot exceed the current expected drawer balance. A closing count different from expected cash requires an explanation and is stored with the signed variance.
+
+Only one OPEN shift can exist per register. The register row is locked during shift opening, and the shift row is locked during checkout/cash movement/close so a checkout cannot race with shift closure. Cashiers can operate their own shift; ADMIN/MANAGER can review and close other shifts. A cashier cannot close another cashier's shift.
+
+The checkout transaction writes its cash tender movements in the same transaction as sale/payment/inventory changes. A failed sale therefore cannot leave a cash drawer entry behind. Every new POS sale is linked to the shift that accepted it.
+
+## 9. Staff accounts and roles
 
 All staff endpoints below require an ADMIN role. Passwords are BCrypt-hashed and are never returned by the API.
 
@@ -118,17 +146,20 @@ Roles are `ADMIN`, `MANAGER`, and `CASHIER`. Usernames are normalized to lowerca
 | Capability | ADMIN | MANAGER | CASHIER |
 |---|---:|---:|---:|
 | POS catalogue and location selection | Yes | Yes | Yes |
-| Complete POS checkout | Yes | Yes | Yes |
+| Complete POS checkout on own open shift | Yes | Yes | Yes |
+| Open/close own shift and cash in/out | Yes | Yes | Yes |
+| Review any shift and cash ledger | Yes | Yes | No |
 | Browse all POS sales history | Yes | Yes | No |
 | Inventory receipt and adjustment APIs | Yes | Yes | No |
+| Create POS registers | Yes | No | No |
 | Staff account administration | Yes | No | No |
 | Other existing admin APIs | Yes | No | No |
 
-This is the first authorization layer. Shift ownership, per-register restrictions, refund approvals and granular permission codes are not yet implemented.
+This is the first authorization layer. Per-register assignment, supervisor approval thresholds, role-permission tables and refund approvals remain future work.
 
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles) and 007 (registers/shifts/cash). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
