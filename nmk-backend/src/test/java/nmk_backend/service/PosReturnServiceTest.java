@@ -18,6 +18,7 @@ import static org.mockito.Mockito.*;
 
 class PosReturnServiceTest {
 
+    private InventoryLocationRepository locationRepository;
     private PosSaleRepository saleRepository;
     private PosReturnRepository returnRepository;
     private PosReturnItemRepository returnItemRepository;
@@ -33,6 +34,7 @@ class PosReturnServiceTest {
 
     @BeforeEach
     void setUp() {
+        locationRepository = mock(InventoryLocationRepository.class);
         saleRepository = mock(PosSaleRepository.class);
         returnRepository = mock(PosReturnRepository.class);
         returnItemRepository = mock(PosReturnItemRepository.class);
@@ -40,7 +42,7 @@ class PosReturnServiceTest {
         inventoryService = mock(InventoryService.class);
         shiftService = mock(PosShiftService.class);
         service = new PosReturnService(
-                saleRepository, returnRepository, returnItemRepository,
+                locationRepository, saleRepository, returnRepository, returnItemRepository,
                 adminRepository, inventoryService, shiftService, new ObjectMapper()
         );
 
@@ -90,6 +92,7 @@ class PosReturnServiceTest {
         manager.setUsername("manager.one");
 
         when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
         when(saleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sale));
         when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
         when(returnRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
