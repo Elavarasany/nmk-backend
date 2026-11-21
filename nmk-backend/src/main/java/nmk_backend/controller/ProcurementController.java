@@ -3,6 +3,7 @@ package nmk_backend.controller;
 import jakarta.validation.Valid;
 import nmk_backend.dto.*;
 import nmk_backend.service.ProcurementService;
+import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +17,11 @@ import java.util.Map;
 public class ProcurementController {
 
     private final ProcurementService procurementService;
+    private final AdminActionAuthorizationService authorizationService;
 
-    public ProcurementController(ProcurementService procurementService) {
+    public ProcurementController(ProcurementService procurementService, AdminActionAuthorizationService authorizationService) {
         this.procurementService = procurementService;
+        this.authorizationService = authorizationService;
     }
 
     @GetMapping("/suppliers")
@@ -123,8 +126,14 @@ public class ProcurementController {
     public ResponseEntity<?> receiveGoods(
             @PathVariable Long purchaseOrderId,
             @Valid @RequestBody GoodsReceiptRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "GOODS_RECEIPT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
                     procurementService.receiveGoods(purchaseOrderId, request, authentication.getName())
@@ -140,8 +149,14 @@ public class ProcurementController {
     public ResponseEntity<?> returnGoods(
             @PathVariable Long purchaseOrderId,
             @Valid @RequestBody SupplierReturnRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "SUPPLIER_RETURN");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
                     procurementService.returnGoodsToSupplier(purchaseOrderId, request, authentication.getName())
