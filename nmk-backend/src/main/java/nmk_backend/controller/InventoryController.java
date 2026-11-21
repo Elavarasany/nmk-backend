@@ -40,6 +40,26 @@ public class InventoryController {
         }
     }
 
+    @GetMapping("/movements")
+    public ResponseEntity<?> getMovementHistory(
+            @RequestParam Long locationId,
+            @RequestParam(required = false) Long variantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        try {
+            return ResponseEntity.ok(
+                    inventoryService.getMovementHistory(locationId, variantId, page, size)
+            );
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", exception.getMessage() == null
+                            ? "Invalid inventory movement history request"
+                            : exception.getMessage()
+            ));
+        }
+    }
+
     @PatchMapping("/reorder-level")
     public ResponseEntity<?> updateReorderLevel(
             @Valid @RequestBody InventoryReorderLevelRequest request,
