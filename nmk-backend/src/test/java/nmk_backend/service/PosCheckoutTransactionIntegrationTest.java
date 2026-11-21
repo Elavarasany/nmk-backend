@@ -3,11 +3,17 @@ package nmk_backend.service;
 import nmk_backend.dto.PosCheckoutRequest;
 import nmk_backend.dto.PosPaymentRequest;
 import nmk_backend.dto.PosSaleItemRequest;
+import nmk_backend.dto.PosRegisterCreateRequest;
+import nmk_backend.dto.PosRegisterResponse;
+import nmk_backend.dto.PosShiftOpenRequest;
 import nmk_backend.entity.Admin;
 import nmk_backend.entity.InventoryBalance;
 import nmk_backend.entity.InventoryLocation;
 import nmk_backend.entity.Product;
 import nmk_backend.entity.ProductVariant;
+import nmk_backend.repository.PosRegisterRepository;
+import nmk_backend.repository.PosShiftRepository;
+import nmk_backend.repository.PosCashMovementRepository;
 import nmk_backend.exception.InsufficientStockException;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.InventoryBalanceRepository;
@@ -56,15 +62,31 @@ class PosCheckoutTransactionIntegrationTest {
     @Autowired
     private PosSaleRepository saleRepository;
 
+    @Autowired
+    private PosRegisterRepository registerRepository;
+
+    @Autowired
+    private PosShiftRepository shiftRepository;
+
+    @Autowired
+    private PosCashMovementRepository cashMovementRepository;
+
+    @Autowired
+    private PosShiftService shiftService;
+
+    private Long shiftId;
     private InventoryLocation location;
     private Product product;
     private ProductVariant variant;
 
     @BeforeEach
     void setUp() {
+        cashMovementRepository.deleteAll();
+        saleRepository.deleteAll();
+        shiftRepository.deleteAll();
+        registerRepository.deleteAll();
         movementRepository.deleteAll();
         balanceRepository.deleteAll();
-        saleRepository.deleteAll();
         variantRepository.deleteAll();
         productRepository.deleteAll();
         locationRepository.deleteAll();
@@ -80,6 +102,18 @@ class PosCheckoutTransactionIntegrationTest {
         location.setName("POS Rollback Test Location");
         location.setActive(true);
         location = locationRepository.saveAndFlush(location);
+
+        PosRegisterResponse register = shiftService.createRegister(
+                new PosRegisterCreateRequest(location.getId(), "MAIN", "Main Register")
+        );
+        shiftId = shiftService.openShift(
+                new PosShiftOpenRequest(
+                        register.id(),
+                        new BigDecimal("100.00"),
+                        "POS-TEST-SHIFT-" + System.nanoTime()
+                ),
+                "pos-rollback-test-cashier"
+        ).id();
 
         product = new Product();
         product.setName("POS Rollback Test Frame");
@@ -109,6 +143,7 @@ class PosCheckoutTransactionIntegrationTest {
     void insufficientStockRollsBackSaleAndPaymentRecords() {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(location.getId());
+        request.setShiftId(shiftId);
         request.setIdempotencyKey("POS-ROLLBACK-IT-" + System.nanoTime());
         request.setDiscountAmount(new BigDecimal("0.00"));
 
@@ -410,6 +445,7 @@ class PosCheckoutTransactionIntegrationTest {
     private PosCheckoutRequest buildCheckoutRequest(String idempotencyKey) {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(location.getId());
+        request.setShiftId(shiftId);
         request.setIdempotencyKey(idempotencyKey);
         request.setDiscountAmount(new BigDecimal("0.00"));
 
