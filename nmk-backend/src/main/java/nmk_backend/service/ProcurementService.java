@@ -99,18 +99,20 @@ public class ProcurementService {
 
     @Transactional
     public PurchaseOrderResponse createPurchaseOrder(PurchaseOrderCreateRequest request, String username) {
+        Admin actor = requireActor(username);
         String idempotencyKey = normalizeKey(request.idempotencyKey());
-        String requestFingerprint = fingerprint(-1L, request);
+        String requestFingerprint = fingerprint(-1L, request, actor.getUsername());
         var previous = purchaseOrderRepository.findByIdempotencyKey(idempotencyKey);
         if (previous.isPresent()) return replayPurchaseOrder(previous.get(), requestFingerprint);
 
-        Admin actor = requireActor(username);
         Supplier supplier = supplierRepository.findById(request.supplierId())
                 .filter(Supplier::isActive)
                 .orElseThrow(() -> new IllegalArgumentException("Select an active supplier"));
         InventoryLocation location = locationRepository.findByIdForUpdate(request.locationId())
                 .filter(InventoryLocation::isActive)
                 .orElseThrow(() -> new IllegalArgumentException("Select an active inventory location"));
+        var raced = purchaseOrderRepository.findByIdempotencyKey(idempotencyKey);
+        if (raced.isPresent()) return replayPurchaseOrder(raced.get(), requestFingerprint);
 
         Set<Long> seenVariants = new HashSet<>();
         PurchaseOrder order = new PurchaseOrder();
@@ -170,8 +172,9 @@ public class ProcurementService {
             GoodsReceiptRequest request,
             String username
     ) {
+        Admin actor = requireActor(username);
         String key = normalizeKey(request.idempotencyKey());
-        String fingerprint = fingerprint(purchaseOrderId, request);
+        String fingerprint = fingerprint(purchaseOrderId, request, actor.getUsername());
         var previous = goodsReceiptRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) return replayReceipt(previous.get(), fingerprint);
 
@@ -182,8 +185,6 @@ public class ProcurementService {
         if (!List.of("ORDERED", "PARTIALLY_RECEIVED").contains(order.getStatus())) {
             throw new IllegalArgumentException("Only an ORDERED or PARTIALLY_RECEIVED purchase order can receive goods");
         }
-        Admin actor = requireActor(username);
-
         Set<Long> seenItems = new HashSet<>();
         GoodsReceipt receipt = new GoodsReceipt();
         receipt.setPurchaseOrder(order);
@@ -248,8 +249,9 @@ public class ProcurementService {
             SupplierReturnRequest request,
             String username
     ) {
+        Admin actor = requireActor(username);
         String key = normalizeKey(request.idempotencyKey());
-        String fingerprint = fingerprint(purchaseOrderId, request);
+        String fingerprint = fingerprint(purchaseOrderId, request, actor.getUsername());
         var previous = supplierReturnRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) return replaySupplierReturn(previous.get(), fingerprint);
 
@@ -260,8 +262,6 @@ public class ProcurementService {
         if (!List.of("PARTIALLY_RECEIVED", "RECEIVED").contains(order.getStatus())) {
             throw new IllegalArgumentException("Supplier returns require a purchase order with received goods");
         }
-        Admin actor = requireActor(username);
-
         Set<Long> seenItems = new HashSet<>();
         SupplierReturn supplierReturn = new SupplierReturn();
         supplierReturn.setPurchaseOrder(order);
@@ -360,9 +360,15 @@ public class ProcurementService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private String fingerprint(Long orderId, Object request) {
+    private String fingerprint(Long orderId, Object request, String authenticatedUsername) {
         try {
-            byte[] json = objectMapper.writeValueAsBytes(Map.of("purchaseOrderId", orderId, "request", request));
+            String actor = authenticatedUsername == null
+                    ? null : authenticatedUsername.trim().toLowerCase(Locale.ROOT);
+            byte[] json = objectMapper.writeValueAsBytes(Map.of(
+                    "purchaseOrderId", orderId,
+                    "authenticatedUsername", actor,
+                    "request", request
+            ));
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json));
         } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
             throw new IllegalStateException("Unable to fingerprint procurement request", exception);

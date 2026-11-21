@@ -123,6 +123,12 @@ class ProcurementServiceTest {
         );
         var response = service.createPurchaseOrder(request, "manager.one");
         var replay = service.createPurchaseOrder(request, "manager.one");
+        Admin otherManager = new Admin();
+        otherManager.setId(8L);
+        otherManager.setUsername("manager.two");
+        when(adminRepository.findByUsernameIgnoreCase("manager.two")).thenReturn(Optional.of(otherManager));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.createPurchaseOrder(request, "manager.two"));
 
         assertEquals("DRAFT", response.status());
         assertEquals(new BigDecimal("1000.00"), response.subtotal());
