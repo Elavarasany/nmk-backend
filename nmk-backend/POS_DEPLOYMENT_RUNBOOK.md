@@ -26,7 +26,7 @@ Use only when the inspected database has the original `products`, `customer_orde
 1. `001-legacy-order-and-product-columns.sql`
 2. `002-create-variant-inventory-tables.sql`
 3. `003-create-main-store-location.sql`
-4. `005-create-pos-sales-tables.sql` through `013-audit-stock-count-cancellations.sql`, in numeric order.
+4. `005-create-pos-sales-tables.sql` through `014-create-pos-exchanges.sql`, in numeric order.
 
 Run each script individually, inspect its output, and stop immediately on any error. Do not continue to the next script after a partial failure.
 
@@ -34,7 +34,7 @@ Run each script individually, inspect its output, and stop immediately on any er
 
 Use `004-staging-schema-reconciliation.sql` only if schema inspection confirms the exact preconditions documented in that file: variant/inventory tables already exist, the existing `AVP-01` location is present, and only the listed legacy order/product columns are missing.
 
-After 004 succeeds and its verification queries match expectations, apply 005 through 013 in numeric order.
+After 004 succeeds and its verification queries match expectations, apply 005 through 014 in numeric order.
 
 Path B is a staging-specific reconciliation, not a generic production migration. Do not assume a new client database matches it.
 
@@ -67,7 +67,7 @@ No online or POS checkout should be enabled until the active sellable variants a
 3. Create/verify the MAIN register for the active location.
 4. Open the first cashier shift with the physically counted opening float.
 5. Test checkout, split tender, cash change, cash-in/out, shift close and variance explanation using disposable staging records.
-6. Confirm each cashier can access only their own shift operations and cannot browse all sales, process returns or apply discounts.
+6. Confirm each cashier can access only their own shift operations and cannot browse all sales, process returns/exchanges or apply discounts.
 
 ## 7. Application hosting configuration
 
@@ -92,7 +92,9 @@ Run these checks on staging after migration and seed data are complete:
 - Cash, UPI, card and split-tender checkout; exact cash change; duplicate retry with same key; reject changed request with reused key.
 - Two concurrent attempts to sell the final unit; stock never becomes negative.
 - Open/close shift races against checkout; cash ledger and expected drawer reconcile.
-- Receipt, partial return, full return, damaged/discard dispositions, cash refund, recorded non-cash refund reference, and full void after a sale with no prior returns.
+- Receipt, partial/full return, damaged/discard dispositions, cash refund, recorded non-cash refund reference, and full void after a sale with no prior returns.
+- Equal-value exchange, higher-value replacement with difference collected, lower-value replacement with only the excess refunded, same-key replay, failed-stock rollback, and concurrent exchange attempts against the same remaining sold quantity.
+- Exchange-credit reporting reconciles separately from actual tender/refund totals; inventory on-hand report reconciles to location balances.
 - Concurrent return attempts; cumulative returned quantity and refund never exceed the original sale.
 - Stock receipt, adjustment, low-stock alert, stock count freeze/review/post/cancel, and movement history.
 - Purchase order, partial goods receipt, over-receipt rejection, supplier return and stock ledger reconciliation.
@@ -108,7 +110,7 @@ These are genuine release gates, not items to guess in code:
 
 - **GST/HSN and statutory invoice rules:** obtain accountant-approved HSN/tax classification per sellable product, applicable rates, inclusive/exclusive pricing, intra/inter-state treatment, customer invoice fields and rounding rules. Current POS totals are not a certified GST invoice or tax return.
 - **Provider-side refunds:** UPI/card refund records require a provider-confirmed reference. The POS does not initiate or verify settlement with Razorpay/UPI/card providers. Obtain merchant API permissions and implement/test the provider refund adapter before describing refunds as automated.
-- **Exchanges:** there is no atomic linked return-plus-replacement-sale workflow. Do not simulate an exchange by separately processing a full refund and a full new sale; that can misstate cash movement and payment settlement. Until the linked workflow is implemented and verified, process a return and a new sale as two separately approved transactions under the documented return/refund procedure.
+- **Exchanges:** an atomic linked return-plus-replacement-sale workflow is implemented on the POS feature branch, including exchange credit, actual difference collection/refund, stock rollback, idempotency, audit history, and migration 014. It is not merged to production. Rehearse it on a client-matching disposable schema and staging data before staff use; do not simulate an exchange as a separate full refund plus unrelated full sale.
 - **Supplier accounting:** purchase orders, goods receipts and supplier stock returns do not constitute supplier credit notes, accounts payable, supplier payment, landed-cost accounting or bank settlement. Obtain the client's accounting workflow and required fields before implementing these ledgers.
 - **Profit reporting:** gross sales/product totals are not profit. Cost history and approved accounting treatment are not yet available for a reliable POS profit report.
 
