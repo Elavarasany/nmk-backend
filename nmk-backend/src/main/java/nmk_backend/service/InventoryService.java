@@ -210,17 +210,17 @@ public class InventoryService {
         if (variantId != null && variantId <= 0) {
             throw new InvalidInventoryOperationException("A valid product variant is required");
         }
-        if (locationRepository.findById(locationId).isEmpty()) {
-            throw new InventoryNotFoundException("Inventory location was not found");
-        }
-        if (variantId != null && variantRepository.findById(variantId).isEmpty()) {
-            throw new InventoryNotFoundException("Product variant was not found");
-        }
         if (page < 0) {
             throw new InvalidInventoryOperationException("Page must be zero or greater");
         }
         if (size < 1 || size > 100) {
             throw new InvalidInventoryOperationException("Page size must be between 1 and 100");
+        }
+        if (locationRepository.findById(locationId).isEmpty()) {
+            throw new InventoryNotFoundException("Inventory location was not found");
+        }
+        if (variantId != null && variantRepository.findById(variantId).isEmpty()) {
+            throw new InventoryNotFoundException("Product variant was not found");
         }
 
         return movementRepository.findHistory(
