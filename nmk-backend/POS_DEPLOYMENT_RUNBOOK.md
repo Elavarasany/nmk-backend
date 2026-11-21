@@ -38,6 +38,17 @@ After 004 succeeds and its verification queries match expectations, apply 005 th
 
 Path B is a staging-specific reconciliation, not a generic production migration. Do not assume a new client database matches it.
 
+### Razorpay webhook retry schema (separate from POS migrations)
+
+The webhook worker expects the pre-existing `razorpay_webhook_events` table plus four retry/claim columns and a due-event index. The numbered 001–014 POS migration chain does not create or alter this table.
+
+1. Confirm the existing webhook event table and its original columns on the inspected database. No base-table creation script is included here; if the table is absent, stop and resolve the baseline separately.
+2. Apply `razorpay-webhook-claim-token.sql`.
+3. Apply `razorpay-webhook-retry-columns.sql`.
+4. Verify `claim_token`, `attempt_count`, `next_attempt_at`, `processing_started_at`, and `idx_razorpay_webhook_due` exist before starting the application with Hibernate validation.
+
+Do not skip these scripts on a database where the webhook worker is enabled, and do not run them blindly if the columns or index already exist.
+
 ## 4. Verify schema before starting the application
 
 - Confirm all POS tables, foreign keys, unique idempotency constraints, indexes and required columns exist.
