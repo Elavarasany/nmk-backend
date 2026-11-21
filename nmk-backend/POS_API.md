@@ -295,7 +295,16 @@ Supplier returns can only include quantities already received and not previously
 
 Supplier returns are inventory and supplier audit records only; they do not create supplier credit notes, accounts-payable entries or automatic bank refunds. Purchase cost is stored for purchasing visibility; GST and landed-cost accounting are intentionally not calculated until the shop's accountant confirms the required rules.
 
-## 13. Reorder thresholds and low-stock alerts
+## 13. Stock movement history
+
+Managers and administrators can review the append-only stock ledger for a location:
+
+- `GET /api/admin/inventory/movements?locationId=1&page=0&size=50`
+- Optional variant filter: `GET /api/admin/inventory/movements?locationId=1&variantId=42&page=0&size=50`
+
+The endpoint returns a newest-first page of movement snapshots, including quantity and reservation deltas, resulting on-hand/reserved balances, movement type, reference, staff actor ID, reason and timestamp. Page size is limited to 100. The endpoint is read-only; ledger entries are never edited or deleted through POS.
+
+## 14. Reorder thresholds and low-stock alerts
 
 - `PATCH /api/admin/inventory/reorder-level` — configure a threshold for one variant at one location.
 - `GET /api/admin/inventory/low-stock?locationId={id}` — list configured variants whose available quantity is at or below their threshold.
@@ -312,7 +321,7 @@ Example:
 
 A reorder level of zero disables alerts. Alerts compare `availableQuantity` (on-hand minus reserved), not raw on-hand, so stock already committed to online orders is not treated as sellable. Threshold changes record the staff username and timestamp on the inventory balance. Thresholds are location-specific; they do not automatically create purchase orders.
 
-## 14. POS sales and refund reports
+## 15. POS sales and refund reports
 
 Managers and administrators can request a location/date-scoped report:
 
