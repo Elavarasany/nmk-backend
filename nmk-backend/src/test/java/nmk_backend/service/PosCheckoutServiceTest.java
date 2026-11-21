@@ -279,6 +279,7 @@ class PosCheckoutServiceTest {
         PosPaymentRequest upi = new PosPaymentRequest();
         upi.setPaymentMethod("UPI");
         upi.setAmount(new BigDecimal("50.00"));
+        upi.setTransactionReference("UPI-UTR-123456");
         request.setPayments(List.of(cash, upi));
 
         var response = service.checkout(request, "admin", "ADMIN");
@@ -287,6 +288,24 @@ class PosCheckoutServiceTest {
         assertEquals(2, response.payments().size());
         assertEquals("10.00", response.payments().get(0).changeAmount().toPlainString());
         assertEquals("0.00", response.payments().get(1).changeAmount().toPlainString());
+    }
+
+    @Test
+    void rejectsUpiPaymentWithoutTransactionReferenceBeforePersisting() {
+        PosCheckoutRequest request = validRequest();
+        PosPaymentRequest upi = new PosPaymentRequest();
+        upi.setPaymentMethod("UPI");
+        upi.setAmount(new BigDecimal("100.00"));
+        request.setPayments(List.of(upi));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(request, "admin", "ADMIN")
+        );
+
+        assertTrue(exception.getMessage().contains("transaction reference"));
+        verify(saleRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
     }
 
     @Test
