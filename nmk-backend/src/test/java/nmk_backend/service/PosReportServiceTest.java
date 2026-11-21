@@ -95,6 +95,9 @@ class PosReportServiceTest {
                 .thenReturn(List.of(sale));
         when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any()))
                 .thenReturn(List.of(returned, voided));
+        // Exchange credit is a non-cash settlement component, not a provider/cash refund.
+        when(exchangeCreditRepository.sumExchangeCreditApplied(eq(1L), any(), any()))
+                .thenReturn(new BigDecimal("75.00"));
 
         var report = service.getSalesReport(1L, day, day);
 
@@ -106,7 +109,10 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("300.00"), report.refunds());
         assertEquals(new BigDecimal("300.00"), report.salesReversals());
         assertEquals(new BigDecimal("300.00"), report.recordedRefundPayments());
-        assertEquals(new BigDecimal("0.00"), report.exchangeCreditApplied());
+        assertEquals(new BigDecimal("75.00"), report.exchangeCreditApplied(),
+                "Exchange credit must be reported separately from actual refund tenders");
+        assertEquals(new BigDecimal("300.00"), report.recordedRefundPayments(),
+                "Exchange credit must not inflate cash/UPI/card refund payment totals");
         assertEquals(new BigDecimal("600.00"), report.netSalesAfterRefunds());
         assertEquals(new BigDecimal("500.00"), report.salesByPaymentMethod().get("CASH"));
         assertEquals(new BigDecimal("400.00"), report.salesByPaymentMethod().get("UPI"));
