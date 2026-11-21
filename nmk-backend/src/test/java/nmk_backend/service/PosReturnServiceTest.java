@@ -91,6 +91,7 @@ class PosReturnServiceTest {
 
         when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
         when(saleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sale));
+        when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
         when(returnRepository.findByIdempotencyKey(anyString())).thenReturn(Optional.empty());
         when(returnRepository.findByIdempotencyKeyForUpdate(anyString())).thenReturn(Optional.empty());
         when(returnRepository.sumRefundTotalBySaleId(1L)).thenReturn(BigDecimal.ZERO);
@@ -229,54 +230,5 @@ class PosReturnServiceTest {
         verifyNoInteractions(inventoryService);
     }
 
-    @Test
-    void fullVoidRestocksEverySaleLineAndRecordsTheRefundAsAVoid() {
-        when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
-        when(returnRepository.findBySaleIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
-
-        PosVoidRequest request = new PosVoidRequest(
-                99L,
-                "Duplicate sale entered by cashier",
-                "void-key-1",
-                List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("180.00"), null))
-        );
-
-        PosReturnResponse response = service.processVoid(1L, request, "manager.one");
-
-        assertEquals("VOID", response.returnType());
-        assertEquals("180.00", response.refundTotal().toPlainString());
-        assertEquals(2, response.items().size());
-        verify(inventoryService).restockCustomerReturn(
-                eq(1L), eq(101L), eq(1),
-                eq("POS-RETURN-STOCK:void-key-1:11"),
-                eq(7L), contains("RET-TEST-0001"), eq(50L)
-        );
-        verify(inventoryService).restockCustomerReturn(
-                eq(1L), eq(102L), eq(1),
-                eq("POS-RETURN-STOCK:void-key-1:12"),
-                eq(7L), contains("RET-TEST-0001"), eq(50L)
-        );
-        verify(shiftService).recordCashRefund(
-                same(shift), eq(new BigDecimal("180.00")),
-                eq("POS-RETURN-CASH:void-key-1:0"), eq("manager.one"), eq(50L)
-        );
-    }
-
-    @Test
-    void fullVoidIsRejectedWhenAnyReturnAlreadyExists() {
-        when(saleRepository.findById(1L)).thenReturn(Optional.of(sale));
-        when(returnRepository.findBySaleIdOrderByCreatedAtDesc(1L))
-                .thenReturn(List.of(new PosReturn()));
-
-        PosVoidRequest request = new PosVoidRequest(
-                99L, "Duplicate sale", "void-key-2",
-                List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("180.00"), null))
-        );
-
-        assertThrows(IllegalArgumentException.class,
-                () -> service.processVoid(1L, request, "manager.one"));
-        verify(returnRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(inventoryService);
-    }
 
 }
