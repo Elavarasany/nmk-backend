@@ -26,10 +26,13 @@ CREATE TABLE purchase_orders (
     created_by_username VARCHAR(100) NOT NULL,
     notes VARCHAR(500) NULL,
     subtotal DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    idempotency_key VARCHAR(100) NOT NULL,
+    request_fingerprint CHAR(64) NOT NULL,
     ordered_at DATETIME(6) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
     CONSTRAINT uk_purchase_order_number UNIQUE (order_number),
+    CONSTRAINT uk_purchase_order_idempotency UNIQUE (idempotency_key),
     CONSTRAINT fk_purchase_orders_supplier
         FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
         ON DELETE RESTRICT,
