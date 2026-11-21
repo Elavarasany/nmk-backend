@@ -9,8 +9,10 @@ import java.util.List;
 
 @Entity
 @Table(name = "purchase_orders",
-        uniqueConstraints = @UniqueConstraint(name = "uk_purchase_order_number", columnNames = "order_number"),
-                @UniqueConstraint(name = "uk_purchase_order_idempotency", columnNames = "idempotency_key"),
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_purchase_order_number", columnNames = "order_number"),
+                @UniqueConstraint(name = "uk_purchase_order_idempotency", columnNames = "idempotency_key")
+        },
         indexes = @Index(name = "idx_purchase_orders_location_status", columnList = "location_id, status"))
 public class PurchaseOrder {
 
