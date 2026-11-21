@@ -75,9 +75,11 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
 }
 
     @Test
-    void publicProductListCanBeAccessedWithoutToken() throws Exception {
+    void publicProductListReportsUnavailableWhenCheckoutLocationIsNotConfigured() throws Exception {
         mockMvc.perform(get("/api/products"))
-                .andExpect(status().isOk());
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message")
+                        .value("Customer checkout inventory location is not configured"));
     }
 
     @Autowired
