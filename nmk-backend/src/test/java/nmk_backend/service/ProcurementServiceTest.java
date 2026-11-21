@@ -79,7 +79,7 @@ class ProcurementServiceTest {
 
         order = new PurchaseOrder();
         ReflectionTestUtils.setField(order, "id", 20L);
-        order.setOrderNumber("PO-TEST-002");
+        ReflectionTestUtils.setField(order, "orderNumber", "PO-TEST-002");
         order.setSupplier(supplier);
         order.setLocation(location);
         order.setStatus("ORDERED");
@@ -107,7 +107,7 @@ class ProcurementServiceTest {
         when(purchaseOrderRepository.saveAndFlush(any(PurchaseOrder.class))).thenAnswer(invocation -> {
             PurchaseOrder saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 21L);
-            saved.setOrderNumber("PO-TEST-NEW");
+            ReflectionTestUtils.setField(saved, "orderNumber", "PO-TEST-NEW");
             return saved;
         });
 
@@ -134,7 +134,7 @@ class ProcurementServiceTest {
         when(goodsReceiptRepository.saveAndFlush(any(GoodsReceipt.class))).thenAnswer(invocation -> {
             GoodsReceipt receipt = invocation.getArgument(0);
             ReflectionTestUtils.setField(receipt, "id", 70L);
-            receipt.setReceiptNumber("GR-TEST-070");
+            ReflectionTestUtils.setField(receipt, "receiptNumber", "GR-TEST-070");
             return receipt;
         });
         when(purchaseOrderRepository.saveAndFlush(any(PurchaseOrder.class)))
