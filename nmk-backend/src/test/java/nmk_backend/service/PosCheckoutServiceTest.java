@@ -145,7 +145,7 @@ class PosCheckoutServiceTest {
     void sameIdempotencyKeyAndSameRequestReturnsExistingSaleWithoutSellingAgain() throws Exception {
         PosCheckoutRequest request = validRequest();
         String fingerprint = ReflectionTestUtils.invokeMethod(
-                service, "fingerprint", request
+                service, "fingerprint", request, "admin"
         );
         assertNotNull(fingerprint);
 
@@ -191,7 +191,7 @@ class PosCheckoutServiceTest {
     void reusingIdempotencyKeyWithDifferentShiftIsRejected() {
         PosCheckoutRequest originalRequest = validRequest();
         String originalFingerprint = ReflectionTestUtils.invokeMethod(
-                service, "fingerprint", originalRequest
+                service, "fingerprint", originalRequest, "admin"
         );
 
         PosSale existing = new PosSale();
@@ -206,6 +206,28 @@ class PosCheckoutServiceTest {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> service.checkout(retryWithDifferentShift, "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("different checkout details"));
+        verifyNoInteractions(inventoryService, locationRepository, shiftService);
+    }
+
+    @Test
+    void reusingIdempotencyKeyFromAnotherCashierIsRejected() {
+        PosCheckoutRequest request = validRequest();
+        String originalFingerprint = ReflectionTestUtils.invokeMethod(
+                service, "fingerprint", request, "admin"
+        );
+
+        PosSale existing = new PosSale();
+        existing.setIdempotencyKey("key-1");
+        existing.setRequestFingerprint(originalFingerprint);
+        when(saleRepository.findByIdempotencyKey("key-1"))
+                .thenReturn(Optional.of(existing));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(request, "another.cashier")
         );
 
         assertTrue(exception.getMessage().contains("different checkout details"));

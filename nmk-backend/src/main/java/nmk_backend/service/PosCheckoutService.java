@@ -135,7 +135,7 @@ public class PosCheckoutService {
         }
 
         String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
-        String fingerprint = fingerprint(request);
+        String fingerprint = fingerprint(request, authenticatedUsername);
 
         var previousSale = saleRepository.findByIdempotencyKey(idempotencyKey);
         if (previousSale.isPresent()) {
@@ -411,7 +411,7 @@ public class PosCheckoutService {
         return key.trim();
     }
 
-    private String fingerprint(PosCheckoutRequest request) {
+    private String fingerprint(PosCheckoutRequest request, String authenticatedUsername) {
         try {
             var items = request.getItems().stream()
                     .sorted(Comparator.comparing(PosSaleItemRequest::getProductId)
@@ -446,6 +446,7 @@ public class PosCheckoutService {
             CheckoutFingerprint canonicalRequest = new CheckoutFingerprint(
                     request.getLocationId(),
                     request.getShiftId(),
+                    authenticatedUsername.trim().toLowerCase(Locale.ROOT),
                     trimToNull(request.getCustomerName()),
                     trimToNull(request.getCustomerPhone()),
                     canonicalAmount(request.getDiscountAmount()),
@@ -468,6 +469,7 @@ public class PosCheckoutService {
     private record CheckoutFingerprint(
             Long locationId,
             Long shiftId,
+            String cashierUsername,
             String customerName,
             String customerPhone,
             BigDecimal discountAmount,
