@@ -3,7 +3,10 @@ package nmk_backend.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
+
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,8 +66,12 @@ class JwtAuthenticationFilterTest {
         when(jwtService.isTokenValid("valid-token", "admin"))
                 .thenReturn(true);
 
-        when(adminRepository.existsByUsername("admin"))
-                .thenReturn(true);
+        Admin admin = new Admin();
+        admin.setUsername("admin");
+        admin.setRole("ADMIN");
+        admin.setEnabled(true);
+        when(adminRepository.findByUsernameIgnoreCase("admin"))
+                .thenReturn(Optional.of(admin));
 
         filter.doFilter(request, response, filterChain);
 
@@ -99,13 +106,15 @@ class JwtAuthenticationFilterTest {
         when(jwtService.isTokenValid("valid-token", "deleted-admin"))
                 .thenReturn(true);
 
-        when(adminRepository.existsByUsername("deleted-admin"))
-                .thenReturn(false);
+        when(adminRepository.findByUsernameIgnoreCase("deleted-admin"))
+                .thenReturn(Optional.empty());
 
         filter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verify(filterChain).doFilter(request, response);
+        assertEquals(401, response.getStatus());
+        assertTrue(response.getContentAsString().contains("no longer exists"));
+        verify(filterChain, never()).doFilter(request, response);
     }
 
     @Test
