@@ -42,6 +42,9 @@ public class PosReturn {
     @Column(name = "refund_total", nullable = false, precision = 12, scale = 2)
     private BigDecimal refundTotal = BigDecimal.ZERO;
 
+    @Column(name = "return_type", nullable = false, length = 20)
+    private String returnType = "RETURN";
+
     @Column(nullable = false, length = 20)
     private String status = "COMPLETED";
 
@@ -82,6 +85,8 @@ public class PosReturn {
     public void setReason(String value) { this.reason = value; }
     public BigDecimal getRefundTotal() { return refundTotal; }
     public void setRefundTotal(BigDecimal value) { this.refundTotal = value; }
+    public String getReturnType() { return returnType; }
+    public void setReturnType(String value) { returnType = value; }
     public String getStatus() { return status; }
     public void setStatus(String value) { this.status = value; }
     public String getIdempotencyKey() { return idempotencyKey; }
