@@ -250,7 +250,7 @@ The session snapshots every product variant at the selected location, including 
 
 The location remains frozen until the session is posted or cancelled. Posting holds the location lock while applying all variance movements and releasing the freeze in the same transaction. A failed variance adjustment rolls back the post and leaves the location frozen. Negative variances cannot reduce on-hand below reserved stock. Positive variances can create a missing balance for a physically discovered variant.
 
-The stock count line stores the snapshot quantity, counted quantity, variance, user and timestamp. The stock ledger records each non-zero variance with a `STOCK_COUNT` reference. Repeated submit/post/cancel requests are safe to retry.
+The stock count line stores the snapshot quantity, counted quantity, variance, user and timestamp. The stock ledger records each non-zero variance with a `STOCK_COUNT` reference. A person who started, entered or submitted the count cannot approve/post it; a different manager or administrator must review it. Repeated submit/post/cancel requests are safe to retry.
 
 ## 12. Suppliers, purchase orders and goods movements
 

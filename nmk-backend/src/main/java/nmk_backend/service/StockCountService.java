@@ -195,6 +195,13 @@ public class StockCountService {
         if (lines.isEmpty() || lines.stream().anyMatch(line -> line.getCountedQuantity() == null)) {
             throw new IllegalArgumentException("Every stock count line must have a physical quantity before posting");
         }
+        if (sameStaff(session.getStartedByUsername(), username)
+                || sameStaff(session.getSubmittedByUsername(), username)
+                || lines.stream().anyMatch(line -> sameStaff(line.getCountedByUsername(), username))) {
+            throw new IllegalArgumentException(
+                    "A different manager or administrator must review and post this stock count"
+            );
+        }
 
         Admin actor = adminRepository.findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> new IllegalArgumentException("Authenticated staff account was not found"));
@@ -247,6 +254,12 @@ public class StockCountService {
         session.setStatus("CANCELLED");
         sessionRepository.saveAndFlush(session);
         return StockCountSessionResponse.from(session);
+    }
+
+    private boolean sameStaff(String recordedUsername, String authenticatedUsername) {
+        return recordedUsername != null
+                && authenticatedUsername != null
+                && recordedUsername.trim().equalsIgnoreCase(authenticatedUsername.trim());
     }
 
     private void validateActor(String username) {

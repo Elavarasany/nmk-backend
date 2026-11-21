@@ -133,6 +133,44 @@ class StockCountServiceTest {
     }
 
     @Test
+    void submitterCannotApproveAndPostTheirOwnStockCount() {
+        session.setSubmittedByUsername("manager.one");
+        session.setStartedByUsername("manager.one");
+        line.setCountedByUsername("manager.one");
+        location.setStockCountLocked(true);
+        when(sessionRepository.findById(8L)).thenReturn(Optional.of(session));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+        when(lineRepository.findBySessionIdOrderByIdAsc(8L)).thenReturn(List.of(line));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.post(8L, "MANAGER.ONE")
+        );
+
+        assertTrue(error.getMessage().contains("different manager or administrator"));
+        assertTrue(location.isStockCountLocked());
+        verifyNoInteractions(inventoryService);
+        verifyNoInteractions(adminRepository);
+    }
+
+    @Test
+    void counterCannotApproveTheirOwnPhysicalCount() {
+        session.setSubmittedByUsername("manager.two");
+        session.setStartedByUsername("manager.two");
+        line.setCountedByUsername("admin.one");
+        location.setStockCountLocked(true);
+        when(sessionRepository.findById(8L)).thenReturn(Optional.of(session));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+        when(lineRepository.findBySessionIdOrderByIdAsc(8L)).thenReturn(List.of(line));
+
+        assertThrows(IllegalArgumentException.class, () -> service.post(8L, "admin.one"));
+        assertTrue(location.isStockCountLocked());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
     void postCannotProceedUntilEveryLineHasBeenCounted() {
         location.setStockCountLocked(true);
         line.setCountedQuantity(null);
