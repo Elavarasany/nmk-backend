@@ -67,6 +67,7 @@ class PosReportServiceTest {
         PosReturn returned = new PosReturn();
         returned.setSale(sale);
         returned.setStatus("COMPLETED");
+        returned.setReturnType("RETURN");
         returned.setRefundTotal(new BigDecimal("200.00"));
         ReflectionTestUtils.setField(returned, "createdAt", day.atTime(15, 45));
         PosRefundPayment refund = new PosRefundPayment();
@@ -74,10 +75,21 @@ class PosReportServiceTest {
         refund.setAmount(new BigDecimal("200.00"));
         returned.getRefundPayments().add(refund);
 
+        PosReturn voided = new PosReturn();
+        voided.setSale(sale);
+        voided.setStatus("COMPLETED");
+        voided.setReturnType("VOID");
+        voided.setRefundTotal(new BigDecimal("100.00"));
+        ReflectionTestUtils.setField(voided, "createdAt", day.atTime(16, 15));
+        PosRefundPayment voidRefund = new PosRefundPayment();
+        voidRefund.setPaymentMethod("CASH");
+        voidRefund.setAmount(new BigDecimal("100.00"));
+        voided.getRefundPayments().add(voidRefund);
+
         when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any()))
                 .thenReturn(List.of(sale));
         when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any()))
-                .thenReturn(List.of(returned));
+                .thenReturn(List.of(returned, voided));
 
         var report = service.getSalesReport(1L, day, day);
 
@@ -86,14 +98,16 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("100.00"), report.discounts());
         assertEquals(new BigDecimal("900.00"), report.netSalesBeforeRefunds());
         assertEquals(1, report.returnCount());
-        assertEquals(new BigDecimal("200.00"), report.refunds());
-        assertEquals(new BigDecimal("700.00"), report.netSalesAfterRefunds());
+        assertEquals(new BigDecimal("300.00"), report.refunds());
+        assertEquals(new BigDecimal("600.00"), report.netSalesAfterRefunds());
         assertEquals(new BigDecimal("500.00"), report.salesByPaymentMethod().get("CASH"));
         assertEquals(new BigDecimal("400.00"), report.salesByPaymentMethod().get("UPI"));
         assertEquals(new BigDecimal("200.00"), report.refundsByPaymentMethod().get("UPI"));
+        assertEquals(new BigDecimal("100.00"), report.refundsByPaymentMethod().get("CASH"));
         assertEquals("cashier.one", report.cashiers().get(0).cashierUsername());
         assertEquals(2L, report.topProducts().get(0).quantitySold());
-        assertEquals(new BigDecimal("700.00"), report.daily().get(0).netAfterRefunds());
+        assertEquals(new BigDecimal("600.00"), report.daily().get(0).netAfterRefunds());
+        assertEquals(1, report.daily().get(0).returnCount(), "Voids must not be counted as customer returns");
     }
 
     @Test

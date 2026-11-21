@@ -107,7 +107,11 @@ public class PosReportService {
             MutableDaily day = daily.computeIfAbsent(
                     record.getCreatedAt().toLocalDate(), ignored -> new MutableDaily()
             );
-            day.returnCount++;
+            // A full void is a reversal, not a customer return. Keep its refund
+            // in the financial totals, but do not inflate the operational return count.
+            if ("RETURN".equals(record.getReturnType())) {
+                day.returnCount++;
+            }
             day.refunds = day.refunds.add(record.getRefundTotal());
 
             for (PosRefundPayment payment : record.getRefundPayments()) {
