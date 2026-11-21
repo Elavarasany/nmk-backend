@@ -54,6 +54,9 @@ public class SecurityConfig {
                         // Sales and refund reporting is manager/admin only.
                         .requestMatchers(HttpMethod.GET, "/api/admin/pos/reports/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                        // Full sale voids require manager or administrator authority.
+                        .requestMatchers(HttpMethod.POST, "/api/admin/pos/sales/*/void")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         // Returns/refunds require manager or administrator authority.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/sales/*/returns")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
