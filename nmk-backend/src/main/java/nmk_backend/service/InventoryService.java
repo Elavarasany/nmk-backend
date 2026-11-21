@@ -142,6 +142,28 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance restockCustomerReturn(
+            Long locationId, Long variantId, int quantity,
+            String idempotencyKey, Long actorStaffId, String reason,
+            Long returnId
+    ) {
+        validateQuantity(quantity);
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException(
+                    "A customer return restock reason of 1 to 500 characters is required"
+            );
+        }
+        if (returnId == null || returnId <= 0) {
+            throw new InvalidInventoryOperationException("A valid return reference is required");
+        }
+        return execute(
+                locationId, variantId, quantity, idempotencyKey, actorStaffId,
+                reason.trim(), "CUSTOMER_RETURN_RESTOCK", quantity, 0, false,
+                "POS_RETURN", returnId
+        );
+    }
+
+    @Transactional
     public InventoryBalance adjustStock(
             Long locationId, Long variantId, int quantityDelta,
             String idempotencyKey, Long actorStaffId, String reason
@@ -292,7 +314,8 @@ public class InventoryService {
                 "RECEIPT".equals(movementType)
                         || "RESERVATION".equals(movementType)
                         || "SALE".equals(movementType)
-                        || "ADJUSTMENT".equals(movementType);
+                        || "ADJUSTMENT".equals(movementType)
+                        || "CUSTOMER_RETURN_RESTOCK".equals(movementType);
 
         if (requiresActiveRecords) {
             if (!location.isActive()) {
