@@ -206,23 +206,14 @@ public class PosReturnService {
                 );
             }
 
-            BigDecimal lineNetTotal = saleItem.getLineTotal()
-                    .subtract(discountShareForLine(sale, saleItem))
-                    .max(ZERO)
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal lineNetTotal = PosReturnPricing.netLineValue(sale, saleItem);
             BigDecimal previouslyRefunded = Optional.ofNullable(
                     returnItemRepository.sumRefundedAmountBySaleItemId(saleItem.getId())
             ).orElse(ZERO);
-            BigDecimal lineRefund;
-            if (itemRequest.quantity() == remainingQuantity) {
-                lineRefund = lineNetTotal.subtract(previouslyRefunded).setScale(2, RoundingMode.HALF_UP);
-            } else {
-                lineRefund = lineNetTotal.multiply(BigDecimal.valueOf(itemRequest.quantity()))
-                        .divide(BigDecimal.valueOf(soldQuantity), 2, RoundingMode.HALF_UP);
-            }
-            if (lineRefund.compareTo(ZERO) < 0) {
-                throw new IllegalArgumentException("Calculated refund cannot be negative");
-            }
+            BigDecimal lineRefund = PosReturnPricing.refundForQuantity(
+                    lineNetTotal, soldQuantity, remainingQuantity,
+                    itemRequest.quantity(), previouslyRefunded
+            );
 
             PosReturnItem returnItem = new PosReturnItem();
             returnItem.setReturnRecord(returnRecord);
@@ -332,32 +323,6 @@ public class PosReturnService {
             throw new IllegalArgumentException("This return idempotency key was already used with different details");
         }
         return PosReturnResponse.from(existing);
-    }
-
-    private BigDecimal discountShareForLine(PosSale sale, PosSaleItem target) {
-        if (sale.getDiscountAmount() == null || sale.getDiscountAmount().compareTo(ZERO) <= 0
-                || sale.getSubtotal() == null || sale.getSubtotal().compareTo(ZERO) <= 0) {
-            return ZERO;
-        }
-        List<PosSaleItem> ordered = sale.getItems().stream()
-                .sorted(Comparator.comparing(PosSaleItem::getId))
-                .toList();
-        BigDecimal allocated = ZERO;
-        for (int index = 0; index < ordered.size(); index++) {
-            PosSaleItem item = ordered.get(index);
-            BigDecimal share;
-            if (index == ordered.size() - 1) {
-                share = sale.getDiscountAmount().subtract(allocated);
-            } else {
-                share = sale.getDiscountAmount().multiply(item.getLineTotal())
-                        .divide(sale.getSubtotal(), 2, RoundingMode.HALF_UP);
-                BigDecimal remaining = sale.getDiscountAmount().subtract(allocated);
-                if (share.compareTo(remaining) > 0) share = remaining;
-            }
-            if (Objects.equals(item.getId(), target.getId())) return share.max(ZERO);
-            allocated = allocated.add(share);
-        }
-        throw new IllegalArgumentException("Original sale line was not found for discount allocation");
     }
 
     private void validateRequest(Long saleId, PosReturnRequest request, String username) {
