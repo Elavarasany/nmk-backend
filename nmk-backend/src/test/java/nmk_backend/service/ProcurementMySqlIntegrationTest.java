@@ -117,6 +117,6 @@ class ProcurementMySqlIntegrationTest {
         assertEquals(2L, report.returnedQuantity());
         assertEquals(new BigDecimal("175.00"), report.receivedCost());
         assertEquals(new BigDecimal("70.00"), report.returnedCost());
-        assertEquals(new BigDecimal("105.00"), report.netReceivedCost());
+        assertEquals(new BigDecimal("105.00"), report.netRecordedProcurementCost());
     }
 }
