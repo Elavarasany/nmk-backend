@@ -99,6 +99,11 @@ public class ProcurementService {
 
     @Transactional
     public PurchaseOrderResponse createPurchaseOrder(PurchaseOrderCreateRequest request, String username) {
+        String idempotencyKey = normalizeKey(request.idempotencyKey());
+        String requestFingerprint = fingerprint(-1L, request);
+        var previous = purchaseOrderRepository.findByIdempotencyKey(idempotencyKey);
+        if (previous.isPresent()) return replayPurchaseOrder(previous.get(), requestFingerprint);
+
         Admin actor = requireActor(username);
         Supplier supplier = supplierRepository.findById(request.supplierId())
                 .filter(Supplier::isActive)
@@ -113,6 +118,8 @@ public class ProcurementService {
         order.setLocation(location);
         order.setStatus("DRAFT");
         order.setCreatedByUsername(actor.getUsername());
+        order.setIdempotencyKey(idempotencyKey);
+        order.setRequestFingerprint(requestFingerprint);
         order.setNotes(trimToNull(request.notes()));
 
         BigDecimal subtotal = ZERO;
@@ -304,6 +311,13 @@ public class ProcurementService {
 
         purchaseOrderRepository.saveAndFlush(order);
         return SupplierReturnResponse.from(supplierReturn);
+    }
+
+    private PurchaseOrderResponse replayPurchaseOrder(PurchaseOrder existing, String fingerprint) {
+        if (!fingerprint.equals(existing.getRequestFingerprint())) {
+            throw new IllegalArgumentException("Purchase order idempotency key was reused with different details");
+        }
+        return PurchaseOrderResponse.from(existing);
     }
 
     private GoodsReceiptResponse replayReceipt(GoodsReceipt existing, String fingerprint) {
