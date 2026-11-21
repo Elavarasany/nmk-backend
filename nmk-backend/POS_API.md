@@ -330,7 +330,7 @@ Managers and administrators can request a location/date-scoped report:
 
 - `GET /api/admin/pos/reports/sales?locationId=1&from=2026-11-01&to=2026-11-21`
 
-The response includes transaction count, subtotal, discounts, sales after discount, returns/refunds recorded during the selected period, net after refunds, tender totals, refund tender totals, cashier totals, daily totals and the top ten products by gross line total. Refunds are grouped by the date the return was processed, not backdated to the original sale date. The report is limited to 367 calendar days per request.
+The response includes transaction count, subtotal, discounts, sales after discount, returns/refunds recorded during the selected period, net after refunds, tender totals, refund tender totals, cashier totals, daily totals and the top ten products by gross line total and gross quantity sold. Product quantities are not reduced by returns processed in the same date window; use return history separately when reconciling net units. Refunds are grouped by the date the return was processed, not backdated to the original sale date. The report is limited to 367 calendar days per request.
 
 This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
 
