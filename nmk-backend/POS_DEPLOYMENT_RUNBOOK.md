@@ -95,7 +95,7 @@ Run these checks on staging after migration and seed data are complete:
 - Two concurrent attempts to sell the final unit; stock never becomes negative.
 - Open/close shift races against checkout; cash ledger and expected drawer reconcile.
 - Receipt, partial/full return, damaged/discard dispositions, cash refund, recorded non-cash refund reference, and full void after a sale with no prior returns.
-- Equal-value exchange, higher-value replacement with difference collected, lower-value replacement with only the excess refunded, same-key replay, failed-stock rollback, and concurrent exchange attempts against the same remaining sold quantity.
+- Equal-value exchange, higher-value replacement with difference collected (including mandatory UPI/card transaction references), lower-value replacement with only the excess refunded, same-key replay, failed-stock rollback, and concurrent exchange attempts against the same remaining sold quantity.
 - Exchange-credit reporting reconciles separately from actual tender/refund totals; inventory on-hand report reconciles to location balances.
 - A manager/admin cannot perform a stock receipt/adjustment, post/cancel a stock count, submit a purchase order, receive purchase-order goods, return goods to a supplier, process a customer return, full void, or exchange without a fresh one-time password authorization token; token reuse, expiry, wrong staff, and wrong action are rejected.
 - Concurrent return attempts; cumulative returned quantity and refund never exceed the original sale.
