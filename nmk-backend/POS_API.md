@@ -169,15 +169,15 @@ Roles are `ADMIN`, `MANAGER`, and `CASHIER`. Usernames are normalized to lowerca
 | POS catalogue and location selection | Yes | Yes | Yes |
 | Complete POS checkout on own open shift | Yes | Yes | Yes |
 | Apply sale discount | Yes | Yes | No |
-| Open/close own shift and cash in/out | Yes | Yes | Yes |
-| Review any shift and cash ledger | Yes | Yes | No |
+| Open own shift and close own shift; cash in/out on own open shift | Yes | Yes | Yes |
+| Review or close another staff member's shift and cash ledger | Yes | Yes | No |
 | Browse all POS sales history | Yes | Yes | No |
 | Inventory receipt and adjustment APIs | Yes | Yes | No |
 | Create POS registers | Yes | No | No |
 | Staff account administration | Yes | No | No |
 | Other existing admin APIs | Yes | No | No |
 
-This is the first authorization layer. Per-register assignment, supervisor approval thresholds, role-permission tables and refund approvals remain future work.
+This is the first authorization layer. Shift ownership is enforced in the service as well as the HTTP role matcher: CASHIER can operate only their own shift; MANAGER/ADMIN can review and close another staff member's shift. Per-register assignment, supervisor approval thresholds, role-permission tables and refund approvals remain future work.
 
 ## 10. Customer returns and refunds
 
