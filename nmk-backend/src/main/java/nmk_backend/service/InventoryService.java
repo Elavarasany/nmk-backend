@@ -142,6 +142,46 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance receivePurchaseOrderStock(
+            Long locationId, Long variantId, int quantity,
+            String idempotencyKey, Long actorStaffId, String reason,
+            Long goodsReceiptId
+    ) {
+        validateQuantity(quantity);
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException("A purchase receipt reason is required");
+        }
+        if (goodsReceiptId == null || goodsReceiptId <= 0) {
+            throw new InvalidInventoryOperationException("A valid goods receipt reference is required");
+        }
+        return execute(
+                locationId, variantId, quantity, idempotencyKey, actorStaffId,
+                reason.trim(), "RECEIPT", quantity, 0, true,
+                "GOODS_RECEIPT", goodsReceiptId
+        );
+    }
+
+    @Transactional
+    public InventoryBalance returnStockToSupplier(
+            Long locationId, Long variantId, int quantity,
+            String idempotencyKey, Long actorStaffId, String reason,
+            Long supplierReturnId
+    ) {
+        validateQuantity(quantity);
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException("A supplier return reason is required");
+        }
+        if (supplierReturnId == null || supplierReturnId <= 0) {
+            throw new InvalidInventoryOperationException("A valid supplier return reference is required");
+        }
+        return execute(
+                locationId, variantId, quantity, idempotencyKey, actorStaffId,
+                reason.trim(), "SUPPLIER_RETURN", -quantity, 0, false,
+                "SUPPLIER_RETURN", supplierReturnId
+        );
+    }
+
+    @Transactional
     public InventoryBalance applyStockCountVariance(
             Long locationId, Long variantId, int quantityDelta,
             String idempotencyKey, Long actorStaffId, String reason,
