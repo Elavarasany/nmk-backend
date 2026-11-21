@@ -35,10 +35,7 @@ public class InventoryController {
     @GetMapping("/low-stock")
     public ResponseEntity<?> getLowStock(@RequestParam Long locationId) {
         try {
-            return ResponseEntity.ok(
-                    inventoryService.getLowStockBalances(locationId).stream()
-                            .map(LowStockAlertResponse::from).toList()
-            );
+            return ResponseEntity.ok(inventoryService.getLowStockBalances(locationId));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
