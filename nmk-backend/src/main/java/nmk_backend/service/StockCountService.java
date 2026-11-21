@@ -143,6 +143,9 @@ public class StockCountService {
         validateActor(username);
         StockCountSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
+        if ("READY_FOR_REVIEW".equals(session.getStatus())) {
+            return StockCountSessionResponse.from(session);
+        }
         if (!"COUNTING".equals(session.getStatus())) {
             throw new IllegalArgumentException("Only a COUNTING session can be submitted for review");
         }
@@ -165,6 +168,9 @@ public class StockCountService {
 
         StockCountSession snapshot = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
+        if ("POSTED".equals(snapshot.getStatus())) {
+            return StockCountSessionResponse.from(snapshot);
+        }
         InventoryLocation location = locationRepository.findByIdForUpdate(snapshot.getLocation().getId())
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         StockCountSession session = sessionRepository.findByIdForUpdate(sessionId)
@@ -220,6 +226,9 @@ public class StockCountService {
         validateActor(username);
         StockCountSession snapshot = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
+        if ("CANCELLED".equals(snapshot.getStatus())) {
+            return StockCountSessionResponse.from(snapshot);
+        }
         InventoryLocation location = locationRepository.findByIdForUpdate(snapshot.getLocation().getId())
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         StockCountSession session = sessionRepository.findByIdForUpdate(sessionId)
