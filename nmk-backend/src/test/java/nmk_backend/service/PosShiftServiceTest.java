@@ -237,7 +237,7 @@ class PosShiftServiceTest {
 
         var response = service.closeShift(
                 9L,
-                new PosShiftCloseRequest(new BigDecimal("95.00"), "Different retry text"),
+                new PosShiftCloseRequest(new BigDecimal("95.00"), "Drawer recounted"),
                 "cashier.one",
                 "CASHIER"
         );
@@ -248,6 +248,22 @@ class PosShiftServiceTest {
         assertEquals("Drawer recounted", response.closingReason());
         verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
         verify(movementRepository, never()).findByShiftIdOrderByCreatedAtAscIdAsc(9L);
+    }
+
+    @Test
+    void shiftCloseRetryRejectsDifferentClosingReason() {
+        shift.setStatus("CLOSED");
+        shift.setClosingCashCount(new BigDecimal("95.00"));
+        shift.setClosingReason("Drawer recounted");
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        assertThrows(IllegalArgumentException.class, () -> service.closeShift(
+                9L,
+                new PosShiftCloseRequest(new BigDecimal("95.00"), "Different explanation"),
+                "cashier.one",
+                "CASHIER"
+        ));
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
     }
 
     @Test
