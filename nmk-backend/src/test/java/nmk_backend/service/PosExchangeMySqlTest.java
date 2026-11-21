@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PosExchangeMySqlTest {
  @Autowired private PosCheckoutService checkoutService;
  @Autowired private PosExchangeService exchangeService;
+ @Autowired private PosReturnService returnService;
  @Autowired private PosReportService reportService;
  @Autowired private PosShiftService shiftService;
  @Autowired private InventoryService inventoryService;
@@ -238,6 +239,37 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ @Test
+ void concurrentReturnAndExchangeCannotClaimTheSameSoldUnitOnMySql() throws Exception {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-CROSS-OPEN-"+UUID.randomUUID(),null,"Cross-operation concurrency opening stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-CROSS-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ExecutorService executor=Executors.newFixedThreadPool(2);
+  CountDownLatch ready=new CountDownLatch(2), start=new CountDownLatch(1);
+  try {
+   Future<Outcome> exchange=executor.submit(()->crossOperationExchange(f,original.id(),originalLine,ready,start));
+   Future<Outcome> customerReturn=executor.submit(()->crossOperationReturn(f,original.id(),originalLine,ready,start));
+   assertTrue(ready.await(15,TimeUnit.SECONDS),"Both MySQL mutation workers should be ready");
+   start.countDown();
+   Outcome exchangeResult=exchange.get(30,TimeUnit.SECONDS);
+   Outcome returnResult=customerReturn.get(30,TimeUnit.SECONDS);
+   long successful=List.of(exchangeResult,returnResult).stream().filter(Outcome::successful).count();
+   long rejected=List.of(exchangeResult,returnResult).stream()
+    .filter(o->o.failure() instanceof IllegalArgumentException).count();
+   assertEquals(1,successful,"Only one mutation may claim the original sold unit");
+   assertEquals(1,rejected,"The competing mutation must observe the committed returned quantity");
+   List<PosReturn> saleReturns=returns.findBySaleIdOrderByCreatedAtDesc(original.id());
+   assertEquals(1,saleReturns.size());
+   assertEquals(1,saleReturns.get(0).getItems().stream().mapToInt(PosReturnItem::getQuantity).sum());
+   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
+   assertEquals(1,balance.getOnHandQuantity(),"Exactly one returned unit must be restocked");
+  } finally {
+   start.countDown();
+   executor.shutdownNow();
+  }
+ }
+
  void insufficientReplacementStockRollsBackExchangeOnMySql() {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),1,"MYSQL-EX-ROLLBACK-OPEN-"+UUID.randomUUID(),null,"Exchange rollback opening stock");
@@ -270,6 +302,34 @@ class PosExchangeMySqlTest {
    List.of(new PosReturnItemRequest(saleItemId,1,"RESTOCK",null)),List.of(replacement),
    new BigDecimal("0.00"),List.of(),List.of());
   return exchangeService.exchange(saleId,request,f.username(),"CASHIER");
+ }
+
+ private Outcome crossOperationExchange(Fixture f,Long saleId,Long saleItemId,CountDownLatch ready,CountDownLatch start) {
+  ready.countDown();
+  try {
+   if(!start.await(15,TimeUnit.SECONDS)) return new Outcome(false,new TimeoutException("Exchange start signal timed out"));
+   PosSaleItemRequest replacement=new PosSaleItemRequest();
+   replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+   PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Concurrent return versus exchange",
+    "MYSQL-EX-CROSS-EX-"+UUID.randomUUID(),
+    List.of(new PosReturnItemRequest(saleItemId,1,"RESTOCK",null)),List.of(replacement),
+    new BigDecimal("0.00"),List.of(),List.of());
+   exchangeService.exchange(saleId,request,f.username(),"CASHIER");
+   return new Outcome(true,null);
+  } catch(Throwable failure) { return new Outcome(false,failure); }
+ }
+
+ private Outcome crossOperationReturn(Fixture f,Long saleId,Long saleItemId,CountDownLatch ready,CountDownLatch start) {
+  ready.countDown();
+  try {
+   if(!start.await(15,TimeUnit.SECONDS)) return new Outcome(false,new TimeoutException("Return start signal timed out"));
+   PosReturnRequest request=new PosReturnRequest(f.shiftId(),"Concurrent return versus exchange",
+    "MYSQL-EX-CROSS-RETURN-"+UUID.randomUUID(),
+    List.of(new PosReturnItemRequest(saleItemId,1,"RESTOCK",null)),
+    List.of(new PosRefundPaymentRequest("CASH",new BigDecimal("100.00"),null)));
+   returnService.processReturn(saleId,request,f.username(),"CASHIER");
+   return new Outcome(true,null);
+  } catch(Throwable failure) { return new Outcome(false,failure); }
  }
 
  private ProductVariant createReplacementVariant(String suffix,BigDecimal price) {
