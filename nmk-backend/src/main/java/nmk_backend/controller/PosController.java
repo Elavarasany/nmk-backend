@@ -84,7 +84,7 @@ public class PosController {
         if (authentication == null || authentication.getName() == null
                 || authentication.getName().isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Admin authentication is required"));
+                    .body(Map.of("message", "Staff authentication is required"));
         }
 
         try {
