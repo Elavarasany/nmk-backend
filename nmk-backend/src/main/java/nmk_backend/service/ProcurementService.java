@@ -248,6 +248,10 @@ public class ProcurementService {
     public PurchaseOrderResponse submitPurchaseOrder(Long purchaseOrderId) {
         PurchaseOrder order = purchaseOrderRepository.findByIdForUpdate(purchaseOrderId)
                 .orElseThrow(() -> new InventoryNotFoundException("Purchase order was not found"));
+        if (List.of("ORDERED", "PARTIALLY_RECEIVED", "RECEIVED").contains(order.getStatus())) {
+            // Safe replay after a client timeout: submission is a one-way state transition.
+            return PurchaseOrderResponse.from(order);
+        }
         if (!"DRAFT".equals(order.getStatus())) {
             throw new IllegalArgumentException("Only a DRAFT purchase order can be submitted");
         }

@@ -139,6 +139,17 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void purchaseOrderSubmissionRetryIsSafeAfterUncertainResponse() {
+        when(purchaseOrderRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(order));
+
+        PurchaseOrderResponse response = service.submitPurchaseOrder(20L);
+
+        assertEquals("ORDERED", response.status());
+        assertEquals("ORDERED", order.getStatus());
+        verify(purchaseOrderRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void goodsReceiptAddsInventoryAndTracksPartialDelivery() {
         when(goodsReceiptRepository.findByIdempotencyKey("gr-key-1")).thenReturn(Optional.empty());
         when(purchaseOrderRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(order));
