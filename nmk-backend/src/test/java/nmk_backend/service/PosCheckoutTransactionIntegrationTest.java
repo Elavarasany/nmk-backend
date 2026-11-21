@@ -212,6 +212,51 @@ class PosCheckoutTransactionIntegrationTest {
     }
 
     @Test
+    void higherValueExchangeCollectsOnlyTheDifference() {
+        InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
+        balance.setOnHandQuantity(2);
+        balanceRepository.saveAndFlush(balance);
+        var original = checkoutService.checkout(buildCheckoutRequest("POS-EXCHANGE-HIGH-ORIGINAL-" + System.nanoTime()),
+                "pos-rollback-test-cashier");
+        Long originalItemId = saleItemRepository.findBySaleId(original.id()).get(0).getId();
+        product.setPrice(new BigDecimal("150.00"));
+        productRepository.saveAndFlush(product);
+        PosSaleItemRequest replacementLine = new PosSaleItemRequest();
+        replacementLine.setProductId(product.getId()); replacementLine.setVariantId(variant.getId()); replacementLine.setQuantity(1);
+        PosPaymentRequest collection = new PosPaymentRequest();
+        collection.setPaymentMethod("CASH"); collection.setAmount(new BigDecimal("50.00")); collection.setTenderedAmount(new BigDecimal("50.00"));
+        PosExchangeRequest request = new PosExchangeRequest(shiftId,"Higher value replacement","POS-EXCHANGE-HIGH-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(originalItemId,1,"RESTOCK",null)),List.of(replacementLine),
+                new BigDecimal("0.00"),List.of(collection),List.of());
+        var result = exchangeService.exchange(original.id(),request,"pos-rollback-test-cashier","CASHIER");
+        assertEquals(new BigDecimal("100.00"),result.creditApplied());
+        assertEquals(new BigDecimal("50.00"),result.amountCollected());
+        assertEquals(new BigDecimal("0.00"),result.actualRefund());
+        assertEquals(new BigDecimal("50.00"),saleRepository.findById(result.replacementSaleId()).orElseThrow().getPayments().get(0).getAmount());
+    }
+
+    @Test
+    void lowerValueExchangeRecordsOnlyTheActualCashRefund() {
+        InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(location.getId(),variant.getId()).orElseThrow();
+        balance.setOnHandQuantity(2); balanceRepository.saveAndFlush(balance);
+        var original = checkoutService.checkout(buildCheckoutRequest("POS-EXCHANGE-LOW-ORIGINAL-" + System.nanoTime()),
+                "pos-rollback-test-cashier");
+        Long originalItemId = saleItemRepository.findBySaleId(original.id()).get(0).getId();
+        product.setPrice(new BigDecimal("80.00")); productRepository.saveAndFlush(product);
+        PosSaleItemRequest replacementLine = new PosSaleItemRequest();
+        replacementLine.setProductId(product.getId()); replacementLine.setVariantId(variant.getId()); replacementLine.setQuantity(1);
+        PosExchangeRequest request = new PosExchangeRequest(shiftId,"Lower value replacement","POS-EXCHANGE-LOW-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(originalItemId,1,"RESTOCK",null)),List.of(replacementLine),
+                new BigDecimal("0.00"),List.of(),List.of(new PosRefundPaymentRequest("CASH",new BigDecimal("20.00"),null)));
+        var result = exchangeService.exchange(original.id(),request,"pos-rollback-test-cashier","CASHIER");
+        assertEquals(new BigDecimal("80.00"),result.creditApplied());
+        assertEquals(new BigDecimal("0.00"),result.amountCollected());
+        assertEquals(new BigDecimal("20.00"),result.actualRefund());
+        assertEquals(new BigDecimal("20.00"),returnRepository.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0)
+                .getRefundPayments().get(0).getAmount());
+    }
+
+    @Test
     void failedReplacementStockConsumptionRollsBackEntireExchange() {
         InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
         balance.setOnHandQuantity(1);
