@@ -1,0 +1,154 @@
+package nmk_backend.service;
+
+import nmk_backend.dto.PosCashMovementRequest;
+import nmk_backend.dto.PosShiftCloseRequest;
+import nmk_backend.entity.*;
+import nmk_backend.repository.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class PosShiftServiceTest {
+
+    private InventoryLocationRepository locationRepository;
+    private PosRegisterRepository registerRepository;
+    private PosShiftRepository shiftRepository;
+    private PosCashMovementRepository movementRepository;
+    private PosShiftService service;
+    private PosShift shift;
+
+    @BeforeEach
+    void setUp() {
+        locationRepository = mock(InventoryLocationRepository.class);
+        registerRepository = mock(PosRegisterRepository.class);
+        shiftRepository = mock(PosShiftRepository.class);
+        movementRepository = mock(PosCashMovementRepository.class);
+        service = new PosShiftService(
+                locationRepository, registerRepository, shiftRepository, movementRepository
+        );
+
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setActive(true);
+
+        PosRegister register = new PosRegister();
+        ReflectionTestUtils.setField(register, "id", 3L);
+        register.setLocation(location);
+        register.setRegisterCode("MAIN");
+        register.setActive(true);
+
+        shift = new PosShift();
+        ReflectionTestUtils.setField(shift, "id", 9L);
+        shift.setRegister(register);
+        shift.setOpenedByUsername("cashier.one");
+        shift.setOpeningFloat(new BigDecimal("100.00"));
+        shift.setStatus("OPEN");
+        shift.setIdempotencyKey("SHIFT-OPEN-1");
+    }
+
+    @Test
+    void cashOutCannotExceedCurrentExpectedDrawerCash() {
+        PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByIdempotencyKey("CASH-OUT-1")).thenReturn(Optional.empty());
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L))
+                .thenReturn(List.of(opening));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.recordCashMovement(
+                        9L,
+                        new PosCashMovementRequest("CASH_OUT", new BigDecimal("101.00"),
+                                "CASH-OUT-1", "Petty cash"),
+                        "cashier.one",
+                        "CASHIER"
+                )
+        );
+        verify(movementRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void cashOutIsRecordedAsAnOutflowAndReducesExpectedCash() {
+        PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByIdempotencyKey("CASH-OUT-2")).thenReturn(Optional.empty());
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L))
+                .thenReturn(List.of(opening, movement("CASH_OUT", "OUT", "25.00", shift)));
+        when(movementRepository.saveAndFlush(any(PosCashMovement.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.recordCashMovement(
+                9L,
+                new PosCashMovementRequest("CASH_OUT", new BigDecimal("25.00"),
+                        "CASH-OUT-2", "Store supplies"),
+                "cashier.one",
+                "CASHIER"
+        );
+
+        assertEquals(new BigDecimal("75.00"), response.expectedCash());
+        verify(movementRepository).saveAndFlush(argThat(movement ->
+                "CASH_OUT".equals(movement.getMovementType())
+                        && "OUT".equals(movement.getDirection())
+                        && new BigDecimal("25.00").compareTo(movement.getAmount()) == 0
+        ));
+    }
+
+    @Test
+    void cashVarianceRequiresAnExplanationAtShiftClose() {
+        PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L))
+                .thenReturn(List.of(opening));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.closeShift(
+                        9L,
+                        new PosShiftCloseRequest(new BigDecimal("95.00"), null),
+                        "cashier.one",
+                        "CASHIER"
+                )
+        );
+        verify(shiftRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shiftCloseStoresExpectedCashVarianceAndReason() {
+        PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L))
+                .thenReturn(List.of(opening));
+        when(shiftRepository.saveAndFlush(any(PosShift.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.closeShift(
+                9L,
+                new PosShiftCloseRequest(new BigDecimal("95.00"), "Five rupees short; recounted drawer"),
+                "cashier.one",
+                "CASHIER"
+        );
+
+        assertEquals("CLOSED", response.status());
+        assertEquals(new BigDecimal("100.00"), response.expectedCash());
+        assertEquals(new BigDecimal("-5.00"), response.cashVariance());
+        assertEquals("Five rupees short; recounted drawer", response.closingReason());
+        assertNotNull(response.closedAt());
+    }
+
+    private PosCashMovement movement(String type, String direction, String amount, PosShift shift) {
+        PosCashMovement movement = new PosCashMovement();
+        movement.setShift(shift);
+        movement.setMovementType(type);
+        movement.setDirection(direction);
+        movement.setAmount(new BigDecimal(amount));
+        movement.setIdempotencyKey(type + "-" + amount);
+        movement.setActorUsername("cashier.one");
+        return movement;
+    }
+}
