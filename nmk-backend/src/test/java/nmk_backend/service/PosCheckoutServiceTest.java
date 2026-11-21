@@ -234,7 +234,7 @@ class PosCheckoutServiceTest {
         upi.setAmount(new BigDecimal("50.00"));
         request.setPayments(List.of(cash, upi));
 
-        var response = service.checkout(request, "admin");
+        var response = service.checkout(request, "admin", "ADMIN");
 
         assertEquals("90.00", response.grandTotal().toPlainString());
         assertEquals(2, response.payments().size());
