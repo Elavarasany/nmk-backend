@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PosExchangeMySqlTest {
  @Autowired private PosCheckoutService checkoutService;
  @Autowired private PosExchangeService exchangeService;
+ @Autowired private PosReportService reportService;
  @Autowired private PosShiftService shiftService;
  @Autowired private InventoryService inventoryService;
  @Autowired private AdminRepository admins;
@@ -64,6 +65,11 @@ class PosExchangeMySqlTest {
    "Non-cash exchange credit must not be written as a tender row");
   assertEquals(1,returns.findBySaleIdOrderByCreatedAtDesc(original.id()).size());
   assertEquals(1,exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(original.id()).size());
+  var report=reportService.getSalesReport(f.locationId(),java.time.LocalDate.now(),java.time.LocalDate.now());
+  assertEquals(new BigDecimal("100.00"),report.exchangeCreditApplied(),
+   "Exchange credit must be reported separately from payment tenders and refund payments");
+  assertEquals(new BigDecimal("0.00"),report.recordedRefundPayments());
+  assertEquals(new BigDecimal("100.00"),report.netSalesAfterRefunds());
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(1,balance.getOnHandQuantity(),"Restock and replacement sale must both commit");
  }
