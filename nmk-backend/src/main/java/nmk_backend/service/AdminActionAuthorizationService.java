@@ -29,7 +29,7 @@ public class AdminActionAuthorizationService {
     );
 
     private static final Set<String> MANAGER_ALLOWED_ACTIONS = Set.of(
-            "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL"
+            "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN"
     );
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
