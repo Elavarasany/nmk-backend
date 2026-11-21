@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -110,6 +111,27 @@ class AdminActionAuthorizationServiceTest {
                         .map(AdminActionAuthorization::getAction)
                         .collect(java.util.stream.Collectors.toSet())
         );
+    }
+
+    @Test
+    void managerCanAuthorizeFinancialPosActionsButNotGlobalClearActions() {
+        admin.setRole("MANAGER");
+        when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("correct-password", "encoded-password")).thenReturn(true);
+        for (String action : new String[]{"POS_RETURN", "POS_VOID", "POS_EXCHANGE"}) {
+            assertNotNull(service.authorizeAction("admin", "correct-password", action));
+        }
+        assertThrows(IllegalArgumentException.class,
+                () -> service.authorizeAction("admin", "correct-password", "CLEAR_ORDERS"));
+    }
+
+    @Test
+    void disabledStaffCannotAuthorizeActions() {
+        admin.setEnabled(false);
+        when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.authorizeAction("admin", "correct-password", "POS_EXCHANGE"));
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
     }
 
     @Test
