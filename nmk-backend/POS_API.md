@@ -249,6 +249,7 @@ Create purchase order example:
   "supplierId": 2,
   "locationId": 1,
   "notes": "Frames replenishment",
+  "idempotencyKey": "po-create-device-unique-key",
   "items": [
     { "variantId": 15, "orderedQuantity": 20, "unitCost": 425.00 }
   ]
