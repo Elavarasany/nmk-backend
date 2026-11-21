@@ -76,7 +76,8 @@ No online or POS checkout should be enabled until the active sellable variants a
 ## 6. Staff, register and cashier setup
 
 1. Confirm the owner/admin account and test that disabled accounts cannot authenticate.
-2. Create individual MANAGER and CASHIER accounts; do not share logins.
+2. **Review every account that existed before migration 006.** That migration assigns the default role `ADMIN` to existing rows; do not leave all legacy accounts as administrators. Keep only the designated owner/admin accounts as `ADMIN`, downgrade operational staff to `MANAGER` or `CASHIER` through staff administration, and disable stale/shared accounts.
+3. Create individual MANAGER and CASHIER accounts; do not share logins.
 3. Create/verify the MAIN register for the active location.
 4. Open the first cashier shift with the physically counted opening float.
 5. Test checkout, split tender, cash change, cash-in/out, shift close and variance explanation using disposable staging records.
