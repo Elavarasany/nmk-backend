@@ -15,6 +15,8 @@ public record PosSalesReportResponse(
         BigDecimal netSalesBeforeRefunds,
         int returnCount,
         BigDecimal refunds,
+        BigDecimal salesReversals,
+        BigDecimal recordedRefundPayments,
         BigDecimal netSalesAfterRefunds,
         Map<String, BigDecimal> salesByPaymentMethod,
         Map<String, BigDecimal> refundsByPaymentMethod,

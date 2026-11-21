@@ -102,6 +102,7 @@ public class PosReportService {
         }
 
         BigDecimal refundTotal = ZERO;
+        BigDecimal recordedRefundPaymentTotal = ZERO;
         int customerReturnCount = 0;
         for (PosReturn record : returns) {
             refundTotal = refundTotal.add(record.getRefundTotal());
@@ -122,6 +123,7 @@ public class PosReportService {
                         payment.getAmount(),
                         BigDecimal::add
                 );
+                recordedRefundPaymentTotal = recordedRefundPaymentTotal.add(payment.getAmount());
             }
         }
 
@@ -165,7 +167,8 @@ public class PosReportService {
         return new PosSalesReportResponse(
                 locationId, from, to, sales.size(),
                 subtotal, discounts, netSales,
-                customerReturnCount, refundTotal, netSales.subtract(refundTotal),
+                customerReturnCount, refundTotal, refundTotal,
+                recordedRefundPaymentTotal, netSales.subtract(refundTotal),
                 Collections.unmodifiableMap(salesByPayment),
                 Collections.unmodifiableMap(refundsByPayment),
                 cashierRows, dailyRows, topProducts
