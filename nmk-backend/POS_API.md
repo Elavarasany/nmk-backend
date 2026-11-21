@@ -193,7 +193,7 @@ Example:
 }
 ```
 
-The server locks the original sale while validating cumulative returned quantities. A sale line cannot be returned beyond the quantity originally sold. Refund values are calculated from the original line-price snapshot and a proportional allocation of the original sale discount; the client cannot choose the refund amount. A full return of the remaining line quantity receives any rounding remainder so partial returns cannot over-refund the line. Cumulative refund value cannot exceed the original sale total.
+The server locks the original sale while validating cumulative returned quantities. Return and void transactions use READ_COMMITTED isolation so that, after waiting for the sale lock, MySQL reads the latest committed return quantities rather than reusing a REPEATABLE_READ snapshot created before the lock. A sale line cannot be returned beyond the quantity originally sold. Refund values are calculated from the original line-price snapshot and a proportional allocation of the original sale discount; the client cannot choose the refund amount. A full return of the remaining line quantity receives any rounding remainder so partial returns cannot over-refund the line. Cumulative refund value cannot exceed the original sale total.
 
 Restock dispositions:
 
@@ -205,7 +205,7 @@ Refund tender allocations must add up exactly to the server-calculated refund to
 
 **Provider limitation:** this POS endpoint records UPI/card refund references; it does not call a UPI/card provider or Razorpay to move funds. The refund must be completed and verified through the relevant provider before recording the reference. Do not treat a saved reference as proof of provider settlement.
 
-The return idempotency key is scoped to the original sale, normalized authenticated staff username and request fingerprint. Replaying the same request as the same staff account returns the prior return; another staff account cannot replay that key, and changing the sale or request while reusing the key is rejected. Returns, refund payments and resaleable stock movements commit in one database transaction.
+The return idempotency key is scoped to the original sale, normalized authenticated staff username and request fingerprint. Replaying the same request as the same staff account returns the prior return; another staff account cannot replay that key, and changing the sale or request while reusing the key is rejected. Returns, refund payments and resaleable stock movements commit in one database transaction. A MySQL 8.4 concurrency integration test verifies that two simultaneous attempts to return the same final unit result in one successful return and one rejection.
 
 
 ### Full sale void
