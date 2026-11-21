@@ -54,10 +54,11 @@ public class StaffAccountService {
 
     @Transactional
     public StaffAccountResponse setEnabled(Long id, boolean enabled, String actorUsername) {
-        Admin account = findLockedAccount(id);
+        List<Admin> lockedAccounts = adminRepository.findAllForUpdate();
+        Admin account = findLockedAccount(lockedAccounts, id);
         preventSelfLockout(account, actorUsername, enabled ? null : "disable");
 
-        long activeAdmins = adminRepository.findAllForUpdate().stream()
+        long activeAdmins = lockedAccounts.stream()
                 .filter(Admin::isEnabled)
                 .filter(item -> ADMIN.equals(item.getRole()))
                 .count();
@@ -71,10 +72,11 @@ public class StaffAccountService {
 
     @Transactional
     public StaffAccountResponse setRole(Long id, String requestedRole, String actorUsername) {
-        Admin account = findLockedAccount(id);
+        List<Admin> lockedAccounts = adminRepository.findAllForUpdate();
+        Admin account = findLockedAccount(lockedAccounts, id);
         String role = normalizeRole(requestedRole);
 
-        long activeAdmins = adminRepository.findAllForUpdate().stream()
+        long activeAdmins = lockedAccounts.stream()
                 .filter(Admin::isEnabled)
                 .filter(item -> ADMIN.equals(item.getRole()))
                 .count();
@@ -89,11 +91,11 @@ public class StaffAccountService {
         return StaffAccountResponse.from(adminRepository.save(account));
     }
 
-    private Admin findLockedAccount(Long id) {
+    private Admin findLockedAccount(List<Admin> lockedAccounts, Long id) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("A valid staff account id is required");
         }
-        return adminRepository.findAllForUpdate().stream()
+        return lockedAccounts.stream()
                 .filter(account -> account.getId().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Staff account not found"));
