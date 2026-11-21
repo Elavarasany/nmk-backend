@@ -135,6 +135,7 @@ class StockCountServiceTest {
 
     @Test
     void anotherStaffMemberCannotOverwriteTheOriginalCountersAuditIdentity() {
+        session.setStatus("COUNTING");
         line.setCountedByUsername("manager.one");
         when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
         when(lineRepository.findBySessionAndIdForUpdate(8L, 80L)).thenReturn(Optional.of(line));
