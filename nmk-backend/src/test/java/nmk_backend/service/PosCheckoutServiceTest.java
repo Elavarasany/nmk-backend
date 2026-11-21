@@ -30,6 +30,7 @@ class PosCheckoutServiceTest {
     private InventoryLocationRepository locationRepository;
     private AdminRepository adminRepository;
     private InventoryService inventoryService;
+    private PosShiftService shiftService;
     private ObjectMapper objectMapper;
     private PosCheckoutService service;
 
@@ -46,6 +47,7 @@ class PosCheckoutServiceTest {
         locationRepository = mock(InventoryLocationRepository.class);
         adminRepository = mock(AdminRepository.class);
         inventoryService = mock(InventoryService.class);
+        shiftService = mock(PosShiftService.class);
         objectMapper = new ObjectMapper();
 
         service = new PosCheckoutService(
@@ -55,6 +57,7 @@ class PosCheckoutServiceTest {
                 locationRepository,
                 adminRepository,
                 inventoryService,
+                shiftService,
                 objectMapper
         );
 
@@ -79,6 +82,17 @@ class PosCheckoutServiceTest {
         cashier = new Admin();
         cashier.setId(7L);
         cashier.setUsername("admin");
+
+        PosRegister register = new PosRegister();
+        register.setId(3L);
+        register.setLocation(location);
+        register.setRegisterCode("MAIN");
+        PosShift shift = new PosShift();
+        ReflectionTestUtils.setField(shift, "id", 99L);
+        shift.setRegister(register);
+        shift.setOpenedByUsername("admin");
+        shift.setStatus("OPEN");
+        when(shiftService.requireOpenShift(99L, 1L, "admin")).thenReturn(shift);
 
         when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
         when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(cashier));
@@ -120,6 +134,10 @@ class PosCheckoutServiceTest {
                 eq(123L)
         );
         verify(saleRepository).saveAndFlush(any(PosSale.class));
+        verify(shiftService).recordCashSale(
+                same(shift), eq(new BigDecimal("100.00")),
+                eq("POS-CASH:key-1:0"), eq("admin"), eq(123L)
+        );
     }
 
     @Test
@@ -254,6 +272,7 @@ class PosCheckoutServiceTest {
     private PosCheckoutRequest validRequest() {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(1L);
+        request.setShiftId(99L);
         request.setIdempotencyKey("key-1");
         request.setDiscountAmount(new BigDecimal("0.00"));
 
