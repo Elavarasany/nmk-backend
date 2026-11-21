@@ -141,6 +141,26 @@ class PosAuthorizationIntegrationTest {
 
 
     @Test
+    void cashierCannotProcessExchanges() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReachExchangeRequestValidation() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void cashierCannotVoidCompletedSale() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(post("/api/admin/pos/sales/1/void")

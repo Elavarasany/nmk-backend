@@ -12,6 +12,11 @@ import java.util.Map;
 public class PosExchangeController {
  private final PosExchangeService service;
  public PosExchangeController(PosExchangeService service) { this.service=service; }
+ @GetMapping
+ public ResponseEntity<?> getExchanges(@PathVariable Long saleId) {
+  try { return ResponseEntity.ok(service.getExchanges(saleId)); }
+  catch(IllegalArgumentException ex) { return ResponseEntity.badRequest().body(Map.of("message",ex.getMessage())); }
+ }
  @PostMapping
  public ResponseEntity<?> exchange(@PathVariable Long saleId,@Valid @RequestBody PosExchangeRequest request,Authentication auth) {
   if(auth==null||auth.getName()==null||auth.getName().isBlank())

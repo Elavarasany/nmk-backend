@@ -39,6 +39,14 @@ public class PosExchangeService {
   this.admins=admins; this.inventory=inventory; this.shifts=shifts; this.mapper=mapper;
  }
 
+ @Transactional(readOnly=true)
+ public List<PosExchangeResponse> getExchanges(Long originalSaleId) {
+  if(originalSaleId==null||originalSaleId<=0) throw new IllegalArgumentException("A valid original sale ID is required");
+  if(!sales.existsById(originalSaleId)) throw new InventoryNotFoundException("Original POS sale was not found");
+  return exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(originalSaleId).stream()
+   .map(PosExchangeResponse::from).toList();
+ }
+
  @Transactional(isolation=Isolation.READ_COMMITTED)
  public PosExchangeResponse exchange(Long saleId,PosExchangeRequest req,String username,String role) {
   validate(saleId,req,username);
