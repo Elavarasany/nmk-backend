@@ -248,7 +248,7 @@ class PosCheckoutServiceTest {
         request.setDiscountAmount(new BigDecimal("101.00"));
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.checkout(request, "admin"));
+                () -> service.checkout(request, "admin", "ADMIN"));
 
         verify(saleRepository, never()).saveAndFlush(any());
         verifyNoInteractions(inventoryService);
