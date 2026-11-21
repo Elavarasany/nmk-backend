@@ -12,7 +12,7 @@ import java.util.List;
 public record PosReturnRequest(
         @NotNull @Positive Long shiftId,
         @NotBlank @Size(max = 500) String reason,
-        @NotBlank String idempotencyKey,
+        @NotBlank @Size(max = 100) String idempotencyKey,
         @NotEmpty @Size(max = 100) List<@Valid PosReturnItemRequest> items,
         @Size(max = 3) List<@Valid PosRefundPaymentRequest> refundPayments
 ) {
