@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Local staging configuration and logs
+/src/main/resources/application-staging.properties
+/staging-startup.log
+

@@ -54,9 +54,25 @@ public class StockReservationScheduler {
             Order snapshot = orderRepository.findById(orderId)
                     .orElse(null);
 
-            if (snapshot == null ||
-                    snapshot.getRazorpayOrderId() == null ||
+            if (snapshot == null) {
+                return;
+            }
+
+            if (!"CREATED".equalsIgnoreCase(
+                    snapshot.getPaymentCreationStatus())) {
+
+                System.err.println(
+                        "Reservation retained for payment reconciliation. "
+                                + "Payment creation status: "
+                                + snapshot.getPaymentCreationStatus()
+                                + ", Order: " + orderId
+                );
+                return;
+            }
+
+            if (snapshot.getRazorpayOrderId() == null ||
                     snapshot.getRazorpayOrderId().isBlank()) {
+
                 System.err.println(
                         "Reservation requires review. Missing Razorpay order ID: "
                                 + orderId
@@ -93,6 +109,8 @@ public class StockReservationScheduler {
                 if (!lockedOrder.isStockReserved()
                         || !"PENDING".equalsIgnoreCase(
                         lockedOrder.getPaymentStatus())
+                        || !"CREATED".equalsIgnoreCase(
+                        lockedOrder.getPaymentCreationStatus())
                         || lockedOrder.getReservationExpiresAt() == null
                         || lockedOrder.getReservationExpiresAt()
                         .isAfter(LocalDateTime.now())) {

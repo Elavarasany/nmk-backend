@@ -1,3 +1,4 @@
+
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
@@ -39,13 +40,31 @@ public class RazorpayWebhookEvent {
 
     private LocalDateTime processedAt;
 
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount = 0;
+
+    @Column(name = "next_attempt_at")
+    private LocalDateTime nextAttemptAt;
+
+    @Column(name = "processing_started_at")
+    private LocalDateTime processingStartedAt;
+
+    // Identifies the worker that currently owns this processing attempt.
+    @Column(name = "claim_token", length = 36)
+    private String claimToken;
+
     @PrePersist
     public void prePersist() {
         if (receivedAt == null) {
             receivedAt = LocalDateTime.now();
         }
+
         if (status == null) {
             status = "RECEIVED";
+        }
+
+        if (nextAttemptAt == null) {
+            nextAttemptAt = receivedAt;
         }
     }
 
@@ -103,5 +122,37 @@ public class RazorpayWebhookEvent {
 
     public void setProcessedAt(LocalDateTime processedAt) {
         this.processedAt = processedAt;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public void setAttemptCount(int attemptCount) {
+        this.attemptCount = attemptCount;
+    }
+
+    public LocalDateTime getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public void setNextAttemptAt(LocalDateTime nextAttemptAt) {
+        this.nextAttemptAt = nextAttemptAt;
+    }
+
+    public LocalDateTime getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(LocalDateTime processingStartedAt) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
+    public String getClaimToken() {
+        return claimToken;
+    }
+
+    public void setClaimToken(String claimToken) {
+        this.claimToken = claimToken;
     }
 }
