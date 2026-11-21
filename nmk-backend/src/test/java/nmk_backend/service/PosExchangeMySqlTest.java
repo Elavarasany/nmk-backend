@@ -137,7 +137,7 @@ class PosExchangeMySqlTest {
   PosPaymentRequest originalPayment=new PosPaymentRequest();
   originalPayment.setPaymentMethod("CASH"); originalPayment.setAmount(new BigDecimal("180.00"));
   originalPayment.setTenderedAmount(new BigDecimal("180.00")); saleRequest.setPayments(List.of(originalPayment));
-  PosSaleResponse original=checkoutService.checkout(saleRequest,f.username());
+  PosSaleResponse original=checkoutService.checkout(saleRequest,f.username(),"MANAGER");
   Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
   ProductVariant replacementVariant=createReplacementVariant("PARTIAL-"+UUID.randomUUID(),new BigDecimal("90.00"));
   inventoryService.receiveStock(f.locationId(),replacementVariant.getId(),2,"MYSQL-EX-PARTIAL-NEW-"+UUID.randomUUID(),null,"Partial exchange replacement stock");
