@@ -15,7 +15,7 @@ public record PosInventoryReportResponse(
    var v=b.getVariant(); var p=v.getProduct();
    int available=b.getAvailableQuantity(), reorder=b.getReorderLevel()==null?0:b.getReorderLevel();
    return new VariantStock(v.getId(),p.getId(),p.getName(),v.getSku(),v.getBarcode(),v.getVariantName(),
-    Map.copyOf(v.getAttributes()),b.getOnHandQuantity(),b.getReservedQuantity(),available,reorder,reorder>0&&available<=reorder);
+    java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(v.getAttributes())),b.getOnHandQuantity(),b.getReservedQuantity(),available,reorder,reorder>0&&available<=reorder);
   }
  }
  public static PosInventoryReportResponse from(InventoryLocation location,List<InventoryBalance> balances) {
