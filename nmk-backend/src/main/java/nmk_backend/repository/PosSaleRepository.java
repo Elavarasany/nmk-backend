@@ -27,6 +27,10 @@ public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
 
     Optional<PosSale> findByInvoiceNumber(String invoiceNumber);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM PosSale s WHERE s.id = :saleId")
+    Optional<PosSale> findByIdForUpdate(@Param("saleId") Long saleId);
+
     List<PosSale> findAllByOrderByCreatedAtDesc();
 
     List<PosSale> findByLocationIdOrderByCreatedAtDesc(Long locationId);
