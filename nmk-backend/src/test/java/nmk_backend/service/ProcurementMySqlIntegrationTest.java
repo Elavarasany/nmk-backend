@@ -84,6 +84,14 @@ class ProcurementMySqlIntegrationTest {
         GoodsReceiptResponse firstReceipt = procurement.receiveGoods(draft.id(), firstReceiptRequest, username);
         GoodsReceiptResponse firstReceiptReplay = procurement.receiveGoods(draft.id(), firstReceiptRequest, username);
         assertEquals(firstReceipt.id(), firstReceiptReplay.id());
+        String otherUsername = "mysql-procurement-other-" + suffix;
+        Admin otherManager = new Admin();
+        otherManager.setUsername(otherUsername);
+        otherManager.setPassword("test-only-password");
+        admins.saveAndFlush(otherManager);
+        assertThrows(IllegalArgumentException.class,
+                () -> procurement.receiveGoods(draft.id(), firstReceiptRequest, otherUsername),
+                "A different staff member must not replay another user's goods receipt key");
         assertEquals("PARTIALLY_RECEIVED", procurement.getPurchaseOrder(draft.id()).status());
         assertEquals(4, balances.findByLocationIdAndVariantId(location.getId(), variant.getId())
                 .orElseThrow().getOnHandQuantity(),
@@ -106,6 +114,9 @@ class ProcurementMySqlIntegrationTest {
         SupplierReturnResponse supplierReturn = procurement.returnGoodsToSupplier(draft.id(), returnRequest, username);
         SupplierReturnResponse supplierReturnReplay = procurement.returnGoodsToSupplier(draft.id(), returnRequest, username);
         assertEquals(supplierReturn.id(), supplierReturnReplay.id());
+        assertThrows(IllegalArgumentException.class,
+                () -> procurement.returnGoodsToSupplier(draft.id(), returnRequest, otherUsername),
+                "A different staff member must not replay another user's supplier return key");
         assertEquals(3, balances.findByLocationIdAndVariantId(location.getId(), variant.getId())
                 .orElseThrow().getOnHandQuantity(),
                 "A retried supplier return must not deduct stock twice");
