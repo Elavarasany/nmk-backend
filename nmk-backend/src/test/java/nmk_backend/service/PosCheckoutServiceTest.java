@@ -38,6 +38,7 @@ class PosCheckoutServiceTest {
     private ProductVariant variant;
     private InventoryLocation location;
     private Admin cashier;
+    private PosShift shift;
 
     @BeforeEach
     void setUp() {
@@ -87,7 +88,7 @@ class PosCheckoutServiceTest {
         register.setId(3L);
         register.setLocation(location);
         register.setRegisterCode("MAIN");
-        PosShift shift = new PosShift();
+        shift = new PosShift();
         ReflectionTestUtils.setField(shift, "id", 99L);
         shift.setRegister(register);
         shift.setOpenedByUsername("admin");
