@@ -214,4 +214,26 @@ class ProcurementServiceTest {
         verify(supplierReturnRepository, never()).saveAndFlush(any());
         verifyNoInteractions(inventoryService);
     }
+    @Test
+    void procurementAuditHistoryReturnsEmptyListsForExistingOrder() {
+        when(purchaseOrderRepository.existsById(20L)).thenReturn(true);
+        when(goodsReceiptRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(20L)).thenReturn(List.of());
+        when(supplierReturnRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(20L)).thenReturn(List.of());
+
+        assertTrue(service.getGoodsReceipts(20L).isEmpty());
+        assertTrue(service.getSupplierReturns(20L).isEmpty());
+        verify(goodsReceiptRepository).findByPurchaseOrderIdOrderByCreatedAtDesc(20L);
+        verify(supplierReturnRepository).findByPurchaseOrderIdOrderByCreatedAtDesc(20L);
+    }
+
+    @Test
+    void procurementAuditHistoryRejectsMissingOrInvalidOrder() {
+        when(purchaseOrderRepository.existsById(999L)).thenReturn(false);
+        assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(999L));
+        assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(999L));
+        assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(0L));
+        assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(null));
+        verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
+    }
+
 }
