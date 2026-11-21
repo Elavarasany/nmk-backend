@@ -69,6 +69,7 @@ class PosExchangeMySqlTest {
   Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
   PosSaleItemRequest replacement=new PosSaleItemRequest();
   replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+  long salesBefore=sales.count();
   String key="MYSQL-EX-ROLLBACK-KEY-"+UUID.randomUUID();
   PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Rollback failed MySQL exchange",key,
    List.of(new PosReturnItemRequest(originalLine,1,"DAMAGED","Damaged item")),List.of(replacement),
@@ -80,7 +81,7 @@ class PosExchangeMySqlTest {
    "Failed exchange must roll back the return");
   assertTrue(exchanges.findByIdempotencyKey(key).isEmpty(),
    "Failed exchange must roll back its exchange header");
-  assertEquals(1,sales.count(),"Only the original sale may remain");
+  assertEquals(salesBefore,sales.count(),"Failed exchange must not leave a replacement sale");
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(0,balance.getOnHandQuantity(),"Failed replacement sale must not change stock");
  }
