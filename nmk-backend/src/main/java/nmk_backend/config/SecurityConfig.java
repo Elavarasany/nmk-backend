@@ -70,6 +70,8 @@ public class SecurityConfig {
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
                         .requestMatchers("/api/admin/inventory/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                        .requestMatchers("/api/admin/procurement/**")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
