@@ -118,7 +118,7 @@ class AdminActionAuthorizationServiceTest {
         admin.setRole("MANAGER");
         when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
         when(passwordEncoder.matches("correct-password", "encoded-password")).thenReturn(true);
-        for (String action : new String[]{"POS_RETURN", "POS_VOID", "POS_EXCHANGE", "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN"}) {
+        for (String action : new String[]{"POS_RETURN", "POS_VOID", "POS_EXCHANGE", "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN", "PURCHASE_ORDER_SUBMIT"}) {
             assertNotNull(service.authorizeAction("admin", "correct-password", action));
         }
         assertThrows(IllegalArgumentException.class,
