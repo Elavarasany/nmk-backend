@@ -81,6 +81,28 @@ class PosAuthorizationIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+
+    @Test
+    void cashierCannotApplySaleDiscountThroughPosCheckoutApi() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        String body = """
+                {
+                  "locationId": 1,
+                  "shiftId": 1,
+                  "discountAmount": 10.00,
+                  "idempotencyKey": "cashier-discount-security-test",
+                  "items": [{"productId": 1, "variantId": 1, "quantity": 1}],
+                  "payments": [{"paymentMethod": "CASH", "amount": 90.00, "tenderedAmount": 90.00}]
+                }
+                """;
+
+        mockMvc.perform(post("/api/admin/pos/checkout")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void cashierCannotBrowseAllSalesHistory() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
