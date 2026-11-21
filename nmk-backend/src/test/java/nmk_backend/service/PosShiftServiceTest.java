@@ -89,6 +89,32 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void concurrentCashMovementRetryReplaysAfterTheShiftHasClosed() {
+        PosCashMovement existing = movement("CASH_OUT", "OUT", "25.00", shift);
+        existing.setIdempotencyKey("CASH-OUT-RACE");
+        existing.setReason("Store supplies");
+        shift.setStatus("CLOSED");
+        shift.setExpectedCash(new BigDecimal("75.00"));
+
+        when(movementRepository.findByIdempotencyKey("CASH-OUT-RACE"))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        var response = service.recordCashMovement(
+                9L,
+                new PosCashMovementRequest("CASH_OUT", new BigDecimal("25.00"),
+                        "CASH-OUT-RACE", "Store supplies"),
+                "cashier.one",
+                "CASHIER"
+        );
+
+        assertEquals("CLOSED", response.status());
+        assertEquals(new BigDecimal("75.00"), response.expectedCash());
+        verify(movementRepository, times(2)).findByIdempotencyKey("CASH-OUT-RACE");
+        verify(movementRepository, never()).saveAndFlush(any(PosCashMovement.class));
+    }
+
+    @Test
     void cashOutCannotExceedCurrentExpectedDrawerCash() {
         PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
         when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
