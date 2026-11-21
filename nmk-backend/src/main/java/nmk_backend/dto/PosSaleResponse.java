@@ -52,6 +52,7 @@ public record PosSaleResponse(
     }
 
     public record ItemResponse(
+            Long id,
             Long productId,
             Long variantId,
             String sku,
@@ -64,6 +65,7 @@ public record PosSaleResponse(
     ) {
         private static ItemResponse from(PosSaleItem item) {
             return new ItemResponse(
+                    item.getId(),
                     item.getProductId(),
                     item.getVariantId(),
                     item.getSku(),
