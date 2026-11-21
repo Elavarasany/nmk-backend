@@ -102,6 +102,7 @@ public class PosReportService {
         }
 
         BigDecimal refundTotal = ZERO;
+        int customerReturnCount = 0;
         for (PosReturn record : returns) {
             refundTotal = refundTotal.add(record.getRefundTotal());
             MutableDaily day = daily.computeIfAbsent(
@@ -110,6 +111,7 @@ public class PosReportService {
             // A full void is a reversal, not a customer return. Keep its refund
             // in the financial totals, but do not inflate the operational return count.
             if ("RETURN".equals(record.getReturnType())) {
+                customerReturnCount++;
                 day.returnCount++;
             }
             day.refunds = day.refunds.add(record.getRefundTotal());
@@ -163,7 +165,7 @@ public class PosReportService {
         return new PosSalesReportResponse(
                 locationId, from, to, sales.size(),
                 subtotal, discounts, netSales,
-                returns.size(), refundTotal, netSales.subtract(refundTotal),
+                customerReturnCount, refundTotal, netSales.subtract(refundTotal),
                 Collections.unmodifiableMap(salesByPayment),
                 Collections.unmodifiableMap(refundsByPayment),
                 cashierRows, dailyRows, topProducts

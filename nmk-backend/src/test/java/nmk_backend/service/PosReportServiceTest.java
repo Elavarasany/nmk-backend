@@ -97,7 +97,7 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("1000.00"), report.subtotal());
         assertEquals(new BigDecimal("100.00"), report.discounts());
         assertEquals(new BigDecimal("900.00"), report.netSalesBeforeRefunds());
-        assertEquals(1, report.returnCount());
+        assertEquals(1, report.returnCount(), "Full voids must not count as customer returns");
         assertEquals(new BigDecimal("300.00"), report.refunds());
         assertEquals(new BigDecimal("600.00"), report.netSalesAfterRefunds());
         assertEquals(new BigDecimal("500.00"), report.salesByPaymentMethod().get("CASH"));
