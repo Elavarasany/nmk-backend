@@ -277,6 +277,72 @@ class InventoryServiceTest {
     }
 
     @Test
+    void updatesLocationSpecificReorderLevelWithActorAudit() {
+        stubLocation();
+        stubActiveProductAndVariant();
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(6);
+        balance.setReservedQuantity(2);
+        when(balanceRepository.findByLocationAndVariantForUpdate(1L, 2L))
+                .thenReturn(Optional.of(balance));
+        when(balanceRepository.saveAndFlush(any(InventoryBalance.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryBalance result = inventoryService.updateReorderLevel(
+                1L, 2L, 5, "manager.one"
+        );
+
+        assertEquals(5, result.getReorderLevel());
+        assertEquals("manager.one", result.getReorderLevelUpdatedBy());
+        assertNotNull(result.getReorderLevelUpdatedAt());
+        assertEquals(4, result.getAvailableQuantity());
+    }
+
+    @Test
+    void lowStockAlertsOnlyIncludeConfiguredThresholdsAtOrBelowAvailableQuantity() {
+        stubLocation();
+        stubActiveProductAndVariant();
+        InventoryBalance low = new InventoryBalance();
+        low.setLocation(location);
+        low.setVariant(variant);
+        low.setOnHandQuantity(5);
+        low.setReservedQuantity(2);
+        low.setReorderLevel(3);
+
+        ProductVariant secondVariant = new ProductVariant();
+        secondVariant.setId(3L);
+        secondVariant.setProduct(variant.getProduct());
+        secondVariant.setSku("FRAME-003");
+        InventoryBalance above = new InventoryBalance();
+        above.setLocation(location);
+        above.setVariant(secondVariant);
+        above.setOnHandQuantity(10);
+        above.setReservedQuantity(0);
+        above.setReorderLevel(3);
+
+        ProductVariant noAlertVariant = new ProductVariant();
+        noAlertVariant.setId(4L);
+        noAlertVariant.setProduct(variant.getProduct());
+        noAlertVariant.setSku("FRAME-004");
+        InventoryBalance noAlert = new InventoryBalance();
+        noAlert.setLocation(location);
+        noAlert.setVariant(noAlertVariant);
+        noAlert.setOnHandQuantity(0);
+        noAlert.setReservedQuantity(0);
+        noAlert.setReorderLevel(0);
+
+        when(balanceRepository.findByLocationId(1L)).thenReturn(List.of(above, noAlert, low));
+
+        var alerts = inventoryService.getLowStockBalances(1L);
+
+        assertEquals(1, alerts.size());
+        assertEquals("FRAME-005", alerts.get(0).getVariant().getSku());
+        assertEquals(3, alerts.get(0).getAvailableQuantity());
+    }
+
+    @Test
     void stockCountFreezeBlocksNewInventoryMovements() {
         stubLocation();
         location.setStockCountLocked(true);
