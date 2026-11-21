@@ -157,9 +157,55 @@ Roles are `ADMIN`, `MANAGER`, and `CASHIER`. Usernames are normalized to lowerca
 
 This is the first authorization layer. Per-register assignment, supervisor approval thresholds, role-permission tables and refund approvals remain future work.
 
+## 10. Customer returns and refunds
+
+Only ADMIN and MANAGER can process a return. The original sale and sale lines are never edited or deleted.
+
+- `GET /api/admin/pos/sales/{saleId}/returns` — return history for the original sale.
+- `POST /api/admin/pos/sales/{saleId}/returns` — create an audited return/refund.
+
+Example:
+
+```json
+{
+  "shiftId": 12,
+  "reason": "Customer selected the wrong frame size",
+  "idempotencyKey": "return-unique-device-key",
+  "items": [
+    {
+      "saleItemId": 55,
+      "quantity": 1,
+      "restockDisposition": "RESTOCK",
+      "dispositionReason": null
+    }
+  ],
+  "refundPayments": [
+    {
+      "paymentMethod": "CASH",
+      "amount": 950.00,
+      "transactionReference": null
+    }
+  ]
+}
+```
+
+The server locks the original sale while validating cumulative returned quantities. A sale line cannot be returned beyond the quantity originally sold. Refund values are calculated from the original line-price snapshot and a proportional allocation of the original sale discount; the client cannot choose the refund amount. A full return of the remaining line quantity receives any rounding remainder so partial returns cannot over-refund the line. Cumulative refund value cannot exceed the original sale total.
+
+Restock dispositions:
+
+- `RESTOCK`: only for physically received, inspected, resaleable goods; creates an append-only `CUSTOMER_RETURN_RESTOCK` stock movement.
+- `DAMAGED`: no stock increase; a disposition reason is mandatory.
+- `DISCARD`: no stock increase; a disposition reason is mandatory.
+
+Refund tender allocations must add up exactly to the server-calculated refund total. CASH refunds create an OUT cash movement on the current open shift and are rejected if the drawer does not contain enough expected cash. UPI/card refund records require a transaction reference.
+
+**Provider limitation:** this POS endpoint records UPI/card refund references; it does not call a UPI/card provider or Razorpay to move funds. The refund must be completed and verified through the relevant provider before recording the reference. Do not treat a saved reference as proof of provider settlement.
+
+The return idempotency key is scoped to the original sale and request fingerprint. Replaying the same request returns the prior return; changing the sale or request while reusing the key is rejected. Returns, refund payments and resaleable stock movements commit in one database transaction.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles) and 007 (registers/shifts/cash). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) and 008 (returns/refunds). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
