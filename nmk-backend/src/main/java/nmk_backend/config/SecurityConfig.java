@@ -63,6 +63,9 @@ public class SecurityConfig {
                         // Returns/refunds require manager or administrator authority.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/sales/*/returns")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                        // Linked exchanges combine a return and replacement sale and require manager or administrator authority.
+                        .requestMatchers(HttpMethod.POST, "/api/admin/pos/sales/*/exchange")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         // Cashiers may sell but cannot browse the full sales ledger.
                         .requestMatchers(HttpMethod.GET, "/api/admin/pos/sales", "/api/admin/pos/sales/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
