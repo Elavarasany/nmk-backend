@@ -142,6 +142,28 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance applyStockCountVariance(
+            Long locationId, Long variantId, int quantityDelta,
+            String idempotencyKey, Long actorStaffId, String reason,
+            Long stockCountSessionId
+    ) {
+        if (quantityDelta == 0) {
+            throw new InvalidInventoryOperationException("A zero stock count variance does not create a movement");
+        }
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException("A stock count variance reason is required");
+        }
+        if (stockCountSessionId == null || stockCountSessionId <= 0) {
+            throw new InvalidInventoryOperationException("A valid stock count session reference is required");
+        }
+        return execute(
+                locationId, variantId, Math.abs(quantityDelta), idempotencyKey,
+                actorStaffId, reason.trim(), "COUNT_VARIANCE", quantityDelta, 0,
+                false, "STOCK_COUNT", stockCountSessionId
+        );
+    }
+
+    @Transactional
     public InventoryBalance restockCustomerReturn(
             Long locationId, Long variantId, int quantity,
             String idempotencyKey, Long actorStaffId, String reason,
@@ -310,12 +332,19 @@ public class InventoryService {
          * Releases and consumptions are allowed for inactive records:
          * deactivation must not strand stock already reserved by an order.
          */
+        if (location.isStockCountLocked() && !"COUNT_VARIANCE".equals(movementType)) {
+            throw new InventoryConflictException(
+                    "Inventory is frozen while a physical stock count is in progress"
+            );
+        }
+
         boolean requiresActiveRecords =
                 "RECEIPT".equals(movementType)
                         || "RESERVATION".equals(movementType)
                         || "SALE".equals(movementType)
                         || "ADJUSTMENT".equals(movementType)
-                        || "CUSTOMER_RETURN_RESTOCK".equals(movementType);
+                        || "CUSTOMER_RETURN_RESTOCK".equals(movementType)
+                        || "COUNT_VARIANCE".equals(movementType);
 
         if (requiresActiveRecords) {
             if (!location.isActive()) {
