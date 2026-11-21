@@ -16,6 +16,7 @@ public record PosShiftResponse(
         BigDecimal expectedCash,
         BigDecimal closingCashCount,
         BigDecimal cashVariance,
+        String closingReason,
         String status,
         LocalDateTime openedAt,
         LocalDateTime closedAt
@@ -32,6 +33,7 @@ public record PosShiftResponse(
                 shift.getExpectedCash(),
                 shift.getClosingCashCount(),
                 shift.getCashVariance(),
+                shift.getClosingReason(),
                 shift.getStatus(),
                 shift.getOpenedAt(),
                 shift.getClosedAt()
