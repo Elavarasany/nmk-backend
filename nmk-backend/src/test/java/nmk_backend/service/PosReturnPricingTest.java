@@ -18,7 +18,7 @@ class PosReturnPricingTest {
         PosSaleItem first = item(1L, "33.33");
         PosSaleItem second = item(2L, "33.33");
         PosSaleItem third = item(3L, "33.34");
-        sale.setItems(List.of(first, second, third));
+        sale.getItems().addAll(List.of(first, second, third));
 
         assertEquals(new BigDecimal("3.33"), PosReturnPricing.discountShareForLine(sale, first));
         assertEquals(new BigDecimal("3.33"), PosReturnPricing.discountShareForLine(sale, second));
@@ -43,7 +43,7 @@ class PosReturnPricingTest {
         PosSale sale = sale("200.00", "20.00");
         PosSaleItem first = item(1L, "150.00");
         PosSaleItem second = item(2L, "50.00");
-        sale.setItems(List.of(first, second));
+        sale.getItems().addAll(List.of(first, second));
 
         assertEquals(new BigDecimal("135.00"), PosReturnPricing.netLineValue(sale, first));
         assertEquals(new BigDecimal("45.00"), PosReturnPricing.netLineValue(sale, second));
