@@ -338,6 +338,41 @@ class PosAuthorizationIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+
+    @Test
+    void cashierCannotReadOrStartPhysicalStockCounts() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/inventory/stock-counts/current?locationId=1")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/inventory/stock-counts/start")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"locationId":1,"reason":"security test"}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReadCurrentPhysicalStockCount() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(get("/api/admin/inventory/stock-counts/current?locationId=1")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void cashierCannotAttemptInventoryAdjustmentEvenWithMalformedPayload() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(post("/api/admin/inventory/adjust")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void disabledStaffAccountCannotUsePreviouslyIssuedJwt() throws Exception {
         String username = "disabled-" + java.util.UUID.randomUUID();
