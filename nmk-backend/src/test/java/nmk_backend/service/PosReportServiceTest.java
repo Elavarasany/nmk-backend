@@ -20,6 +20,7 @@ class PosReportServiceTest {
     private PosSaleRepository saleRepository;
     private PosReturnRepository returnRepository;
     private InventoryLocationRepository locationRepository;
+    private PosExchangeCreditSettlementRepository exchangeCreditRepository;
     private PosReportService service;
 
     @BeforeEach
@@ -27,7 +28,9 @@ class PosReportServiceTest {
         saleRepository = mock(PosSaleRepository.class);
         returnRepository = mock(PosReturnRepository.class);
         locationRepository = mock(InventoryLocationRepository.class);
-        service = new PosReportService(saleRepository, returnRepository, locationRepository);
+        exchangeCreditRepository = mock(PosExchangeCreditSettlementRepository.class);
+        service = new PosReportService(saleRepository, returnRepository, locationRepository, exchangeCreditRepository);
+        when(exchangeCreditRepository.sumExchangeCreditApplied(eq(1L), any(), any())).thenReturn(new BigDecimal("0.00"));
 
         InventoryLocation location = new InventoryLocation();
         location.setId(1L);
@@ -101,6 +104,7 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("300.00"), report.refunds());
         assertEquals(new BigDecimal("300.00"), report.salesReversals());
         assertEquals(new BigDecimal("300.00"), report.recordedRefundPayments());
+        assertEquals(new BigDecimal("0.00"), report.exchangeCreditApplied());
         assertEquals(new BigDecimal("600.00"), report.netSalesAfterRefunds());
         assertEquals(new BigDecimal("500.00"), report.salesByPaymentMethod().get("CASH"));
         assertEquals(new BigDecimal("400.00"), report.salesByPaymentMethod().get("UPI"));
