@@ -15,7 +15,7 @@ CREATE TABLE product_variants (
     product_id BIGINT NOT NULL,
     sku VARCHAR(100) NOT NULL,
     barcode VARCHAR(100) NULL,
-    variant_name VARCHAR(150) NOT NULL,
+    variant_name VARCHAR(255) NOT NULL,
     attributes JSON NOT NULL,
     selling_price_override DECIMAL(12,2) NULL,
     active BIT(1) NOT NULL DEFAULT b'1',
