@@ -50,6 +50,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/auth/authorize-action")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
                         // Register configuration is administrator-only.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/registers")

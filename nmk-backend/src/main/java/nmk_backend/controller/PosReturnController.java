@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import nmk_backend.dto.PosReturnRequest;
 import nmk_backend.dto.PosVoidRequest;
 import nmk_backend.service.PosReturnService;
+import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,9 +18,11 @@ import java.util.Map;
 public class PosReturnController {
 
     private final PosReturnService returnService;
+    private final AdminActionAuthorizationService authorizationService;
 
-    public PosReturnController(PosReturnService returnService) {
+    public PosReturnController(PosReturnService returnService, AdminActionAuthorizationService authorizationService) {
         this.returnService = returnService;
+        this.authorizationService = authorizationService;
     }
 
     @GetMapping("/returns")
@@ -35,12 +38,18 @@ public class PosReturnController {
     public ResponseEntity<?> processReturn(
             @PathVariable Long saleId,
             @Valid @RequestBody PosReturnRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
         if (authentication == null || authentication.getName() == null
                 || authentication.getName().isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "Manager authentication is required"));
+        }
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "POS_RETURN");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
         }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
@@ -61,12 +70,18 @@ public class PosReturnController {
     public ResponseEntity<?> voidSale(
             @PathVariable Long saleId,
             @Valid @RequestBody PosVoidRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
         if (authentication == null || authentication.getName() == null
                 || authentication.getName().isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "Manager authentication is required"));
+        }
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "POS_VOID");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
         }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(

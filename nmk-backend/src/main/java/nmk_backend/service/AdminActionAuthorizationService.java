@@ -25,7 +25,11 @@ public class AdminActionAuthorizationService {
             "CLEAR_ORDERS",
             "CLEAR_APPOINTMENTS",
             "INVENTORY_RECEIPT",
-            "INVENTORY_ADJUSTMENT"
+            "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE"
+    );
+
+    private static final Set<String> MANAGER_ALLOWED_ACTIONS = Set.of(
+            "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE"
     );
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -55,8 +59,12 @@ public class AdminActionAuthorizationService {
         }
 
         Admin admin = adminRepository.findByUsername(username)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Invalid admin"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid staff account"));
+        if (!admin.isEnabled()) throw new IllegalArgumentException("Staff account is disabled");
+        String role = admin.getRole() == null ? "" : admin.getRole().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"ADMIN".equals(role) && !("MANAGER".equals(role) && MANAGER_ALLOWED_ACTIONS.contains(action))) {
+            throw new IllegalArgumentException("This staff role cannot authorize the requested action");
+        }
 
         if (!passwordEncoder.matches(password, admin.getPassword())) {
             throw new IllegalArgumentException("Incorrect admin password");
