@@ -282,7 +282,6 @@ class InventoryServiceTest {
         location.setStockCountLocked(true);
         stubActiveProductAndVariant();
         stubNewMovement();
-        stubExistingBalance();
 
         assertThrows(InventoryConflictException.class, () ->
                 inventoryService.adjustStock(
