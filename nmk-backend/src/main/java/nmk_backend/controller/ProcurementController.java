@@ -114,7 +114,16 @@ public class ProcurementController {
     }
 
     @PostMapping("/purchase-orders/{purchaseOrderId}/submit")
-    public ResponseEntity<?> submitPurchaseOrder(@PathVariable Long purchaseOrderId) {
+    public ResponseEntity<?> submitPurchaseOrder(
+            @PathVariable Long purchaseOrderId,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
+            Authentication authentication
+    ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "PURCHASE_ORDER_SUBMIT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
         try {
             return ResponseEntity.ok(procurementService.submitPurchaseOrder(purchaseOrderId));
         } catch (IllegalArgumentException exception) {

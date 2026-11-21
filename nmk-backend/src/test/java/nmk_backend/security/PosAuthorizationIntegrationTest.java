@@ -227,6 +227,14 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void managerCannotSubmitPurchaseOrderWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/procurement/purchase-orders/1/submit")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cashierCannotProcessExchanges() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
