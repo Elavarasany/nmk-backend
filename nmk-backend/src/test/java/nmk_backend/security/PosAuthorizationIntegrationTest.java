@@ -141,6 +141,31 @@ class PosAuthorizationIntegrationTest {
 
 
     @Test
+    void managerCannotProcessReturnWithoutFreshPasswordAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/returns")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"shiftId":1,"reason":"test return","idempotencyKey":"test-return-auth",
+                   "items":[{"saleItemId":1,"quantity":1,"restockDisposition":"RESTOCK"}],"refundPayments":[]}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotVoidWithoutFreshPasswordAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/void")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"shiftId":1,"reason":"test void","idempotencyKey":"test-void-auth","refundPayments":[]}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cashierCannotProcessExchanges() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
