@@ -1,7 +1,9 @@
 package nmk_backend.security;
 
 import nmk_backend.entity.Admin;
+import nmk_backend.entity.InventoryLocation;
 import nmk_backend.repository.AdminRepository;
+import nmk_backend.repository.InventoryLocationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +32,9 @@ class PosAuthorizationIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private InventoryLocationRepository locationRepository;
 
     private String adminToken;
 
@@ -165,7 +170,13 @@ class PosAuthorizationIntegrationTest {
     @Test
     void managerCanReadStockMovementHistory() throws Exception {
         String managerToken = tokenForRole("MANAGER");
-        mockMvc.perform(get("/api/admin/inventory/movements?locationId=1")
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("POS-MOVEMENT-" + java.util.UUID.randomUUID());
+        location.setName("POS movement security test");
+        location.setActive(true);
+        InventoryLocation saved = locationRepository.saveAndFlush(location);
+
+        mockMvc.perform(get("/api/admin/inventory/movements?locationId=" + saved.getId())
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
     }
