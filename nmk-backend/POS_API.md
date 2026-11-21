@@ -274,9 +274,26 @@ Supplier returns can only include quantities already received and not previously
 
 Supplier returns are inventory and supplier audit records only; they do not create supplier credit notes, accounts-payable entries or automatic bank refunds. Purchase cost is stored for purchasing visibility; GST and landed-cost accounting are intentionally not calculated until the shop's accountant confirms the required rules.
 
+## 13. Reorder thresholds and low-stock alerts
+
+- `PATCH /api/admin/inventory/reorder-level` — configure a threshold for one variant at one location.
+- `GET /api/admin/inventory/low-stock?locationId={id}` — list configured variants whose available quantity is at or below their threshold.
+
+Example:
+
+```json
+{
+  "locationId": 1,
+  "variantId": 25,
+  "reorderLevel": 5
+}
+```
+
+A reorder level of zero disables alerts. Alerts compare `availableQuantity` (on-hand minus reserved), not raw on-hand, so stock already committed to online orders is not treated as sellable. Threshold changes record the staff username and timestamp on the inventory balance. Thresholds are location-specific; they do not automatically create purchase orders.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements) and 011 (reorder threshold audit fields). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
