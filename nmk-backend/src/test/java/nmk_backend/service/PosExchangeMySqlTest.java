@@ -260,7 +260,8 @@ class PosExchangeMySqlTest {
    assertEquals(1,rejected,"The competing mutation must observe the committed returned quantity");
    List<PosReturn> saleReturns=returns.findBySaleIdOrderByCreatedAtDesc(original.id());
    assertEquals(1,saleReturns.size());
-   assertEquals(1,saleReturns.get(0).getItems().stream().mapToInt(PosReturnItem::getQuantity).sum());
+   assertEquals(1L,returnItemRepository.sumReturnedQuantityBySaleItemId(originalLine),
+    "The sold unit must be returned exactly once across both competing workflows");
    InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
    assertEquals(1,balance.getOnHandQuantity(),"Exactly one returned unit must be restocked");
   } finally {
