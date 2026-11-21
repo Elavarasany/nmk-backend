@@ -16,6 +16,10 @@ public class PosCheckoutRequest {
     @Positive
     private Long locationId;
 
+    @NotNull
+    @Positive
+    private Long shiftId;
+
     private String customerName;
     private String customerPhone;
 
@@ -39,6 +43,14 @@ public class PosCheckoutRequest {
 
     public void setLocationId(Long locationId) {
         this.locationId = locationId;
+    }
+
+    public Long getShiftId() {
+        return shiftId;
+    }
+
+    public void setShiftId(Long shiftId) {
+        this.shiftId = shiftId;
     }
 
     public String getCustomerName() {
