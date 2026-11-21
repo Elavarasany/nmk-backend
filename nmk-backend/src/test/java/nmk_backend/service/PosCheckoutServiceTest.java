@@ -270,6 +270,28 @@ class PosCheckoutServiceTest {
         verifyNoInteractions(inventoryService);
     }
 
+
+    @Test
+    void cashierCannotApplySaleDiscount() {
+        PosCheckoutRequest request = validRequest();
+        request.setDiscountAmount(new BigDecimal("10.00"));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(request, "admin", "CASHIER")
+        );
+
+        assertTrue(exception.getMessage().contains("Only ADMIN or MANAGER"));
+        verifyNoInteractions(saleRepository, locationRepository, shiftService, inventoryService);
+    }
+
+    @Test
+    void cashierCanCompleteSaleWithoutDiscount() {
+        PosSaleResponse response = service.checkout(validRequest(), "admin", "CASHIER");
+        assertEquals("100.00", response.grandTotal().toPlainString());
+        verify(saleRepository).saveAndFlush(any(PosSale.class));
+    }
+
     private PosCheckoutRequest validRequest() {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(1L);
