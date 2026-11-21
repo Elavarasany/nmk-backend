@@ -40,6 +40,7 @@ class PosExchangeMySqlTest {
  @Autowired private PosExchangeCreditSettlementRepository credits;
  @Autowired private PosPaymentRepository payments;
  @Autowired private PosCashMovementRepository cashMovements;
+ @Autowired private PosReturnItemRepository returnItemRepository;
  private record Fixture(Long locationId,Long productId,Long variantId,Long shiftId,String username) {}
  private record Outcome(boolean successful,Throwable failure) {}
 
@@ -93,8 +94,10 @@ class PosExchangeMySqlTest {
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(0,balance.getOnHandQuantity(),"Damaged returned stock must not be added back before the replacement sale");
   PosReturn persisted=returns.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0);
-  assertEquals("DAMAGED",persisted.getItems().get(0).getRestockDisposition());
-  assertEquals("Lens coating scratched",persisted.getItems().get(0).getDispositionReason());
+  PosReturnItem persistedItem=returnItemRepository.findAll().stream()
+   .filter(item->Objects.equals(item.getReturnRecord().getId(),persisted.getId())).findFirst().orElseThrow();
+  assertEquals("DAMAGED",persistedItem.getRestockDisposition());
+  assertEquals("Lens coating scratched",persistedItem.getDispositionReason());
  }
 
  @Test
