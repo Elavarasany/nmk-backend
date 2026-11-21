@@ -331,7 +331,7 @@ The response includes transaction count, subtotal, discounts, sales after discou
 
 This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
 
-## 15. Full sale voids
+## 16. Full sale voids
 
 Managers and administrators can void a completed sale only when no earlier return has been recorded:
 
