@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import nmk_backend.dto.InventoryBalanceResponse;
 import nmk_backend.dto.InventoryAdjustmentRequest;
 import nmk_backend.dto.InventoryReceiptRequest;
+import nmk_backend.dto.InventoryReorderLevelRequest;
+import nmk_backend.dto.LowStockAlertResponse;
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.service.InventoryService;
@@ -28,6 +30,41 @@ public class InventoryController {
     ) {
         this.inventoryService = inventoryService;
         this.adminRepository = adminRepository;
+    }
+
+    @GetMapping("/low-stock")
+    public ResponseEntity<?> getLowStock(@RequestParam Long locationId) {
+        try {
+            return ResponseEntity.ok(
+                    inventoryService.getLowStockBalances(locationId).stream()
+                            .map(LowStockAlertResponse::from).toList()
+            );
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
+    @PatchMapping("/reorder-level")
+    public ResponseEntity<?> updateReorderLevel(
+            @Valid @RequestBody InventoryReorderLevelRequest request,
+            Authentication authentication
+    ) {
+        if (authentication == null || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Admin authentication is required"));
+        }
+        try {
+            var balance = inventoryService.updateReorderLevel(
+                    request.locationId(), request.variantId(),
+                    request.reorderLevel(), authentication.getName()
+            );
+            return ResponseEntity.ok(InventoryBalanceResponse.from(balance));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", exception.getMessage() == null ? "Invalid reorder level" : exception.getMessage()
+            ));
+        }
     }
 
     @PostMapping("/adjust")
