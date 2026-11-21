@@ -103,7 +103,7 @@ class PosReturnServiceTest {
         when(returnItemRepository.sumReturnedQuantityBySaleItemId(11L)).thenReturn(0L);
         when(returnItemRepository.sumRefundedAmountBySaleItemId(11L)).thenReturn(BigDecimal.ZERO);
         when(adminRepository.findByUsernameIgnoreCase("manager.one")).thenReturn(Optional.of(manager));
-        when(shiftService.requireOpenShift(99L, 1L, "manager.one")).thenReturn(shift);
+        when(shiftService.requireOpenShiftForManagerAction(99L, 1L, "manager.one", "CASHIER")).thenReturn(shift);
     }
 
     @Test
