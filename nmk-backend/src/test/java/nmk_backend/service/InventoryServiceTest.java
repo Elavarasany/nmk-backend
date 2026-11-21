@@ -277,6 +277,34 @@ class InventoryServiceTest {
     }
 
     @Test
+    void customerReturnRestockAddsOnlyInspectedResaleableUnits() {
+        stubLocation();
+        stubActiveProductAndVariant();
+        stubNewMovement();
+        stubExistingBalance();
+
+        InventoryBalance result = inventoryService.restockCustomerReturn(
+                1L, 2L, 1, "RETURN-STOCK-001", 10L,
+                "Inspected resaleable customer return", 501L
+        );
+
+        assertEquals(11, result.getOnHandQuantity());
+        assertEquals(2, result.getReservedQuantity());
+        assertEquals(9, result.getAvailableQuantity());
+
+        ArgumentCaptor<StockMovement> captor =
+                ArgumentCaptor.forClass(StockMovement.class);
+        verify(movementRepository).saveAndFlush(captor.capture());
+
+        StockMovement movement = captor.getValue();
+        assertEquals("CUSTOMER_RETURN_RESTOCK", movement.getMovementType());
+        assertEquals(1, movement.getQuantityDelta());
+        assertEquals(0, movement.getReservedDelta());
+        assertEquals("POS_RETURN", movement.getReferenceType());
+        assertEquals(501L, movement.getReferenceId());
+    }
+
+    @Test
     void sellStockRejectsInsufficientAvailableQuantity() {
         stubLocation();
         stubActiveProductAndVariant();
