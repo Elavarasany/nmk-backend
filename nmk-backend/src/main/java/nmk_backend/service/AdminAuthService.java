@@ -1,12 +1,12 @@
-
 package nmk_backend.service;
 
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.security.JwtService;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.Locale;
 
 @Service
 public class AdminAuthService {
@@ -26,22 +26,27 @@ public class AdminAuthService {
     }
 
     public String login(String username, String password) {
+        Admin admin = adminRepository.findByUsernameIgnoreCase(username.trim())
+                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
 
-        Admin admin = adminRepository.findByUsername(username)
-                .orElseThrow(() ->
-                        new RuntimeException("Invalid username or password"));
-
-        if (!passwordEncoder.matches(password, admin.getPassword())) {
+        if (!admin.isEnabled() || !passwordEncoder.matches(password, admin.getPassword())) {
             throw new RuntimeException("Invalid username or password");
         }
 
         return jwtService.generateToken(admin.getUsername());
     }
-    public void verifyPassword(String username, String password) {
 
-        Admin admin = adminRepository.findByUsername(username)
-                .orElseThrow(() ->
-                        new RuntimeException("Invalid admin"));
+    public String getRole(String username) {
+        return adminRepository.findByUsernameIgnoreCase(username.trim())
+                .filter(Admin::isEnabled)
+                .map(Admin::getRole)
+                .orElseThrow(() -> new RuntimeException("Staff account is disabled or missing"));
+    }
+
+    public void verifyPassword(String username, String password) {
+        Admin admin = adminRepository.findByUsernameIgnoreCase(username.trim())
+                .filter(Admin::isEnabled)
+                .orElseThrow(() -> new RuntimeException("Invalid admin"));
 
         if (!passwordEncoder.matches(password, admin.getPassword())) {
             throw new RuntimeException("Incorrect password");
