@@ -2,6 +2,25 @@
 
 All endpoints require an authenticated staff JWT unless marked as public. The login endpoint returns the staff role.
 
+## Invoice and GST status — important release limitation
+
+The current POS checkout stores commercial sale totals and payment snapshots. It does **not** calculate GST, store product HSN/SAC classifications, create a tax-component snapshot, or establish a compliant GST tax-invoice sequence. The printed POS receipt must not be represented as a GST tax invoice or used as evidence of tax compliance.
+
+Before enabling GST invoicing, obtain written accountant/business approval for:
+- supplier legal name, registered address, GSTIN and registration status;
+- HSN classification for each sellable product category/SKU and any service SAC;
+- applicable rate and effective date per classification, exemptions, and whether displayed prices are tax-inclusive or tax-exclusive;
+- discount allocation, taxable-value rounding and tax rounding policy;
+- intra-state CGST/SGST versus inter-state IGST determination, place-of-supply and delivery-address rules;
+- customer identity/address/GSTIN capture rules, including when details are mandatory or requested;
+- reverse-charge applicability and required invoice wording;
+- invoice series format and financial-year reset/uniqueness controls.
+
+The GST tax invoice requirements in CGST Rule 46 include a consecutive serial number unique for the financial year and not exceeding 16 characters, supplier identity/GSTIN, issue date, applicable recipient details, HSN/SAC, description, quantity/UQC, total and taxable values, tax rates/amounts, and place-of-supply details where applicable. The current random-suffix POS invoice number is not a verified implementation of that tax-invoice numbering control. See the [CBIC GST invoice rules](https://cbic-gst.gov.in/gst-invoice-rules.html).
+
+Do not add guessed tax rates or silently reinterpret existing sale totals. A GST implementation requires an approved tax matrix, immutable per-line tax snapshots, a transactional financial-year invoice counter, tax-aware returns/credit notes, and reconciliation tests. Existing historical sales must remain unchanged.
+
+
 ## 1. Load POS locations
 
 `GET /api/admin/pos/locations`
