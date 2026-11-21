@@ -89,7 +89,6 @@ public class PosExchangeService {
    ri.setRestockDisposition(disposition); ri.setDispositionReason(why); ret.getItems().add(ri); returned=returned.add(value);
   }
   returned=returned.setScale(2,RoundingMode.HALF_UP);
-  if(returned.signum()<=0) throw new IllegalArgumentException("Returned items have no refundable value");
   BigDecimal priorReturns=Optional.ofNullable(returns.sumRefundTotalBySaleId(saleId)).orElse(ZERO);
   if(priorReturns.add(returned).compareTo(original.getGrandTotal())>0) throw new IllegalArgumentException("Cumulative returns cannot exceed original sale total");
 

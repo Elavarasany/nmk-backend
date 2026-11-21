@@ -330,7 +330,7 @@ Managers and administrators can request a location/date-scoped report:
 
 - `GET /api/admin/pos/reports/sales?locationId=1&from=2026-11-01&to=2026-11-21`
 
-The response includes transaction count, subtotal, discounts, sales after discount, sales reversals, recorded refund-payment allocations, net after reversals, tender totals, refund tender totals, cashier totals, daily totals and the top ten products by gross line total and gross quantity sold. `salesReversals` is the original-sale value reversed by completed returns and voids. `recordedRefundPayments` is the sum of the CASH/UPI/CARD refund allocations recorded against those reversals. The legacy `refunds` field remains as a compatibility alias for `salesReversals`; new clients should use the explicit field names. UPI/card amounts are operator-recorded references after external processing, not provider settlement confirmations. Product quantities are not reduced by returns processed in the same date window; use return history separately when reconciling net units. Refunds are grouped by the date the return was processed, not backdated to the original sale date. The report is limited to 367 calendar days per request.
+The response includes transaction count, subtotal, discounts, sales after discount, sales reversals, recorded refund-payment allocations, net after reversals, tender totals, refund tender totals, cashier totals, daily totals and the top ten products by gross line total and gross quantity sold. `salesReversals` is the original-sale value reversed by completed returns and voids. `recordedRefundPayments` is the sum of the CASH/UPI/CARD refund allocations recorded against those reversals. `exchangeCreditApplied` is non-cash exchange credit consumed by replacement sales and is deliberately excluded from payment-method tender totals. The legacy `refunds` field remains as a compatibility alias for `salesReversals`; new clients should use the explicit field names. UPI/card amounts are operator-recorded references after external processing, not provider settlement confirmations. Product quantities are not reduced by returns processed in the same date window; use return history separately when reconciling net units. Refunds are grouped by the date the return was processed, not backdated to the original sale date. The report is limited to 367 calendar days per request.
 
 This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
 
@@ -357,12 +357,48 @@ A full void records a `VOID` return record, restocks all original sale lines, an
 
 This endpoint records a refund; it does not initiate a UPI/card refund with the payment provider. Complete the external refund first and enter its real reference. Only use a full void when the goods are physically returned in resaleable condition before leaving the shop; use the normal return workflow for goods that are damaged or discarded.
 
+
+## 17. Atomic linked exchanges
+
+The feature branch provides one transaction for a linked return and replacement sale:
+
+- `POST /api/admin/pos/sales/{saleId}/exchange`
+
+Example request:
+
+```json
+{
+  "shiftId": 9,
+  "reason": "Frame exchange requested by customer",
+  "idempotencyKey": "exchange-device-unique-key",
+  "returnItems": [
+    { "saleItemId": 123, "quantity": 1, "restockDisposition": "RESTOCK" }
+  ],
+  "replacementItems": [
+    { "productId": 45, "variantId": 78, "quantity": 1 }
+  ],
+  "replacementDiscountAmount": 0.00,
+  "collectionPayments": [
+    { "paymentMethod": "CASH", "amount": 50.00, "tenderedAmount": 50.00 }
+  ],
+  "refundPayments": []
+}
+```
+
+The backend calculates the returned value (R) using the original sale's proportional discount allocation and the same partial-return rounding rules as ordinary returns. It calculates the replacement value (N) from current replacement variant prices and the authorized replacement discount. Settlement is explicit: exchange credit is `min(R,N)`; only `N-R` is collected when the replacement costs more, and only `R-N` is refunded when it costs less. Equal-value exchanges have no cash or provider payment.
+
+The return record reverses the full returned value for net-sales reporting. The replacement sale records its full sale value. Actual payment rows contain only money collected or refunded; non-cash exchange credit is stored separately in `pos_exchange_credit_settlements` and reported as `exchangeCreditApplied`. Cash drawer entries are written only for actual cash collections/refunds. UPI/card rows remain operator-entered external payment/refund references; this endpoint does not initiate or verify provider transactions.
+
+Return quantities are checked against all earlier returns/exchanges. RESTOCK items alone increase sellable stock; DAMAGED and DISCARD items do not. The original sale, open shift, return, replacement sale, stock movements, credit settlement and cash ledger entries share one database transaction. A failed stock or cash operation rolls the entire exchange back. Retries must use the same idempotency key and identical request by the same staff member.
+
+The feature branch includes MySQL-backed coverage for equal-value credit, higher-value collection, lower-value actual refund, insufficient-stock rollback and idempotent replay. Migration `014-create-pos-exchanges.sql` is additive and manual. Do not run it against the client's live database until the disposable-schema migration test, backup/restore verification and explicit release approval are complete.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- There is no atomic linked-exchange endpoint yet. Do not process an exchange as though a return and a new sale were one transaction; confirm the shop's price-difference collection/refund policy before enabling that workflow.
+- The atomic exchange endpoint is present on the POS feature branch but remains unreleased until its review, migration, and production release gates are approved. Do not manually simulate an exchange as a separate return and sale.
 - Inter-location stock transfers are not implemented. The current shop operates one physical location; do not enable a second stock location until a transfer/dispatch/receipt workflow and its reconciliation controls are added.
-- Manual SQL files are under `src/main/resources/db/manual/`. First verify the existing schema and choose the correct baseline path: `001` is the legacy product/order update for the verified reference schema; `002` creates variants/inventory; `003` inserts the `MAIN_STORE` location; `004` is a staging-only reconciliation draft for the partially migrated `nmk_staging_restore` database and is an alternative to overlapping parts of `001`—never run both blindly and never run `004` in production. After the approved baseline, apply POS additions in order: `005` sales/payments, `006` staff roles, `007` registers/shifts/cash, `008` returns/refunds, `009` stock counts, `010` procurement, `011` reorder-level audit fields, `012` full-void type, and `013` stock-count cancellation audit fields. Verify every precondition and record each applied migration on a disposable MySQL 8.4 restore first. Do not execute against the client's live database without a separately approved migration plan and backup.
+- Manual SQL files are under `src/main/resources/db/manual/`. First verify the existing schema and choose the correct baseline path: `001` is the legacy product/order update for the verified reference schema; `002` creates variants/inventory; `003` inserts the `MAIN_STORE` location; `004` is a staging-only reconciliation draft for the partially migrated `nmk_staging_restore` database and is an alternative to overlapping parts of `001`—never run both blindly and never run `004` in production. After the approved baseline, apply POS additions in order: `005` sales/payments, `006` staff roles, `007` registers/shifts/cash, `008` returns/refunds, `009` stock counts, `010` procurement, `011` reorder-level audit fields, `012` full-void type, and `013` stock-count cancellation audit fields, then `014` linked POS exchange headers and non-cash credit settlements. Verify every precondition and record each applied migration on a disposable MySQL 8.4 restore first. Do not execute against the client's live database without a separately approved migration plan and backup.
 - Production deployments must activate `SPRING_PROFILES_ACTIVE=prod` and provide `APP_CORS_ALLOWED_ORIGINS` as an explicit HTTPS origin allowlist. The production profile enforces Hibernate `validate`, disables automatic schema changes and hides exception details. Keep manual migrations separate from application startup.
 - No database migration is executed by these code changes.

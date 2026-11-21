@@ -213,6 +213,9 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(2, saleRepository.count(), "Original and replacement sales must both be persisted");
         assertTrue(posPaymentRepository.findBySaleId(result.replacementSaleId()).isEmpty(),
                 "Exchange credit must not be represented as a fake tender payment");
+        var replay = exchangeService.exchange(original.id(), request, "pos-rollback-test-cashier", "CASHIER");
+        assertEquals(result.id(), replay.id(), "An identical exchange retry must replay the original exchange");
+        assertEquals(1, exchangeRepository.count(), "Idempotent replay must not duplicate exchange records");
 
         InventoryBalance finalBalance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
         assertEquals(1, finalBalance.getOnHandQuantity(), "Return restock and replacement sale must net to one unit");
