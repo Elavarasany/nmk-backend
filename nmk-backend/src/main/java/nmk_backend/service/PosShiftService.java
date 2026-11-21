@@ -51,9 +51,7 @@ public class PosShiftService {
         }
 
         String code = request.registerCode().trim().toUpperCase(Locale.ROOT);
-        boolean exists = registerRepository.findByLocationIdAndActiveTrueOrderByRegisterCode(location.getId())
-                .stream().anyMatch(register -> register.getRegisterCode().equalsIgnoreCase(code));
-        if (exists) {
+        if (registerRepository.existsByLocationIdAndRegisterCodeIgnoreCase(location.getId(), code)) {
             throw new IllegalArgumentException("A register with this code already exists at the location");
         }
 
@@ -106,10 +104,6 @@ public class PosShiftService {
         if (shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(register.getId(), "OPEN").isPresent()) {
             throw new IllegalArgumentException("This register already has an open shift");
         }
-        if (shiftRepository.findFirstByOpenedByUsernameAndStatusOrderByOpenedAtDesc(username, "OPEN").isPresent()) {
-            throw new IllegalArgumentException("You already have an open shift on another register");
-        }
-
         PosShift shift = new PosShift();
         shift.setRegister(register);
         shift.setOpenedByUsername(username);
@@ -121,7 +115,7 @@ public class PosShiftService {
         if (openingFloat.compareTo(ZERO) > 0) {
             saveCashMovement(
                     shift, "OPENING_FLOAT", "IN", openingFloat,
-                    "SHIFT_OPEN", shift.getId(), "OPEN:" + key,
+                    "SHIFT_OPEN", shift.getId(), "SHIFT-OPENING-FLOAT:" + shift.getId(),
                     username, "Opening cash float"
             );
         }
@@ -153,7 +147,8 @@ public class PosShiftService {
             PosCashMovement existing = previous.get();
             if (!Objects.equals(existing.getShift().getId(), shiftId)
                     || !existing.getMovementType().equals(type)
-                    || existing.getAmount().compareTo(amount) != 0) {
+                    || existing.getAmount().compareTo(amount) != 0
+                    || !Objects.equals(existing.getReason(), request.reason().trim())) {
                 throw new IllegalArgumentException("Cash movement idempotency key was reused with different details");
             }
             return response(shift);
@@ -223,9 +218,9 @@ public class PosShiftService {
         );
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PosShift requireOpenShift(Long shiftId, Long locationId, String username) {
-        PosShift shift = shiftRepository.findById(shiftId)
+        PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("An open POS shift is required"));
         if (!"OPEN".equals(shift.getStatus())) {
             throw new IllegalArgumentException("The selected POS shift is not open");
