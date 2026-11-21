@@ -228,9 +228,54 @@ The location remains frozen until the session is posted or cancelled. Posting ho
 
 The stock count line stores the snapshot quantity, counted quantity, variance, user and timestamp. The stock ledger records each non-zero variance with a `STOCK_COUNT` reference. Repeated submit/post/cancel requests are safe to retry.
 
+## 12. Suppliers, purchase orders and goods movements
+
+All procurement endpoints require ADMIN or MANAGER authority.
+
+- `GET /api/admin/procurement/suppliers`
+- `POST /api/admin/procurement/suppliers` — create a supplier with name and optional contact details.
+- `PATCH /api/admin/procurement/suppliers/{supplierId}/active` — body: `{"active":false}`.
+- `GET /api/admin/procurement/purchase-orders`
+- `POST /api/admin/procurement/purchase-orders` — create a DRAFT purchase order.
+- `GET /api/admin/procurement/purchase-orders/{purchaseOrderId}`
+- `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/submit` — DRAFT → ORDERED.
+- `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/receive` — record a full or partial goods receipt.
+- `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/supplier-returns` — return previously received goods to the supplier.
+
+Create purchase order example:
+
+```json
+{
+  "supplierId": 2,
+  "locationId": 1,
+  "notes": "Frames replenishment",
+  "items": [
+    { "variantId": 15, "orderedQuantity": 20, "unitCost": 425.00 }
+  ]
+}
+```
+
+Goods receipt example:
+
+```json
+{
+  "reason": "Supplier delivery checked against packing slip",
+  "idempotencyKey": "gr-device-unique-key",
+  "items": [
+    { "purchaseOrderItemId": 44, "quantity": 12 }
+  ]
+}
+```
+
+A purchase order begins as DRAFT and must be submitted before goods can be received. Receipts can be partial. The backend locks the purchase order and its item rows, rejects over-receipt, records an immutable goods receipt and adds inventory in the same transaction. The PO status moves to PARTIALLY_RECEIVED or RECEIVED as appropriate. Goods receipt idempotency keys are scoped to the PO and request fingerprint.
+
+Supplier returns can only include quantities already received and not previously returned. The backend locks the purchase order and item rows, creates a supplier-return record, and writes a negative `SUPPLIER_RETURN` stock movement. A return fails if it would reduce on-hand below reserved stock. Goods receipt and supplier return stock movements are blocked during a frozen physical stock count.
+
+Supplier returns are inventory and supplier audit records only; they do not create supplier credit notes, accounts-payable entries or automatic bank refunds. Purchase cost is stored for purchasing visibility; GST and landed-cost accounting are intentionally not calculated until the shop's accountant confirms the required rules.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
