@@ -193,6 +193,8 @@ public class PosExchangeService {
   if(r.returnItems().stream().anyMatch(i->i.saleItemId()==null||i.saleItemId()<=0||i.quantity()==null||i.quantity()<=0)) throw new IllegalArgumentException("Return lines require valid sale item IDs and quantities");
   if(r.replacementItems()==null||r.replacementItems().isEmpty()||r.replacementItems().size()>100||r.replacementItems().stream().anyMatch(Objects::isNull)) throw new IllegalArgumentException("1 to 100 replacement lines are required");
   if(r.replacementItems().stream().anyMatch(i->i.getProductId()==null||i.getProductId()<=0||i.getVariantId()==null||i.getVariantId()<=0||i.getQuantity()==null||i.getQuantity()<=0)) throw new IllegalArgumentException("Replacement lines require valid products, variants and quantities");
+  if(r.collectionPayments()!=null&&r.collectionPayments().stream().anyMatch(Objects::isNull)) throw new IllegalArgumentException("Collection payment rows cannot be null");
+  if(r.refundPayments()!=null&&r.refundPayments().stream().anyMatch(Objects::isNull)) throw new IllegalArgumentException("Refund payment rows cannot be null");
  }
  private String normalizeDisposition(String s) { String v=s==null?"":s.trim().toUpperCase(Locale.ROOT); if(!Set.of("RESTOCK","DAMAGED","DISCARD").contains(v)) throw new IllegalArgumentException("Disposition must be RESTOCK, DAMAGED or DISCARD"); return v; }
  private String normalizeMethod(String s) { String v=s==null?"":s.trim().toUpperCase(Locale.ROOT); if(!METHODS.contains(v)) throw new IllegalArgumentException("Payment method must be CASH, UPI or CARD"); return v; }
