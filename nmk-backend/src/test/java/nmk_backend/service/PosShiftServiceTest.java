@@ -55,6 +55,29 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void concurrentShiftOpenRetryReplaysAfterRegisterLock() {
+        shift.setIdempotencyKey("SHIFT-OPEN-RACE");
+        shift.setStatus("CLOSED");
+        shift.setExpectedCash(new BigDecimal("100.00"));
+        when(shiftRepository.findByIdempotencyKey("SHIFT-OPEN-RACE"))
+                .thenReturn(Optional.empty(), Optional.of(shift));
+        when(registerRepository.findByIdForUpdate(3L))
+                .thenReturn(Optional.of(shift.getRegister()));
+
+        var response = service.openShift(
+                new nmk_backend.dto.PosShiftOpenRequest(
+                        3L, new BigDecimal("100.00"), "SHIFT-OPEN-RACE"
+                ),
+                "cashier.one"
+        );
+
+        assertEquals("CLOSED", response.status());
+        assertEquals(new BigDecimal("100.00"), response.expectedCash());
+        verify(shiftRepository, times(2)).findByIdempotencyKey("SHIFT-OPEN-RACE");
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
+    }
+
+    @Test
     void anotherManagerCannotReplayACashMovementCreatedByDifferentStaff() {
         PosCashMovement existing = movement("CASH_OUT", "OUT", "25.00", shift);
         existing.setIdempotencyKey("CASH-OUT-3");
