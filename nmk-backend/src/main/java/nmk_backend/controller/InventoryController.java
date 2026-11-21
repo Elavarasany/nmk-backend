@@ -8,6 +8,7 @@ import nmk_backend.dto.InventoryReorderLevelRequest;
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.service.InventoryService;
+import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,13 +23,16 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
     private final AdminRepository adminRepository;
+    private final AdminActionAuthorizationService authorizationService;
 
     public InventoryController(
             InventoryService inventoryService,
-            AdminRepository adminRepository
+            AdminRepository adminRepository,
+            AdminActionAuthorizationService authorizationService
     ) {
         this.inventoryService = inventoryService;
         this.adminRepository = adminRepository;
+        this.authorizationService = authorizationService;
     }
 
     @GetMapping("/low-stock")
@@ -86,6 +90,7 @@ public class InventoryController {
     @PostMapping("/adjust")
     public ResponseEntity<?> adjustStock(
             @Valid @RequestBody InventoryAdjustmentRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
         if (authentication == null || authentication.getName() == null
@@ -93,6 +98,18 @@ public class InventoryController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                     Map.of("message", "Admin authentication is required")
             );
+        }
+
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "INVENTORY_ADJUSTMENT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
+
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "INVENTORY_RECEIPT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
         }
 
         Admin admin = adminRepository.findByUsername(authentication.getName())
@@ -129,6 +146,7 @@ public class InventoryController {
     @PostMapping("/receive")
     public ResponseEntity<?> receiveStock(
             @Valid @RequestBody InventoryReceiptRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
         if (authentication == null || authentication.getName() == null
