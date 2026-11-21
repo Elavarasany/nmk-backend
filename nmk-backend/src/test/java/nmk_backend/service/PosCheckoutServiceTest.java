@@ -188,6 +188,31 @@ class PosCheckoutServiceTest {
     }
 
     @Test
+    void reusingIdempotencyKeyWithDifferentShiftIsRejected() {
+        PosCheckoutRequest originalRequest = validRequest();
+        String originalFingerprint = ReflectionTestUtils.invokeMethod(
+                service, "fingerprint", originalRequest
+        );
+
+        PosSale existing = new PosSale();
+        existing.setIdempotencyKey("key-1");
+        existing.setRequestFingerprint(originalFingerprint);
+        when(saleRepository.findByIdempotencyKey("key-1"))
+                .thenReturn(Optional.of(existing));
+
+        PosCheckoutRequest retryWithDifferentShift = validRequest();
+        retryWithDifferentShift.setShiftId(100L);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.checkout(retryWithDifferentShift, "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("different checkout details"));
+        verifyNoInteractions(inventoryService, locationRepository, shiftService);
+    }
+
+    @Test
     void paymentTotalMustEqualGrandTotal() {
         PosCheckoutRequest request = validRequest();
         request.getPayments().get(0).setAmount(new BigDecimal("99.00"));

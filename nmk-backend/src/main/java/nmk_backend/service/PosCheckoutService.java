@@ -445,6 +445,7 @@ public class PosCheckoutService {
 
             CheckoutFingerprint canonicalRequest = new CheckoutFingerprint(
                     request.getLocationId(),
+                    request.getShiftId(),
                     trimToNull(request.getCustomerName()),
                     trimToNull(request.getCustomerPhone()),
                     canonicalAmount(request.getDiscountAmount()),
@@ -466,6 +467,7 @@ public class PosCheckoutService {
 
     private record CheckoutFingerprint(
             Long locationId,
+            Long shiftId,
             String customerName,
             String customerPhone,
             BigDecimal discountAmount,
