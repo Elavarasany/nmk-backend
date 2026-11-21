@@ -231,6 +231,44 @@ public class PosShiftService {
     }
 
     @Transactional
+    public void recordCashRefund(
+            PosShift shift,
+            BigDecimal amount,
+            String idempotencyKey,
+            String username,
+            Long returnId
+    ) {
+        if (amount == null || amount.compareTo(ZERO) <= 0) return;
+        PosShift locked = shiftRepository.findByIdForUpdate(shift.getId())
+                .orElseThrow(() -> new InventoryNotFoundException("POS shift was not found"));
+        if (!"OPEN".equals(locked.getStatus())) {
+            throw new IllegalArgumentException("Cash refunds require an open shift");
+        }
+
+        String key = normalizeKey(idempotencyKey);
+        var previous = cashMovementRepository.findByIdempotencyKey(key);
+        if (previous.isPresent()) {
+            PosCashMovement existing = previous.get();
+            if (!Objects.equals(existing.getShift().getId(), locked.getId())
+                    || !"CASH_REFUND".equals(existing.getMovementType())
+                    || existing.getAmount().compareTo(amount) != 0
+                    || !Objects.equals(existing.getReferenceId(), returnId)) {
+                throw new IllegalArgumentException("Cash refund idempotency key was reused with different details");
+            }
+            return;
+        }
+
+        if (amount.compareTo(calculateExpectedCash(locked.getId())) > 0) {
+            throw new IllegalArgumentException("Cash refund exceeds the cash currently expected in the drawer");
+        }
+        saveCashMovement(
+                locked, "CASH_REFUND", "OUT", amount,
+                "POS_RETURN", returnId, key, username,
+                "Cash refund for return " + returnId
+        );
+    }
+
+    @Transactional
     public PosShift requireOpenShift(Long shiftId, Long locationId, String username) {
         PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("An open POS shift is required"));
