@@ -134,6 +134,26 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void cashierCannotVoidCompletedSales() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/void")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReachFullVoidRequestValidation() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/void")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void disabledStaffAccountCannotUsePreviouslyIssuedJwt() throws Exception {
         String username = "disabled-" + java.util.UUID.randomUUID();
         Admin admin = new Admin();
