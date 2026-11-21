@@ -146,6 +146,8 @@ public class PosShiftService {
             PosShift existingShift = existing.getShift();
             assertShiftActor(existingShift, username, role);
             if (!Objects.equals(existingShift.getId(), shiftId)
+                    || existing.getActorUsername() == null
+                    || !existing.getActorUsername().equalsIgnoreCase(username)
                     || !existing.getMovementType().equals(type)
                     || existing.getAmount().compareTo(amount) != 0
                     || !Objects.equals(existing.getReason(), request.reason().trim())) {
