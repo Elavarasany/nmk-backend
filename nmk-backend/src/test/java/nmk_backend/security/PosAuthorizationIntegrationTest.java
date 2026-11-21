@@ -166,6 +166,41 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void managerCannotAdjustInventoryWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/inventory/adjust")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"locationId":1,"variantId":1,"quantityDelta":1,"idempotencyKey":"test-adjust-auth","reason":"test"}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotReceiveInventoryWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/inventory/receive")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"locationId":1,"variantId":1,"quantity":1,"idempotencyKey":"test-receive-auth","reason":"test"}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotPostOrCancelStockCountWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/inventory/stock-counts/1/post")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/inventory/stock-counts/1/cancel")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cashierCannotProcessExchanges() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
