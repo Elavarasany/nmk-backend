@@ -153,6 +153,23 @@ class PosAuthorizationIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+
+    @Test
+    void cashierCannotReadStockMovementHistory() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/inventory/movements?locationId=1")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReadStockMovementHistory() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(get("/api/admin/inventory/movements?locationId=1")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void disabledStaffAccountCannotUsePreviouslyIssuedJwt() throws Exception {
         String username = "disabled-" + java.util.UUID.randomUUID();
