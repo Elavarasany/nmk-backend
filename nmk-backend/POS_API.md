@@ -291,6 +291,16 @@ Example:
 
 A reorder level of zero disables alerts. Alerts compare `availableQuantity` (on-hand minus reserved), not raw on-hand, so stock already committed to online orders is not treated as sellable. Threshold changes record the staff username and timestamp on the inventory balance. Thresholds are location-specific; they do not automatically create purchase orders.
 
+## 14. POS sales and refund reports
+
+Managers and administrators can request a location/date-scoped report:
+
+- `GET /api/admin/pos/reports/sales?locationId=1&from=2026-11-01&to=2026-11-21`
+
+The response includes transaction count, subtotal, discounts, sales after discount, returns/refunds recorded during the selected period, net after refunds, tender totals, refund tender totals, cashier totals, daily totals and the top ten products by gross line total. Refunds are grouped by the date the return was processed, not backdated to the original sale date. The report is limited to 367 calendar days per request.
+
+This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
