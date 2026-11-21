@@ -12,6 +12,7 @@ import java.util.Optional;
 
 public interface PosRegisterRepository extends JpaRepository<PosRegister, Long> {
     List<PosRegister> findByLocationIdAndActiveTrueOrderByRegisterCode(Long locationId);
+    boolean existsByLocationIdAndRegisterCodeIgnoreCase(Long locationId, String registerCode);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from PosRegister r where r.id = :id")
