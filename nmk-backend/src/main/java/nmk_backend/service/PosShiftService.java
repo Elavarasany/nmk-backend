@@ -252,6 +252,8 @@ public class PosShiftService {
         if (previous.isPresent()) {
             PosCashMovement existing = previous.get();
             if (!Objects.equals(existing.getShift().getId(), locked.getId())
+                    || existing.getActorUsername() == null
+                    || !existing.getActorUsername().equalsIgnoreCase(username)
                     || !"CASH_REFUND".equals(existing.getMovementType())
                     || existing.getAmount().compareTo(amount) != 0
                     || !Objects.equals(existing.getReferenceId(), returnId)) {

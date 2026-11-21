@@ -73,6 +73,22 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void anotherStaffMemberCannotReplayCashRefundMovement() {
+        PosCashMovement existing = movement("CASH_REFUND", "OUT", "25.00", shift);
+        existing.setIdempotencyKey("POS-RETURN-CASH:return-key:0");
+        existing.setReferenceId(77L);
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByIdempotencyKey("POS-RETURN-CASH:return-key:0"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class, () -> service.recordCashRefund(
+                shift, new BigDecimal("25.00"), "POS-RETURN-CASH:return-key:0",
+                "manager.two", 77L
+        ));
+        verify(movementRepository, never()).saveAndFlush(any(PosCashMovement.class));
+    }
+
+    @Test
     void cashOutCannotExceedCurrentExpectedDrawerCash() {
         PosCashMovement opening = movement("OPENING_FLOAT", "IN", "100.00", shift);
         when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
