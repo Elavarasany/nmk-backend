@@ -225,7 +225,7 @@ Example:
 }
 ```
 
-Cash refunds are recorded as an OUT movement on the open shift and cannot exceed expected drawer cash. UPI/card refunds require a provider-confirmed reference; this API does not execute the provider refund. A full void uses the same transaction, locking and idempotency protections as customer returns. Only ADMIN and MANAGER may call it; CASHIER requests are forbidden.
+Cash refunds are recorded as an OUT movement on the open shift and cannot exceed expected drawer cash. Staff must execute and confirm any UPI/card refund through the payment provider's dashboard or terminal before entering its reference here; this API does not initiate or independently verify the provider refund. A full void uses the same transaction, locking and idempotency protections as customer returns. Only ADMIN and MANAGER may call it; CASHIER requests are forbidden.
 
 ## 11. Frozen physical stock counts
 
@@ -292,7 +292,7 @@ Goods receipt example:
 }
 ```
 
-A purchase order begins as DRAFT and must be submitted before goods can be received. Receipts can be partial. The backend locks the purchase order and its item rows, rejects over-receipt, records an immutable goods receipt and adds inventory in the same transaction. The PO status moves to PARTIALLY_RECEIVED or RECEIVED as appropriate. Goods receipt idempotency keys are scoped to the PO and request fingerprint.
+A purchase order begins as DRAFT and must be submitted before goods can be received. Receipts can be partial. The backend locks the purchase order and its item rows, rejects over-receipt, records an immutable goods receipt and adds inventory in the same transaction. The PO status moves to PARTIALLY_RECEIVED or RECEIVED as appropriate. Purchase-order, goods-receipt and supplier-return idempotency fingerprints include the normalized authenticated staff username and request details. The same staff member can safely retry the same request; another staff member cannot replay that key.
 
 Supplier returns can only include quantities already received and not previously returned. The backend locks the purchase order and item rows, creates a supplier-return record, and writes a negative `SUPPLIER_RETURN` stock movement. A return fails if it would reduce on-hand below reserved stock. Goods receipt and supplier return stock movements are blocked during a frozen physical stock count.
 
