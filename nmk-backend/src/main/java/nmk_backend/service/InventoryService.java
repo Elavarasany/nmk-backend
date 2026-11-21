@@ -142,6 +142,61 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance updateReorderLevel(
+            Long locationId, Long variantId, int reorderLevel,
+            String actorUsername
+    ) {
+        if (locationId == null || locationId <= 0 || variantId == null || variantId <= 0) {
+            throw new InvalidInventoryOperationException("A valid location and product variant are required");
+        }
+        if (reorderLevel < 0 || reorderLevel > 1_000_000) {
+            throw new InvalidInventoryOperationException("Reorder level must be between 0 and 1,000,000");
+        }
+        if (actorUsername == null || actorUsername.isBlank()) {
+            throw new InvalidInventoryOperationException("An authenticated staff username is required");
+        }
+
+        InventoryLocation location = locationRepository.findByIdForUpdate(locationId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
+        if (!location.isActive()) {
+            throw new InvalidInventoryOperationException("Inventory location is inactive");
+        }
+        ProductVariant variant = variantRepository.findById(variantId)
+                .orElseThrow(() -> new InventoryNotFoundException("Product variant was not found"));
+
+        InventoryBalance balance = balanceRepository
+                .findByLocationAndVariantForUpdate(locationId, variantId)
+                .orElseGet(() -> {
+                    InventoryBalance created = new InventoryBalance();
+                    created.setLocation(location);
+                    created.setVariant(variant);
+                    created.setOnHandQuantity(0);
+                    created.setReservedQuantity(0);
+                    return created;
+                });
+
+        balance.setReorderLevel(reorderLevel);
+        balance.setReorderLevelUpdatedBy(actorUsername.trim());
+        balance.setReorderLevelUpdatedAt(java.time.LocalDateTime.now());
+        return balanceRepository.saveAndFlush(balance);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<InventoryBalance> getLowStockBalances(Long locationId) {
+        if (locationId == null || locationId <= 0) {
+            throw new InvalidInventoryOperationException("A valid inventory location is required");
+        }
+        return balanceRepository.findByLocationId(locationId).stream()
+                .filter(balance -> balance.getReorderLevel() != null && balance.getReorderLevel() > 0)
+                .filter(balance -> balance.getAvailableQuantity() <= balance.getReorderLevel())
+                .sorted(java.util.Comparator.comparing(
+                        balance -> balance.getVariant().getSku(),
+                        java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
+                ))
+                .toList();
+    }
+
+    @Transactional
     public InventoryBalance receivePurchaseOrderStock(
             Long locationId, Long variantId, int quantity,
             String idempotencyKey, Long actorStaffId, String reason,
