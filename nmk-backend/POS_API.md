@@ -94,3 +94,30 @@ Page size is limited to 100.
 - Completed sales are immutable through this API. Void, return and refund flows must be implemented as separate audited operations; do not edit or delete completed sales.
 - The manual database migration is `src/main/resources/db/manual/005-create-pos-sales-tables.sql`. Review and test it against a disposable staging database with a backup first. Do not execute it against the client's live database without a separate approved migration plan.
 - No migration is executed by this code change.
+
+
+## 6. Audited stock adjustment
+
+`POST /api/admin/inventory/adjust`
+
+Use this only for a verified physical count correction, damage/write-off, loss, or other documented discrepancy. A supplier delivery must use the receipt endpoint instead.
+
+Example (five units found during a physical count):
+
+```json
+{
+  "locationId": 1,
+  "variantId": 42,
+  "quantityDelta": 5,
+  "idempotencyKey": "stock-count-adjustment-2026-0001",
+  "reason": "Physical count on 21 Nov 2026; five additional units verified"
+}
+```
+
+- Positive `quantityDelta` adds on-hand stock; negative removes it.
+- Zero adjustments are rejected.
+- The endpoint requires an active location, product and variant, an authenticated admin, a unique idempotency key and a reason.
+- An adjustment cannot reduce on-hand below the quantity reserved for online orders.
+- Balance update and append-only `stock_movements` insert occur in the same transaction.
+- A retry must send the exact same payload and idempotency key. A key cannot be reused for another quantity, SKU or operation.
+- This is an adjustment primitive, not a complete stock-count session workflow. It does not create count sessions, freeze a count snapshot or approve discrepancies.
