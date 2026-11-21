@@ -92,7 +92,8 @@ class PosReturnMySqlConcurrencyTest {
             assertEquals(1, rejectedForQuantity,
                     "The competing return must see the committed return quantity");
             assertEquals(1, returnRepository.findBySaleIdOrderByCreatedAtDesc(sale.id()).size());
-            assertEquals(1, returnItemRepository.count());
+            assertEquals(1L, returnItemRepository.sumReturnedQuantityBySaleItemId(saleItemId),
+                    "The sale line should have exactly one returned unit, independent of other integration fixtures");
 
             InventoryBalance balance = balanceRepository
                     .findByLocationIdAndVariantId(fixture.locationId(), fixture.variantId())

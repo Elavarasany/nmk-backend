@@ -391,7 +391,7 @@ The return record reverses the full returned value for net-sales reporting. The 
 
 Return quantities are checked against all earlier returns/exchanges. RESTOCK items alone increase sellable stock; DAMAGED and DISCARD items do not. The original sale, open shift, return, replacement sale, stock movements, credit settlement and cash ledger entries share one database transaction. A failed stock or cash operation rolls the entire exchange back. Retries must use the same idempotency key and identical request by the same staff member.
 
-The feature branch includes MySQL-backed coverage for equal-value credit, higher-value collection, lower-value actual refund, insufficient-stock rollback and idempotent replay. Migration `014-create-pos-exchanges.sql` is additive and manual. Do not run it against the client's live database until the disposable-schema migration test, backup/restore verification and explicit release approval are complete.
+The automated integration suite covers equal-value credit, higher-value collection, lower-value actual refund, insufficient-stock rollback and idempotent replay. The MySQL 8.4 profile specifically exercises equal-value exchange, replay and transaction rollback against the real database engine. Migration `014-create-pos-exchanges.sql` is additive and manual. Do not run it against the client's live database until the disposable-schema migration test, backup/restore verification and explicit release approval are complete.
 
 ## Important operational boundaries
 
