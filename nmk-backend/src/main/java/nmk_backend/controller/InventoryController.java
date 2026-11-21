@@ -2,6 +2,7 @@ package nmk_backend.controller;
 
 import jakarta.validation.Valid;
 import nmk_backend.dto.InventoryBalanceResponse;
+import nmk_backend.dto.InventoryAdjustmentRequest;
 import nmk_backend.dto.InventoryReceiptRequest;
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
@@ -27,6 +28,49 @@ public class InventoryController {
     ) {
         this.inventoryService = inventoryService;
         this.adminRepository = adminRepository;
+    }
+
+    @PostMapping("/adjust")
+    public ResponseEntity<?> adjustStock(
+            @Valid @RequestBody InventoryAdjustmentRequest request,
+            Authentication authentication
+    ) {
+        if (authentication == null || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    Map.of("message", "Admin authentication is required")
+            );
+        }
+
+        Admin admin = adminRepository.findByUsername(authentication.getName())
+                .orElse(null);
+        if (admin == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    Map.of("message", "Authenticated admin account was not found")
+            );
+        }
+
+        try {
+            var balance = inventoryService.adjustStock(
+                    request.getLocationId(),
+                    request.getVariantId(),
+                    request.getQuantityDelta(),
+                    request.getIdempotencyKey(),
+                    admin.getId(),
+                    request.getReason()
+            );
+            return ResponseEntity.ok(InventoryBalanceResponse.from(balance));
+        } catch (DataIntegrityViolationException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "message",
+                    "A stock adjustment with this idempotency key conflicts with an existing operation. Verify the request before retrying."
+            ));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message",
+                    exception.getMessage() == null ? "Invalid stock adjustment" : exception.getMessage()
+            ));
+        }
     }
 
     @PostMapping("/receive")
