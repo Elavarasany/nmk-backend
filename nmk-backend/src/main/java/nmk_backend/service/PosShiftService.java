@@ -289,6 +289,7 @@ public class PosShiftService {
                 expected,
                 shift.getClosingCashCount(),
                 shift.getCashVariance(),
+                shift.getClosingReason(),
                 shift.getStatus(),
                 shift.getOpenedAt(),
                 shift.getClosedAt()
