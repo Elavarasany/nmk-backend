@@ -76,6 +76,28 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ void damagedReturnIsNotRestockedDuringExchangeOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-DAMAGED-OPEN-"+UUID.randomUUID(),null,"Damaged exchange opening stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-DAMAGED-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Damaged item exchange","MYSQL-EX-DAMAGED-KEY-"+UUID.randomUUID(),
+   List.of(new PosReturnItemRequest(originalLine,1,"DAMAGED","Lens coating scratched")),List.of(replacement),
+   new BigDecimal("0.00"),List.of(),List.of());
+
+  PosExchangeResponse result=exchangeService.exchange(original.id(),request,f.username(),"CASHIER");
+
+  assertEquals(new BigDecimal("100.00"),result.returnedValue());
+  InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
+  assertEquals(0,balance.getOnHandQuantity(),"Damaged returned stock must not be added back before the replacement sale");
+  PosReturn persisted=returns.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0);
+  assertEquals("DAMAGED",persisted.getItems().get(0).getRestockDisposition());
+  assertEquals("Lens coating scratched",persisted.getItems().get(0).getDispositionReason());
+ }
+
+ @Test
  void higherValueReplacementCollectsOnlyTheDifferenceOnMySql() {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-HIGH-OPEN-"+UUID.randomUUID(),null,"Higher exchange original stock");
