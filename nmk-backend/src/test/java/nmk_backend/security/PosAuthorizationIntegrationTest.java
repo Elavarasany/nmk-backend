@@ -5,12 +5,14 @@ import nmk_backend.repository.AdminRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -88,6 +90,26 @@ class PosAuthorizationIntegrationTest {
         mockMvc.perform(get("/api/admin/pos/sales")
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void cashierCannotProcessCustomerReturns() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/returns")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReachReturnRequestValidation() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/sales/1/returns")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
