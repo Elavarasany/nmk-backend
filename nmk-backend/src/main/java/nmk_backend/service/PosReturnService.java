@@ -22,6 +22,7 @@ public class PosReturnService {
     private static final Set<String> DISPOSITIONS = Set.of("RESTOCK", "DAMAGED", "DISCARD");
     private static final Set<String> PAYMENT_METHODS = Set.of("CASH", "UPI", "CARD");
 
+    private final InventoryLocationRepository locationRepository;
     private final PosSaleRepository saleRepository;
     private final PosReturnRepository returnRepository;
     private final PosReturnItemRepository returnItemRepository;
@@ -31,6 +32,7 @@ public class PosReturnService {
     private final ObjectMapper objectMapper;
 
     public PosReturnService(
+            InventoryLocationRepository locationRepository,
             PosSaleRepository saleRepository,
             PosReturnRepository returnRepository,
             PosReturnItemRepository returnItemRepository,
@@ -39,6 +41,7 @@ public class PosReturnService {
             PosShiftService shiftService,
             ObjectMapper objectMapper
     ) {
+        this.locationRepository = locationRepository;
         this.saleRepository = saleRepository;
         this.returnRepository = returnRepository;
         this.returnItemRepository = returnItemRepository;
@@ -118,10 +121,22 @@ public class PosReturnService {
             return replay(previous.get(), fingerprint);
         }
 
+        // Global lock order for POS mutations is location -> shift -> sale -> inventory rows.
+        // Checkout already uses location -> shift. Matching that order here prevents a
+        // checkout/return deadlock when both operations touch the same store and drawer.
+        PosSale saleSnapshot = saleRepository.findById(saleId)
+                .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
+        locationRepository.findByIdForUpdate(saleSnapshot.getLocationId())
+                .orElseThrow(() -> new InventoryNotFoundException("Original sale inventory location was not found"));
+
+        PosShift shift = shiftService.requireOpenShiftForManagerAction(
+                request.shiftId(), saleSnapshot.getLocationId(), username, role
+        );
+
         PosSale sale = saleRepository.findByIdForUpdate(saleId)
                 .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
 
-        // Recheck after locking the original sale. All returns for one sale serialize here.
+        // Recheck after acquiring the sale lock. All returns for one sale serialize here.
         var raced = returnRepository.findByIdempotencyKeyForUpdate(key);
         if (raced.isPresent()) {
             return replay(raced.get(), fingerprint);
@@ -135,9 +150,6 @@ public class PosReturnService {
             throw new IllegalArgumentException("A sale cannot be voided after any return has been processed");
         }
 
-        PosShift shift = shiftService.requireOpenShiftForManagerAction(
-                request.shiftId(), sale.getLocationId(), username, role
-        );
         Admin actor = adminRepository.findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> new IllegalArgumentException("Authenticated staff account was not found"));
 
