@@ -22,13 +22,24 @@ public interface StockMovementRepository
             Long variantId
     );
 
-    @Query("""
-            select movement
-            from StockMovement movement
-            where movement.location.id = :locationId
-              and (:variantId is null or movement.variant.id = :variantId)
-            order by movement.createdAt desc, movement.id desc
-            """)
+    @Query(
+            value = """
+                    select movement
+                    from StockMovement movement
+                    join fetch movement.location
+                    join fetch movement.variant variant
+                    join fetch variant.product
+                    where movement.location.id = :locationId
+                      and (:variantId is null or movement.variant.id = :variantId)
+                    order by movement.createdAt desc, movement.id desc
+                    """,
+            countQuery = """
+                    select count(movement)
+                    from StockMovement movement
+                    where movement.location.id = :locationId
+                      and (:variantId is null or movement.variant.id = :variantId)
+                    """
+    )
     Page<StockMovement> findHistory(
             @Param("locationId") Long locationId,
             @Param("variantId") Long variantId,
