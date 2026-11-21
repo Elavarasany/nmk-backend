@@ -12,6 +12,7 @@ import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
     List<PurchaseOrder> findAllByOrderByCreatedAtDesc();
+    Optional<PurchaseOrder> findByIdempotencyKey(String idempotencyKey);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PurchaseOrder p where p.id = :id")
