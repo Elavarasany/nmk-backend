@@ -104,6 +104,22 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void cashierCannotReadManagerShiftHistory() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=1")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReadShiftHistory() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=1")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void cashierCannotBrowseAllSalesHistory() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(get("/api/admin/pos/sales")
