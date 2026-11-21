@@ -212,6 +212,34 @@ class PosCheckoutTransactionIntegrationTest {
     }
 
     @Test
+    void failedReplacementStockConsumptionRollsBackEntireExchange() {
+        InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+        var original = checkoutService.checkout(buildCheckoutRequest("POS-EXCHANGE-ROLLBACK-ORIGINAL-" + System.nanoTime()),
+                "pos-rollback-test-cashier");
+        Long originalItemId = saleItemRepository.findBySaleId(original.id()).get(0).getId();
+        PosSaleItemRequest replacementLine = new PosSaleItemRequest();
+        replacementLine.setProductId(product.getId());
+        replacementLine.setVariantId(variant.getId());
+        replacementLine.setQuantity(1);
+        PosExchangeRequest request = new PosExchangeRequest(
+                shiftId, "Rollback when replacement stock is unavailable", "POS-EXCHANGE-ROLLBACK-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(originalItemId, 1, "DAMAGED", "Lens damaged")),
+                List.of(replacementLine), new BigDecimal("0.00"), List.of(), List.of());
+
+        assertThrows(InsufficientStockException.class,
+                () -> exchangeService.exchange(original.id(), request, "pos-rollback-test-cashier", "CASHIER"));
+        assertEquals(1, saleRepository.count(), "Failed exchange must not leave a replacement sale");
+        assertEquals(0, returnRepository.count(), "Failed exchange must not leave a return");
+        assertEquals(0, exchangeRepository.count(), "Failed exchange must not leave an exchange header");
+        assertEquals(0, exchangeCreditRepository.count(), "Failed exchange must not leave exchange credit");
+        assertEquals(1, movementRepository.count(), "Only the original checkout stock movement should remain");
+        InventoryBalance unchanged = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
+        assertEquals(0, unchanged.getOnHandQuantity(), "Failed exchange must not restore damaged goods or consume replacement stock");
+    }
+
+    @Test
     void insufficientStockRollsBackSaleAndPaymentRecords() {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(location.getId());
