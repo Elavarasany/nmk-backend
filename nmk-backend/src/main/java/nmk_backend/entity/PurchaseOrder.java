@@ -10,6 +10,7 @@ import java.util.List;
 @Entity
 @Table(name = "purchase_orders",
         uniqueConstraints = @UniqueConstraint(name = "uk_purchase_order_number", columnNames = "order_number"),
+                @UniqueConstraint(name = "uk_purchase_order_idempotency", columnNames = "idempotency_key"),
         indexes = @Index(name = "idx_purchase_orders_location_status", columnList = "location_id, status"))
 public class PurchaseOrder {
 
@@ -43,6 +44,12 @@ public class PurchaseOrder {
     @Column(name = "ordered_at")
     private LocalDateTime orderedAt;
 
+    @Column(name = "idempotency_key", nullable = false, length = 100)
+    private String idempotencyKey;
+
+    @Column(name = "request_fingerprint", nullable = false, length = 64)
+    private String requestFingerprint;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -74,6 +81,10 @@ public class PurchaseOrder {
     public void setSubtotal(BigDecimal value) { subtotal = value; }
     public LocalDateTime getOrderedAt() { return orderedAt; }
     public void setOrderedAt(LocalDateTime value) { orderedAt = value; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String value) { idempotencyKey = value; }
+    public String getRequestFingerprint() { return requestFingerprint; }
+    public void setRequestFingerprint(String value) { requestFingerprint = value; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public List<PurchaseOrderItem> getItems() { return items; }
 }
