@@ -96,7 +96,8 @@ public class PosCatalogService {
                                                 : product.getPrice();
 
                                         return PosCatalogResponse.variant(
-                                                variant, price, onHand, reserved
+                                                variant, price, onHand, reserved,
+                                                balance == null ? 0 : balance.getReorderLevel()
                                         );
                                     })
                                     .toList();
