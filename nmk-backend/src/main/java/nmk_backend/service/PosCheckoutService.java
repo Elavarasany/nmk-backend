@@ -81,7 +81,7 @@ public class PosCheckoutService {
             PosCheckoutRequest request,
             String authenticatedUsername
     ) {
-        return checkout(request, authenticatedUsername, "ADMIN");
+        return checkout(request, authenticatedUsername, "CASHIER");
     }
 
     @Transactional
