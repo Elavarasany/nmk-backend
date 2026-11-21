@@ -23,4 +23,18 @@ public interface PosReturnRepository extends JpaRepository<PosReturn, Long> {
 
     @Query("select coalesce(sum(r.refundTotal), 0) from PosReturn r where r.sale.id = :saleId and r.status = 'COMPLETED'")
     BigDecimal sumRefundTotalBySaleId(@Param("saleId") Long saleId);
+
+    @Query("""
+        select r from PosReturn r
+        where r.sale.locationId = :locationId
+          and r.status = 'COMPLETED'
+          and r.createdAt >= :from
+          and r.createdAt < :to
+        order by r.createdAt asc
+    """)
+    List<PosReturn> findCompletedReturnsForReport(
+            @Param("locationId") Long locationId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to
+    );
 }
