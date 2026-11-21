@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import nmk_backend.dto.StockCountLineRequest;
 import nmk_backend.dto.StockCountStartRequest;
 import nmk_backend.service.StockCountService;
+import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -16,9 +17,11 @@ import java.util.Map;
 public class StockCountController {
 
     private final StockCountService stockCountService;
+    private final AdminActionAuthorizationService authorizationService;
 
-    public StockCountController(StockCountService stockCountService) {
+    public StockCountController(StockCountService stockCountService, AdminActionAuthorizationService authorizationService) {
         this.stockCountService = stockCountService;
+        this.authorizationService = authorizationService;
     }
 
     @GetMapping("/current")
@@ -84,8 +87,14 @@ public class StockCountController {
     @PostMapping("/{sessionId}/post")
     public ResponseEntity<?> post(
             @PathVariable Long sessionId,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "STOCK_COUNT_POST");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
         try {
             return ResponseEntity.ok(stockCountService.post(sessionId, authentication.getName()));
         } catch (IllegalArgumentException exception) {
@@ -96,8 +105,14 @@ public class StockCountController {
     @PostMapping("/{sessionId}/cancel")
     public ResponseEntity<?> cancel(
             @PathVariable Long sessionId,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
             Authentication authentication
     ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "STOCK_COUNT_CANCEL");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
         try {
             return ResponseEntity.ok(stockCountService.cancel(sessionId, authentication.getName()));
         } catch (IllegalArgumentException exception) {
