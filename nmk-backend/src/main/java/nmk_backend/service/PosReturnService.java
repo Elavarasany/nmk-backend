@@ -114,7 +114,7 @@ public class PosReturnService {
     ) {
         validateRequest(saleId, request, username);
         String key = normalizeKey(request.idempotencyKey());
-        String fingerprint = fingerprint(saleId, request, returnType);
+        String fingerprint = fingerprint(saleId, request, returnType, username);
 
         var previous = returnRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
@@ -412,10 +412,10 @@ public class PosReturnService {
         return key.trim();
     }
 
-    private String fingerprint(Long saleId, PosReturnRequest request, String returnType) {
+    private String fingerprint(Long saleId, PosReturnRequest request, String returnType, String username) {
         try {
             byte[] json = objectMapper.writeValueAsBytes(
-                    Map.of("saleId", saleId, "returnType", returnType, "request", request)
+                    Map.of("saleId", saleId, "returnType", returnType, "username", username.trim().toLowerCase(Locale.ROOT), "request", request)
             );
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(json);
             return HexFormat.of().formatHex(digest);

@@ -216,6 +216,27 @@ class PosReturnServiceTest {
     }
 
     @Test
+    void idempotencyKeyCannotBeReplayedByAnotherStaffAccount() {
+        PosReturnRequest request = new PosReturnRequest(
+                99L, "Customer changed mind", "return-key-actor",
+                List.of(new PosReturnItemRequest(11L, 1, "RESTOCK", null)),
+                List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("90.00"), null))
+        );
+        String originalFingerprint = ReflectionTestUtils.invokeMethod(
+                service, "fingerprint", 1L, request, "RETURN", "manager.one"
+        );
+        PosReturn existing = new PosReturn();
+        existing.setIdempotencyKey("return-key-actor");
+        existing.setRequestFingerprint(originalFingerprint);
+        when(returnRepository.findByIdempotencyKey("return-key-actor"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.processReturn(1L, request, "manager.two"));
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
     void idempotencyKeyCannotBeReusedAcrossDifferentOriginalSales() throws Exception {
         PosReturn existing = new PosReturn();
         existing.setIdempotencyKey("return-key-4");
