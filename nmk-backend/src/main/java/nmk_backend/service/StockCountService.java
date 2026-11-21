@@ -187,6 +187,12 @@ public class StockCountService {
         StockCountSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
 
+        // A concurrent duplicate request may have waited for the location lock.
+        // Re-check the locked row so that it replays the committed result.
+        if ("POSTED".equals(session.getStatus())) {
+            return StockCountSessionResponse.from(session);
+        }
+
         if (!"READY_FOR_REVIEW".equals(session.getStatus())) {
             throw new IllegalArgumentException("Only a submitted stock count can be posted");
         }
@@ -251,6 +257,12 @@ public class StockCountService {
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         StockCountSession session = sessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
+
+        // Re-check after acquiring the row lock; another cancellation may
+        // have committed while this request was waiting for the location lock.
+        if ("CANCELLED".equals(session.getStatus())) {
+            return StockCountSessionResponse.from(session);
+        }
 
         if (!ACTIVE_STATUSES.contains(session.getStatus())) {
             throw new IllegalArgumentException("Only an active stock count can be cancelled");
