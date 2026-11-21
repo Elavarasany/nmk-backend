@@ -32,6 +32,9 @@ public class InventoryLocation {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "stock_count_locked", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean stockCountLocked = false;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -79,6 +82,14 @@ public class InventoryLocation {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isStockCountLocked() {
+        return stockCountLocked;
+    }
+
+    public void setStockCountLocked(boolean stockCountLocked) {
+        this.stockCountLocked = stockCountLocked;
     }
 
     public LocalDateTime getCreatedAt() {
