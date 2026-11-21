@@ -46,6 +46,9 @@ public class PosSale {
     @Column(name = "location_id", nullable = false)
     private Long locationId;
 
+    @Column(name = "shift_id")
+    private Long shiftId;
+
     @Column(name = "cashier_username", nullable = false, length = 100)
     private String cashierUsername;
 
@@ -138,6 +141,14 @@ public class PosSale {
 
     public void setLocationId(Long locationId) {
         this.locationId = locationId;
+    }
+
+    public Long getShiftId() {
+        return shiftId;
+    }
+
+    public void setShiftId(Long shiftId) {
+        this.shiftId = shiftId;
     }
 
     public String getCashierUsername() {
