@@ -34,7 +34,7 @@ class PosReturnMySqlConcurrencyTest {
     @Autowired private PosReturnRepository returnRepository;
     @Autowired private PosReturnItemRepository returnItemRepository;
 
-    private record Fixture(Long locationId, Long variantId, Long shiftId, String username) {}
+    private record Fixture(Long locationId, Long variantId, Long productId, Long shiftId, String username) {}
     private record Outcome(boolean successful, Throwable failure) {}
 
     @Test
@@ -53,9 +53,7 @@ class PosReturnMySqlConcurrencyTest {
         checkout.setDiscountAmount(new BigDecimal("0.00"));
 
         PosSaleItemRequest saleItem = new PosSaleItemRequest();
-        saleItem.setProductId(productRepository.findAll().stream()
-                .filter(p -> p.getName().equals("MySQL return concurrency " + fixture.variantId()))
-                .findFirst().orElseThrow().getId());
+        saleItem.setProductId(fixture.productId());
         saleItem.setVariantId(fixture.variantId());
         saleItem.setQuantity(1);
         checkout.setItems(List.of(saleItem));
@@ -177,6 +175,6 @@ class PosReturnMySqlConcurrencyTest {
         variant.setActive(true);
         variant = variantRepository.saveAndFlush(variant);
 
-        return new Fixture(location.getId(), variant.getId(), shiftId, username);
+        return new Fixture(location.getId(), variant.getId(), product.getId(), shiftId, username);
     }
 }
