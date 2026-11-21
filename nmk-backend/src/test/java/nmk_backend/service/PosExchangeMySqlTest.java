@@ -103,6 +103,31 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ void nonCashExchangeCollectionRequiresTransactionReferenceOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-UPI-OPEN-"+UUID.randomUUID(),null,"UPI exchange opening stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-UPI-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ProductVariant higher=createReplacementVariant("UPI-"+UUID.randomUUID(),new BigDecimal("150.00"));
+  inventoryService.receiveStock(f.locationId(),higher.getId(),1,"MYSQL-EX-UPI-NEW-"+UUID.randomUUID(),null,"UPI exchange replacement stock");
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(higher.getProduct().getId()); replacement.setVariantId(higher.getId()); replacement.setQuantity(1);
+  PosPaymentRequest collection=new PosPaymentRequest();
+  collection.setPaymentMethod("UPI"); collection.setAmount(new BigDecimal("50.00"));
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"UPI exchange without reference","MYSQL-EX-UPI-KEY-"+UUID.randomUUID(),
+   List.of(new PosReturnItemRequest(originalLine,1,"RESTOCK",null)),List.of(replacement),
+   new BigDecimal("0.00"),List.of(collection),List.of());
+
+  IllegalArgumentException error=assertThrows(IllegalArgumentException.class,
+   ()->exchangeService.exchange(original.id(),request,f.username(),"CASHIER"));
+  assertTrue(error.getMessage().contains("transaction reference"));
+  assertTrue(returns.findBySaleIdOrderByCreatedAtDesc(original.id()).isEmpty(),
+   "Invalid UPI collection must not persist an exchange return");
+  assertTrue(exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(original.id()).isEmpty(),
+   "Invalid UPI collection must not persist an exchange");
+ }
+
+ @Test
  void higherValueReplacementCollectsOnlyTheDifferenceOnMySql() {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-HIGH-OPEN-"+UUID.randomUUID(),null,"Higher exchange original stock");
