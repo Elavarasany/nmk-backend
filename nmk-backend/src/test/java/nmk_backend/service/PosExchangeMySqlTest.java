@@ -63,7 +63,7 @@ class PosExchangeMySqlTest {
   assertTrue(payments.findBySaleId(first.replacementSaleId()).isEmpty(),
    "Non-cash exchange credit must not be written as a tender row");
   assertEquals(1,returns.findBySaleIdOrderByCreatedAtDesc(original.id()).size());
-  assertEquals(1,exchanges.count());
+  assertEquals(1,exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(original.id()).size());
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(1,balance.getOnHandQuantity(),"Restock and replacement sale must both commit");
  }
