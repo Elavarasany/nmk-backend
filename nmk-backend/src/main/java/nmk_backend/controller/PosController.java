@@ -90,7 +90,8 @@ public class PosController {
         try {
             PosSaleResponse response = checkoutService.checkout(
                     request,
-                    authentication.getName()
+                    authentication.getName(),
+                    authenticatedRole(authentication)
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (DataIntegrityViolationException exception) {
@@ -105,5 +106,14 @@ public class PosController {
                     exception.getMessage() == null ? "Invalid checkout request" : exception.getMessage()
             ));
         }
+    }
+
+    private String authenticatedRole(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .filter(authority -> authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring(5))
+                .findFirst()
+                .orElse("CASHIER");
     }
 }
