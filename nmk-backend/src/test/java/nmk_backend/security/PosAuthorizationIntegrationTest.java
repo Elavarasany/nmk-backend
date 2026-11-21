@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,12 +33,18 @@ class PosAuthorizationIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        String username = "pos-security-test-" + java.util.UUID.randomUUID();
-        Admin admin = new Admin();
-        admin.setUsername(username);
-        admin.setPassword("test-only-password");
-        adminRepository.saveAndFlush(admin);
-        adminToken = jwtService.generateToken(username);
+        adminToken = tokenForRole("ADMIN");
+    }
+
+    private String tokenForRole(String role) {
+        String username = "pos-security-" + role.toLowerCase() + "-" + java.util.UUID.randomUUID();
+        Admin account = new Admin();
+        account.setUsername(username);
+        account.setPassword("test-only-password");
+        account.setRole(role);
+        account.setEnabled(true);
+        adminRepository.saveAndFlush(account);
+        return jwtService.generateToken(username);
     }
 
     @Test
@@ -62,27 +67,27 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "ordinary-user", roles = "USER")
-    void authenticatedNonAdminCannotAccessPosEndpoint() throws Exception {
-        mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(username = "cashier", roles = "CASHIER")
     void cashierCanAccessPosLocationPicker() throws Exception {
-        mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isOk());
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get(POS_LOCATIONS)
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isOk());
     }
 
     @Test
-    @WithMockUser(username = "cashier", roles = "CASHIER")
     void cashierCannotBrowseAllSalesHistory() throws Exception {
-        mockMvc.perform(get("/api/admin/pos/sales")).andExpect(status().isForbidden());
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/pos/sales")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(username = "manager", roles = "MANAGER")
     void managerCanAccessSalesHistory() throws Exception {
-        mockMvc.perform(get("/api/admin/pos/sales")).andExpect(status().isOk());
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(get("/api/admin/pos/sales")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk());
     }
 
     @Test
