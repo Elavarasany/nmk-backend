@@ -45,6 +45,9 @@ public class PosShift {
     @Column(name = "cash_variance", precision = 12, scale = 2)
     private BigDecimal cashVariance;
 
+    @Column(name = "closing_reason", length = 500)
+    private String closingReason;
+
     @Column(nullable = false, length = 20)
     private String status = "OPEN";
 
@@ -80,6 +83,8 @@ public class PosShift {
     public void setClosingCashCount(BigDecimal value) { this.closingCashCount = value; }
     public BigDecimal getCashVariance() { return cashVariance; }
     public void setCashVariance(BigDecimal value) { this.cashVariance = value; }
+    public String getClosingReason() { return closingReason; }
+    public void setClosingReason(String value) { this.closingReason = value; }
     public String getStatus() { return status; }
     public void setStatus(String value) { this.status = value; }
     public String getIdempotencyKey() { return idempotencyKey; }
