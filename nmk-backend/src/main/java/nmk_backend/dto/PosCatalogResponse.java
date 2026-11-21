@@ -32,7 +32,8 @@ public record PosCatalogResponse(
             BigDecimal sellingPrice,
             int onHandQuantity,
             int reservedQuantity,
-            int availableQuantity
+            int availableQuantity,
+            int reorderLevel
     ) {}
 
     public static ProductItem product(Product product, List<VariantItem> variants) {
@@ -51,7 +52,8 @@ public record PosCatalogResponse(
             ProductVariant variant,
             BigDecimal price,
             int onHand,
-            int reserved
+            int reserved,
+            int reorderLevel
     ) {
         return new VariantItem(
                 variant.getId(),
@@ -62,7 +64,8 @@ public record PosCatalogResponse(
                 price,
                 onHand,
                 reserved,
-                onHand - reserved
+                onHand - reserved,
+                reorderLevel
         );
     }
 }
