@@ -267,6 +267,34 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void managerShiftHistoryIncludesClosedCashReconciliationDetails() {
+        shift.setStatus("CLOSED");
+        shift.setExpectedCash(new BigDecimal("100.00"));
+        shift.setClosingCashCount(new BigDecimal("95.00"));
+        shift.setCashVariance(new BigDecimal("-5.00"));
+        shift.setClosingReason("Drawer recounted");
+        when(shiftRepository.findTop100ByRegisterLocationIdOrderByOpenedAtDesc(1L))
+                .thenReturn(List.of(shift));
+
+        var history = service.getShiftHistory(1L);
+
+        assertEquals(1, history.size());
+        assertEquals(9L, history.get(0).id());
+        assertEquals("CLOSED", history.get(0).status());
+        assertEquals(new BigDecimal("100.00"), history.get(0).expectedCash());
+        assertEquals(new BigDecimal("95.00"), history.get(0).closingCashCount());
+        assertEquals(new BigDecimal("-5.00"), history.get(0).cashVariance());
+        assertEquals("Drawer recounted", history.get(0).closingReason());
+        verify(shiftRepository).findTop100ByRegisterLocationIdOrderByOpenedAtDesc(1L);
+    }
+
+    @Test
+    void shiftHistoryRejectsInvalidLocationIds() {
+        assertThrows(IllegalArgumentException.class, () -> service.getShiftHistory(0L));
+        verifyNoInteractions(shiftRepository);
+    }
+
+    @Test
     void managerCanProcessReturnAgainstAnOpenCashierShiftAtSameLocation() {
         when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
 
