@@ -61,7 +61,7 @@ public class PosReturnService {
         return processReturn(saleId, request, username, "CASHIER");
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PosReturnResponse processReturn(
             Long saleId,
             PosReturnRequest request,
@@ -80,7 +80,7 @@ public class PosReturnService {
         return processVoid(saleId, request, username, "CASHIER");
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PosReturnResponse processVoid(
             Long saleId,
             PosVoidRequest request,
