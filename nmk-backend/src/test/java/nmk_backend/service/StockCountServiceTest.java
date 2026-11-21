@@ -134,6 +134,51 @@ class StockCountServiceTest {
     }
 
     @Test
+    void concurrentPostRetryReplaysAlreadyPostedLockedSession() {
+        StockCountSession staleSnapshot = new StockCountSession();
+        ReflectionTestUtils.setField(staleSnapshot, "id", 8L);
+        staleSnapshot.setLocation(location);
+        staleSnapshot.setStatus("READY_FOR_REVIEW");
+
+        session.setStatus("POSTED");
+        session.setPostedByUsername("admin.one");
+        location.setStockCountLocked(false);
+
+        when(sessionRepository.findById(8L)).thenReturn(Optional.of(staleSnapshot));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+
+        var response = service.post(8L, "admin.two");
+
+        assertEquals("POSTED", response.status());
+        assertEquals("admin.one", response.postedByUsername());
+        verifyNoInteractions(inventoryService);
+        verify(sessionRepository, never()).saveAndFlush(any(StockCountSession.class));
+    }
+
+    @Test
+    void concurrentCancelRetryReplaysAlreadyCancelledLockedSession() {
+        StockCountSession staleSnapshot = new StockCountSession();
+        ReflectionTestUtils.setField(staleSnapshot, "id", 8L);
+        staleSnapshot.setLocation(location);
+        staleSnapshot.setStatus("COUNTING");
+
+        session.setStatus("CANCELLED");
+        session.setCancelledByUsername("manager.one");
+        location.setStockCountLocked(false);
+
+        when(sessionRepository.findById(8L)).thenReturn(Optional.of(staleSnapshot));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+
+        var response = service.cancel(8L, "manager.two");
+
+        assertEquals("CANCELLED", response.status());
+        assertEquals("manager.one", response.cancelledByUsername());
+        verify(sessionRepository, never()).saveAndFlush(any(StockCountSession.class));
+    }
+
+    @Test
     void anotherStaffMemberCannotOverwriteTheOriginalCountersAuditIdentity() {
         session.setStatus("COUNTING");
         line.setCountedByUsername("manager.one");
