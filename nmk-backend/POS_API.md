@@ -416,3 +416,14 @@ The automated integration suite covers equal-value credit, higher-value collecti
 - `GET /api/admin/procurement/purchase-orders/{purchaseOrderId}/receipts` returns the chronological goods receipts for one purchase order, including receipt number, receiver, reason, timestamp, SKU, quantity and captured unit cost.
 - `GET /api/admin/procurement/purchase-orders/{purchaseOrderId}/supplier-returns` returns the chronological supplier returns for one purchase order, including return number, processor, reason, timestamp, SKU, quantity and captured unit cost.
 - Both endpoints validate the purchase order and return an empty array when no records exist. These are operational receiving/return records; they do not represent supplier credit-note settlement, supplier payments, or accounts-payable balances.
+
+
+## 18. Financial action reauthorization
+
+POS customer returns, full voids, and linked exchanges require a fresh one-time password authorization in addition to the manager/admin role:
+
+1. Call `POST /api/admin/auth/authorize-action` with `{"password":"<staff-password>","action":"POS_RETURN"}`, using `POS_VOID` or `POS_EXCHANGE` for the other operations.
+2. The response contains `authorizationToken` with a 120-second lifetime.
+3. Send that token in the `X-Admin-Action-Authorization` header on the corresponding return, void, or exchange POST request.
+
+The token is hashed at rest, bound to the authenticated staff username and action, and consumed once. Managers may authorize POS returns, voids and exchanges; administrators may authorize all configured actions. Cashiers cannot access these endpoints. A missing, expired, reused, wrong-action, or wrong-staff token is rejected. A retry after an uncertain response must obtain a new authorization token but reuse the original idempotency key and identical operation payload.
