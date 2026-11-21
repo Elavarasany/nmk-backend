@@ -22,15 +22,18 @@ public class PosReportService {
     private final PosSaleRepository saleRepository;
     private final PosReturnRepository returnRepository;
     private final InventoryLocationRepository locationRepository;
+    private final nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository;
 
     public PosReportService(
             PosSaleRepository saleRepository,
             PosReturnRepository returnRepository,
-            InventoryLocationRepository locationRepository
+            InventoryLocationRepository locationRepository,
+            nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository
     ) {
         this.saleRepository = saleRepository;
         this.returnRepository = returnRepository;
         this.locationRepository = locationRepository;
+        this.exchangeCreditRepository = exchangeCreditRepository;
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +58,8 @@ public class PosReportService {
         List<PosReturn> returns = returnRepository.findCompletedReturnsForReport(
                 locationId, fromDateTime, toExclusive
         );
+
+        BigDecimal exchangeCreditApplied = Optional.ofNullable(exchangeCreditRepository.sumExchangeCreditApplied(locationId, fromDateTime, toExclusive)).orElse(ZERO);
 
         BigDecimal subtotal = ZERO;
         BigDecimal discounts = ZERO;
@@ -168,7 +173,7 @@ public class PosReportService {
                 locationId, from, to, sales.size(),
                 subtotal, discounts, netSales,
                 customerReturnCount, refundTotal, refundTotal,
-                recordedRefundPaymentTotal, netSales.subtract(refundTotal),
+                recordedRefundPaymentTotal, exchangeCreditApplied, netSales.subtract(refundTotal),
                 Collections.unmodifiableMap(salesByPayment),
                 Collections.unmodifiableMap(refundsByPayment),
                 cashierRows, dailyRows, topProducts
