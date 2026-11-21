@@ -426,12 +426,13 @@ POS customer returns, full voids, and linked exchanges require a fresh one-time 
 2. The response contains `authorizationToken` with a 120-second lifetime.
 3. Send that token in the `X-Admin-Action-Authorization` header on the corresponding return, void, or exchange POST request.
 
-The token is hashed at rest, bound to the authenticated staff username and action, and consumed once. Managers may authorize inventory receipt/adjustment, stock-count posting/cancellation, purchase-order goods receipt, supplier return, POS return, full void and linked exchange. Administrators may authorize all configured actions, including global order/appointment clearing. Cashiers cannot access these endpoints. A missing, expired, reused, wrong-action, or wrong-staff token is rejected. A retry after an uncertain response must obtain a new authorization token but reuse the original idempotency key and identical operation payload.
+The token is hashed at rest, bound to the authenticated staff username and action, and consumed once. Managers may authorize inventory receipt/adjustment, stock-count posting/cancellation, purchase-order submission, goods receipt, supplier return, POS return, full void and linked exchange. Administrators may authorize all configured actions, including global order/appointment clearing. Cashiers cannot access these endpoints. A missing, expired, reused, wrong-action, or wrong-staff token is rejected. A retry after an uncertain response must obtain a new authorization token but reuse the original idempotency key and identical operation payload.
 
 Action-to-endpoint mapping:
 - `INVENTORY_RECEIPT`: `POST /api/admin/inventory/receive`
 - `INVENTORY_ADJUSTMENT`: `POST /api/admin/inventory/adjust`
 - `STOCK_COUNT_POST` / `STOCK_COUNT_CANCEL`: `POST /api/admin/inventory/stock-counts/{sessionId}/post` or `/cancel`
+- `PURCHASE_ORDER_SUBMIT`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/submit`
 - `GOODS_RECEIPT`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/receive`
 - `SUPPLIER_RETURN`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/supplier-returns`
 - `POS_RETURN`, `POS_VOID`, `POS_EXCHANGE`: the corresponding POST endpoints documented above

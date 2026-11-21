@@ -67,7 +67,7 @@ No online or POS checkout should be enabled until the active sellable variants a
 3. Create/verify the MAIN register for the active location.
 4. Open the first cashier shift with the physically counted opening float.
 5. Test checkout, split tender, cash change, cash-in/out, shift close and variance explanation using disposable staging records.
-6. Confirm each cashier can access only their own shift operations and cannot browse all sales, process returns/exchanges or apply discounts. Managers/admins must re-enter their password for inventory receipts/adjustments, stock-count post/cancel, purchase-order goods receipts, supplier returns, POS returns, full voids and exchanges; each one-time action token is bound to the staff member and operation.
+6. Confirm each cashier can access only their own shift operations and cannot browse all sales, process returns/exchanges or apply discounts. Managers/admins must re-enter their password for inventory receipts/adjustments, stock-count post/cancel, purchase-order submissions, goods receipts, supplier returns, POS returns, full voids and exchanges; each one-time action token is bound to the staff member and operation.
 
 ## 7. Application hosting configuration
 
@@ -95,7 +95,7 @@ Run these checks on staging after migration and seed data are complete:
 - Receipt, partial/full return, damaged/discard dispositions, cash refund, recorded non-cash refund reference, and full void after a sale with no prior returns.
 - Equal-value exchange, higher-value replacement with difference collected, lower-value replacement with only the excess refunded, same-key replay, failed-stock rollback, and concurrent exchange attempts against the same remaining sold quantity.
 - Exchange-credit reporting reconciles separately from actual tender/refund totals; inventory on-hand report reconciles to location balances.
-- A manager/admin cannot perform a stock receipt/adjustment, post/cancel a stock count, receive purchase-order goods, return goods to a supplier, process a customer return, full void, or exchange without a fresh one-time password authorization token; token reuse, expiry, wrong staff, and wrong action are rejected.
+- A manager/admin cannot perform a stock receipt/adjustment, post/cancel a stock count, submit a purchase order, receive purchase-order goods, return goods to a supplier, process a customer return, full void, or exchange without a fresh one-time password authorization token; token reuse, expiry, wrong staff, and wrong action are rejected.
 - Concurrent return attempts; cumulative returned quantity and refund never exceed the original sale.
 - Stock receipt, adjustment, low-stock alert, stock count freeze/review/post/cancel, and movement history.
 - Purchase order, partial goods receipt, over-receipt rejection, supplier return and stock ledger reconciliation.
