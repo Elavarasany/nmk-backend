@@ -7,6 +7,6 @@ import jakarta.validation.constraints.Size;
 
 public record StockCountStartRequest(
         @NotNull @Positive Long locationId,
-        @NotBlank @Size(max = 500) String reason
+        @NotBlank @Size(max = 400) String reason
 ) {
 }
