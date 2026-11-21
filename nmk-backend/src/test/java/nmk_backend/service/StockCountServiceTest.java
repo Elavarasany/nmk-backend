@@ -1,6 +1,7 @@
 package nmk_backend.service;
 
 import nmk_backend.dto.StockCountStartRequest;
+import nmk_backend.dto.StockCountLineRequest;
 import nmk_backend.entity.*;
 import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -130,6 +131,23 @@ class StockCountServiceTest {
                 1L, 5L, 2, "STOCK-COUNT:8:5", 3L,
                 "Physical stock count session 8: Quarterly physical count", 8L
         );
+    }
+
+    @Test
+    void anotherStaffMemberCannotOverwriteTheOriginalCountersAuditIdentity() {
+        line.setCountedByUsername("manager.one");
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+        when(lineRepository.findBySessionAndIdForUpdate(8L, 80L)).thenReturn(Optional.of(line));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.recordCount(8L, 80L, new StockCountLineRequest(13), "manager.two")
+        );
+
+        assertTrue(error.getMessage().contains("first counted this line"));
+        assertEquals(12, line.getCountedQuantity());
+        assertEquals("manager.one", line.getCountedByUsername());
+        verify(lineRepository, never()).saveAndFlush(any(StockCountLine.class));
     }
 
     @Test

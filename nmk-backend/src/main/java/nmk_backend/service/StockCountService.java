@@ -137,6 +137,12 @@ public class StockCountService {
 
         StockCountLine line = lineRepository.findBySessionAndIdForUpdate(sessionId, lineId)
                 .orElseThrow(() -> new InventoryNotFoundException("Stock count line was not found"));
+        if (line.getCountedQuantity() != null
+                && !sameStaff(line.getCountedByUsername(), username)) {
+            throw new IllegalArgumentException(
+                    "Only the staff member who first counted this line can correct its quantity"
+            );
+        }
         line.setCountedQuantity(request.countedQuantity());
         line.setCountedByUsername(username);
         line.setCountedAt(LocalDateTime.now());
