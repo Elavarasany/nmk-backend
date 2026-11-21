@@ -81,6 +81,15 @@ public class PosCheckoutService {
             PosCheckoutRequest request,
             String authenticatedUsername
     ) {
+        return checkout(request, authenticatedUsername, "ADMIN");
+    }
+
+    @Transactional
+    public PosSaleResponse checkout(
+            PosCheckoutRequest request,
+            String authenticatedUsername,
+            String authenticatedRole
+    ) {
         if (request == null) {
             throw new IllegalArgumentException("Checkout request is required");
         }
@@ -110,6 +119,19 @@ public class PosCheckoutService {
             throw new IllegalArgumentException(
                     "Every sale item needs positive product, variant and quantity values"
             );
+        }
+
+        String role = authenticatedRole == null
+                ? "" : authenticatedRole.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("ADMIN", "MANAGER", "CASHIER").contains(role)) {
+            throw new IllegalArgumentException("A valid POS staff role is required");
+        }
+        BigDecimal discount = money(request.getDiscountAmount(), "Discount");
+        if (discount.compareTo(ZERO) < 0) {
+            throw new IllegalArgumentException("Discount cannot be negative");
+        }
+        if (discount.compareTo(ZERO) > 0 && "CASHIER".equals(role)) {
+            throw new IllegalArgumentException("Only ADMIN or MANAGER staff may apply a sale discount");
         }
 
         String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
@@ -159,11 +181,6 @@ public class PosCheckoutService {
                 ));
 
         validateCustomer(request);
-        BigDecimal discount = money(request.getDiscountAmount(), "Discount");
-        if (discount.compareTo(ZERO) < 0) {
-            throw new IllegalArgumentException("Discount cannot be negative");
-        }
-
         PosSale sale = new PosSale();
         sale.setLocationId(location.getId());
         sale.setShiftId(shift.getId());
