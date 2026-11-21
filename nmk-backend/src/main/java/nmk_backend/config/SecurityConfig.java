@@ -51,6 +51,9 @@ public class SecurityConfig {
                         // Register configuration is administrator-only.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/registers")
                             .hasAuthority("ROLE_ADMIN")
+                        // Returns/refunds require manager or administrator authority.
+                        .requestMatchers(HttpMethod.POST, "/api/admin/pos/sales/*/returns")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         // Cashiers may sell but cannot browse the full sales ledger.
                         .requestMatchers(HttpMethod.GET, "/api/admin/pos/sales", "/api/admin/pos/sales/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
