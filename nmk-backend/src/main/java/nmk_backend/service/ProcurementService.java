@@ -97,6 +97,30 @@ public class ProcurementService {
                 .orElseThrow(() -> new InventoryNotFoundException("Purchase order was not found")));
     }
 
+    @Transactional(readOnly = true)
+    public List<GoodsReceiptResponse> getGoodsReceipts(Long purchaseOrderId) {
+        if (purchaseOrderId == null || purchaseOrderId <= 0) {
+            throw new IllegalArgumentException("A valid purchase order id is required");
+        }
+        if (!purchaseOrderRepository.existsById(purchaseOrderId)) {
+            throw new InventoryNotFoundException("Purchase order was not found");
+        }
+        return goodsReceiptRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(purchaseOrderId)
+                .stream().map(GoodsReceiptResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SupplierReturnResponse> getSupplierReturns(Long purchaseOrderId) {
+        if (purchaseOrderId == null || purchaseOrderId <= 0) {
+            throw new IllegalArgumentException("A valid purchase order id is required");
+        }
+        if (!purchaseOrderRepository.existsById(purchaseOrderId)) {
+            throw new InventoryNotFoundException("Purchase order was not found");
+        }
+        return supplierReturnRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(purchaseOrderId)
+                .stream().map(SupplierReturnResponse::from).toList();
+    }
+
     @Transactional
     public PurchaseOrderResponse createPurchaseOrder(PurchaseOrderCreateRequest request, String username) {
         Admin actor = requireActor(username);
