@@ -168,6 +168,7 @@ public class PosExchangeService {
    if("CASH".equals(method)) { if(tendered==null||money(tendered,"Cash tendered").compareTo(amount)<0) throw new IllegalArgumentException("Cash tendered must cover collection"); tendered=money(tendered,"Cash tendered"); change=tendered.subtract(amount); }
    else if(tendered!=null) throw new IllegalArgumentException("Tendered amount is only valid for cash");
    String ref=row.getTransactionReference()==null?null:row.getTransactionReference().trim();
+   if(!"CASH".equals(method)&&(ref==null||ref.isBlank())) throw new IllegalArgumentException("A transaction reference is required for UPI and card collections");
    if(ref!=null&&ref.length()>150) throw new IllegalArgumentException("Payment reference is too long");
    PosPayment p=new PosPayment(); p.setSale(sale); p.setPaymentMethod(method); p.setAmount(amount); p.setTenderedAmount(tendered); p.setChangeAmount(change); p.setTransactionReference(ref); sale.getPayments().add(p); total=total.add(amount);
   }
