@@ -357,6 +357,9 @@ public class PosCheckoutService {
             }
 
             String reference = trimToNull(paymentRequest.getTransactionReference());
+            if (!"CASH".equals(method) && (reference == null || reference.isBlank())) {
+                throw new IllegalArgumentException("A transaction reference is required for UPI and card payments");
+            }
             if (reference != null && reference.length() > 150) {
                 throw new IllegalArgumentException("Payment reference cannot exceed 150 characters");
             }
