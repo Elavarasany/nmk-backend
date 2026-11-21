@@ -141,6 +141,28 @@ class PosShiftServiceTest {
         assertNotNull(response.closedAt());
     }
 
+    @Test
+    void managerCanProcessReturnAgainstAnOpenCashierShiftAtSameLocation() {
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        PosShift result = service.requireOpenShiftForManagerAction(
+                9L, 1L, "manager.one", "MANAGER"
+        );
+
+        assertSame(shift, result);
+    }
+
+    @Test
+    void cashierCannotProcessReturnAgainstAnotherCashiersShift() {
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.requireOpenShiftForManagerAction(
+                        9L, 1L, "cashier.two", "CASHIER"
+                )
+        );
+    }
+
     private PosCashMovement movement(String type, String direction, String amount, PosShift shift) {
         PosCashMovement movement = new PosCashMovement();
         movement.setShift(shift);
