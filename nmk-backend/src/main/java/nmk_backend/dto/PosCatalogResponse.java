@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 
 public record PosCatalogResponse(
         Long locationId,
+        boolean stockCountLocked,
         List<ProductItem> products
 ) {
     public record ProductItem(
@@ -34,10 +35,7 @@ public record PosCatalogResponse(
             int availableQuantity
     ) {}
 
-    public static ProductItem product(
-            Product product,
-            List<VariantItem> variants
-    ) {
+    public static ProductItem product(Product product, List<VariantItem> variants) {
         return new ProductItem(
                 product.getId(),
                 product.getName(),
