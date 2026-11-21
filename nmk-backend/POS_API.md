@@ -203,9 +203,34 @@ Refund tender allocations must add up exactly to the server-calculated refund to
 
 The return idempotency key is scoped to the original sale and request fingerprint. Replaying the same request returns the prior return; changing the sale or request while reusing the key is rejected. Returns, refund payments and resaleable stock movements commit in one database transaction.
 
+## 11. Frozen physical stock counts
+
+All stock count operations require ADMIN or MANAGER authority.
+
+- `GET /api/admin/inventory/stock-counts/current?locationId=1` — retrieve the active count, if any.
+- `POST /api/admin/inventory/stock-counts/start` — create a snapshot and freeze stock-changing operations at that location.
+
+```json
+{
+  "locationId": 1,
+  "reason": "Monthly physical stock count"
+}
+```
+
+- `PATCH /api/admin/inventory/stock-counts/{sessionId}/lines/{lineId}` — body: `{"countedQuantity":7}`.
+- `POST /api/admin/inventory/stock-counts/{sessionId}/submit` — submit after every line has a count.
+- `POST /api/admin/inventory/stock-counts/{sessionId}/post` — post the verified differences as `COUNT_VARIANCE` stock movements.
+- `POST /api/admin/inventory/stock-counts/{sessionId}/cancel` — cancel without posting and unfreeze the location.
+
+The session snapshots every product variant at the selected location, including variants with no existing balance (expected on-hand zero). The location row is locked while the snapshot is created. While the session is COUNTING or READY_FOR_REVIEW, inventory receipts, adjustments, POS sales, customer return restocks and online stock reservations are blocked. Completed idempotent movements remain safely replayable.
+
+The location remains frozen until the session is posted or cancelled. Posting holds the location lock while applying all variance movements and releasing the freeze in the same transaction. A failed variance adjustment rolls back the post and leaves the location frozen. Negative variances cannot reduce on-hand below reserved stock. Positive variances can create a missing balance for a physically discovered variant.
+
+The stock count line stores the snapshot quantity, counted quantity, variance, user and timestamp. The stock ledger records each non-zero variance with a `STOCK_COUNT` reference. Repeated submit/post/cancel requests are safe to retry.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) and 008 (returns/refunds). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
