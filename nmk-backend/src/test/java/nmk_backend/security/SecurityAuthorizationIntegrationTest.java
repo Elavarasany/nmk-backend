@@ -76,10 +76,11 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
 
     @Test
     void publicProductListReportsUnavailableWhenCheckoutLocationIsNotConfigured() throws Exception {
+        // ResponseStatusException intentionally uses Spring's default error
+        // response, which does not expose exception messages in production.
+        // Assert the service contract without depending on an error-body detail.
         mockMvc.perform(get("/api/products"))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.message")
-                        .value("Customer checkout inventory location is not configured"));
+                .andExpect(status().isServiceUnavailable());
     }
 
     @Autowired
