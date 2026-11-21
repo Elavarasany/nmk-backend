@@ -277,6 +277,23 @@ class InventoryServiceTest {
     }
 
     @Test
+    void stockCountFreezeBlocksNewInventoryMovements() {
+        stubLocation();
+        location.setStockCountLocked(true);
+        stubActiveProductAndVariant();
+        stubNewMovement();
+        stubExistingBalance();
+
+        assertThrows(InventoryConflictException.class, () ->
+                inventoryService.adjustStock(
+                        1L, 2L, 1, "COUNT-FROZEN-001", 10L,
+                        "Attempt during stock count"
+                )
+        );
+        verify(movementRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void customerReturnRestockAddsOnlyInspectedResaleableUnits() {
         stubLocation();
         stubActiveProductAndVariant();
