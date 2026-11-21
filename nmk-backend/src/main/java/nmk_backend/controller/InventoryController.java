@@ -106,12 +106,6 @@ public class InventoryController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
         }
 
-        try {
-            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "INVENTORY_RECEIPT");
-        } catch (IllegalArgumentException exception) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
-        }
-
         Admin admin = adminRepository.findByUsername(authentication.getName())
                 .orElse(null);
         if (admin == null) {
@@ -154,6 +148,12 @@ public class InventoryController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                     Map.of("message", "Admin authentication is required")
             );
+        }
+
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "INVENTORY_RECEIPT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
         }
 
         Admin admin = adminRepository.findByUsername(authentication.getName())
