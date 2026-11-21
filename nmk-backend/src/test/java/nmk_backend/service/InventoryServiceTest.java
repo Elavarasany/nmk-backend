@@ -463,6 +463,8 @@ class InventoryServiceTest {
         existing.setMovementType("SALE");
         existing.setQuantityDelta(-3);
         existing.setReservedDelta(0);
+        existing.setActorStaffId(10L);
+        existing.setReason("Retry POS sale");
 
         when(movementRepository.findByIdempotencyKey("POS-SALE-RETRY"))
                 .thenReturn(Optional.of(existing));
@@ -494,6 +496,8 @@ class InventoryServiceTest {
         existing.setMovementType("RESERVATION");
         existing.setQuantityDelta(0);
         existing.setReservedDelta(3);
+        existing.setActorStaffId(null);
+        existing.setReason("Retry");
 
         when(movementRepository.findByIdempotencyKey("RESERVE-RETRY"))
                 .thenReturn(Optional.of(existing));
@@ -506,6 +510,39 @@ class InventoryServiceTest {
         );
 
         assertSame(balance, result);
+
+        verify(balanceRepository, never()).saveAndFlush(any());
+        verify(movementRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void reusingIdempotencyKeyWithDifferentAuditDetailsIsRejected() {
+        stubLocation();
+        stubActiveProductAndVariant();
+
+        StockMovement existing = new StockMovement();
+        existing.setLocation(location);
+        existing.setVariant(variant);
+        existing.setMovementType("RECEIPT");
+        existing.setQuantityDelta(5);
+        existing.setReservedDelta(0);
+        existing.setActorStaffId(10L);
+        existing.setReason("Supplier delivery");
+
+        when(movementRepository.findByIdempotencyKey("RECEIPT-AUDIT-KEY"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(InventoryConflictException.class,
+                () -> inventoryService.receiveStock(
+                        1L, 2L, 5, "RECEIPT-AUDIT-KEY", 10L,
+                        "Different supplier delivery reason"
+                ));
+
+        assertThrows(InventoryConflictException.class,
+                () -> inventoryService.receiveStock(
+                        1L, 2L, 5, "RECEIPT-AUDIT-KEY", 11L,
+                        "Supplier delivery"
+                ));
 
         verify(balanceRepository, never()).saveAndFlush(any());
         verify(movementRepository, never()).saveAndFlush(any());
@@ -747,6 +784,8 @@ class InventoryServiceTest {
         existing.setMovementType("RESERVATION");
         existing.setQuantityDelta(0);
         existing.setReservedDelta(3);
+        existing.setActorStaffId(null);
+        existing.setReason("Retry existing reservation");
 
         when(movementRepository.findByIdempotencyKey("RESERVE-INACTIVE-RETRY"))
                 .thenReturn(Optional.of(existing));

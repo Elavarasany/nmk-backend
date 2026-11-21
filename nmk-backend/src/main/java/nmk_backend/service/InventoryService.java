@@ -440,6 +440,14 @@ public class InventoryService {
                             && Objects.equals(
                             existing.getReferenceId(),
                             referenceId
+                    )
+                            && Objects.equals(
+                            existing.getActorStaffId(),
+                            actorStaffId
+                    )
+                            && Objects.equals(
+                            existing.getReason(),
+                            reason
                     );
 
             if (!sameOperation) {
