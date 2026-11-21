@@ -858,6 +858,7 @@ class InventoryServiceTest {
 
     @Test
     void movementHistoryReturnsPaginatedAuditedStockLedgerRows() {
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
         StockMovement movement = new StockMovement();
         ReflectionTestUtils.setField(movement, "id", 44L);
         movement.setLocation(location);
