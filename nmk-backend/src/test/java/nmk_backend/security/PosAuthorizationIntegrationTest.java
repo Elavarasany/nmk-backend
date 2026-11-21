@@ -201,6 +201,32 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void managerCannotReceivePurchaseOrderGoodsWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/procurement/purchase-orders/1/receive")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"reason":"test receipt","idempotencyKey":"test-goods-receipt-auth",
+                   "items":[{"purchaseOrderItemId":1,"quantity":1}]}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotReturnGoodsToSupplierWithoutFreshAuthorization() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/procurement/purchase-orders/1/supplier-returns")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"reason":"test supplier return","idempotencyKey":"test-supplier-return-auth",
+                   "items":[{"purchaseOrderItemId":1,"quantity":1}]}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cashierCannotProcessExchanges() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
