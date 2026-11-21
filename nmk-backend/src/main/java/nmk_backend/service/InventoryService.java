@@ -197,6 +197,33 @@ public class InventoryService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<nmk_backend.dto.InventoryMovementResponse> getMovementHistory(
+            Long locationId,
+            Long variantId,
+            int page,
+            int size
+    ) {
+        if (locationId == null || locationId <= 0) {
+            throw new InvalidInventoryOperationException("A valid inventory location is required");
+        }
+        if (variantId != null && variantId <= 0) {
+            throw new InvalidInventoryOperationException("A valid product variant is required");
+        }
+        if (page < 0) {
+            throw new InvalidInventoryOperationException("Page must be zero or greater");
+        }
+        if (size < 1 || size > 100) {
+            throw new InvalidInventoryOperationException("Page size must be between 1 and 100");
+        }
+
+        return movementRepository.findHistory(
+                locationId,
+                variantId,
+                org.springframework.data.domain.PageRequest.of(page, size)
+        ).map(nmk_backend.dto.InventoryMovementResponse::from);
+    }
+
     @Transactional
     public InventoryBalance receivePurchaseOrderStock(
             Long locationId, Long variantId, int quantity,
