@@ -96,6 +96,8 @@ class PosCheckoutTransactionIntegrationTest {
     @BeforeEach
     void setUp() {
         cashMovementRepository.deleteAll();
+        returnItemRepository.deleteAll();
+        returnRepository.deleteAll();
         saleRepository.deleteAll();
         shiftRepository.deleteAll();
         registerRepository.deleteAll();
