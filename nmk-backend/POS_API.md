@@ -427,3 +427,10 @@ POS customer returns, full voids, and linked exchanges require a fresh one-time 
 3. Send that token in the `X-Admin-Action-Authorization` header on the corresponding return, void, or exchange POST request.
 
 The token is hashed at rest, bound to the authenticated staff username and action, and consumed once. Managers may authorize POS returns, voids and exchanges; administrators may authorize all configured actions. Cashiers cannot access these endpoints. A missing, expired, reused, wrong-action, or wrong-staff token is rejected. A retry after an uncertain response must obtain a new authorization token but reuse the original idempotency key and identical operation payload.
+
+
+### Procurement cost report
+
+- `GET /api/admin/procurement/cost-report?locationId={id}&from=YYYY-MM-DD&to=YYYY-MM-DD` returns goods-receipt and supplier-return line costs recorded within the inclusive date range for one location.
+- Summary fields distinguish received quantity/cost, supplier-return quantity/cost, and net recorded procurement cost. Detail rows retain receipt/return reference, purchase order, supplier, SKU, quantity, captured unit cost, actor and timestamp.
+- This report is a historical operational procurement-cost view. It is **not** current inventory valuation, accounts payable, cash paid to suppliers, tax reporting, or COGS/profit. Purchase orders and receipt costs do not establish payment settlement. Opening stock without verified acquisition cost and issue-cost allocation remain outside valuation.
