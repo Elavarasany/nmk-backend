@@ -11,6 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -101,6 +102,9 @@ class ProcurementServiceTest {
 
     @Test
     void createPurchaseOrderStoresSupplierCostAndSubtotalWithoutChangingStock() {
+        AtomicReference<PurchaseOrder> savedOrder = new AtomicReference<>();
+        when(purchaseOrderRepository.findByIdempotencyKey("po-create-key-1"))
+                .thenAnswer(invocation -> Optional.ofNullable(savedOrder.get()));
         when(supplierRepository.findById(2L)).thenReturn(Optional.of(supplier));
         when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
         when(variantRepository.findById(5L)).thenReturn(Optional.of(variant));
@@ -108,20 +112,23 @@ class ProcurementServiceTest {
             PurchaseOrder saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 21L);
             ReflectionTestUtils.setField(saved, "orderNumber", "PO-TEST-NEW");
+            savedOrder.set(saved);
             return saved;
         });
 
-        var response = service.createPurchaseOrder(
-                new PurchaseOrderCreateRequest(
-                        2L, 1L, "Initial purchase",
-                        List.of(new PurchaseOrderItemRequest(5L, 4, new BigDecimal("250.00")))
-                ),
-                "manager.one"
+        PurchaseOrderCreateRequest request = new PurchaseOrderCreateRequest(
+                2L, 1L, "Initial purchase",
+                List.of(new PurchaseOrderItemRequest(5L, 4, new BigDecimal("250.00"))),
+                "po-create-key-1"
         );
+        var response = service.createPurchaseOrder(request, "manager.one");
+        var replay = service.createPurchaseOrder(request, "manager.one");
 
         assertEquals("DRAFT", response.status());
         assertEquals(new BigDecimal("1000.00"), response.subtotal());
         assertEquals(4, response.items().get(0).orderedQuantity());
+        assertEquals(response.id(), replay.id());
+        verify(purchaseOrderRepository, times(1)).saveAndFlush(any(PurchaseOrder.class));
         verifyNoInteractions(inventoryService);
     }
 
