@@ -1,8 +1,6 @@
 # NMK Opticals POS API
 
-All endpoints require an authenticated admin JWT:
-
-`Authorization: Bearer <admin-jwt>`
+All endpoints require an authenticated staff JWT unless marked as public. The login endpoint returns the staff role.
 
 ## 1. Load POS locations
 
@@ -34,7 +32,7 @@ Example:
 }
 ```
 
-The authenticated admin ID is recorded in the stock movement audit. Reusing the same key for the same receipt is safe; reusing it for a different operation is rejected. This endpoint records a normal stock receipt; migration 005 does not create opening stock.
+The authenticated admin identity is recorded in the stock movement audit. Reusing the same key for the same receipt is safe; reusing it for a different operation is rejected. This endpoint records a normal stock receipt; migration 005 does not create opening stock.
 
 ## 4. Complete a POS checkout
 
@@ -50,11 +48,7 @@ Example cash sale:
   "discountAmount": 50.00,
   "idempotencyKey": "pos-sale-unique-client-generated-key",
   "items": [
-    {
-      "productId": 10,
-      "variantId": 42,
-      "quantity": 2
-    }
+    { "productId": 10, "variantId": 42, "quantity": 2 }
   ],
   "payments": [
     {
@@ -71,14 +65,7 @@ Supported payment methods are `CASH`, `UPI`, and `CARD`. For split tender, send 
 
 The client must generate a fresh idempotency key for each new checkout and reuse that same key when retrying the same checkout after a network timeout. Do not reuse a key for a different sale.
 
-The server:
-- Calculates prices from the product and variant records; client prices are not accepted.
-- Applies the direct discount and validates the final payment total.
-- Locks the location, products and variants in a stable order.
-- Saves sale, item and payment snapshots and deducts inventory in one database transaction.
-- Rejects unavailable stock; failed stock deduction rolls back the sale and payments.
-- Writes an audited stock movement for every sold variant.
-- Returns the invoice number, sale details, payment breakdown and cash change.
+The server calculates prices from product and variant records, validates discounts and payment totals, locks inventory in a stable order, writes sale/item/payment snapshots, deducts stock and appends stock movements in one transaction. Failed stock deduction rolls back the sale and payments.
 
 ## 5. POS sales history
 
@@ -88,21 +75,11 @@ The server:
 
 Page size is limited to 100.
 
-## Important v1 boundaries
-
-- No GST/tax calculation is included pending the shop's tax configuration.
-- Completed sales are immutable through this API. Void, return and refund flows must be implemented as separate audited operations; do not edit or delete completed sales.
-- The manual database migration is `src/main/resources/db/manual/005-create-pos-sales-tables.sql`. Review and test it against a disposable staging database with a backup first. Do not execute it against the client's live database without a separate approved migration plan.
-- No migration is executed by this code change.
-
-
 ## 6. Audited stock adjustment
 
 `POST /api/admin/inventory/adjust`
 
-Use this only for a verified physical count correction, damage/write-off, loss, or other documented discrepancy. A supplier delivery must use the receipt endpoint instead.
-
-Example (five units found during a physical count):
+Use only for verified physical count corrections, damage/write-offs, loss or documented discrepancies. Supplier deliveries must use the receipt endpoint.
 
 ```json
 {
@@ -110,14 +87,48 @@ Example (five units found during a physical count):
   "variantId": 42,
   "quantityDelta": 5,
   "idempotencyKey": "stock-count-adjustment-2026-0001",
-  "reason": "Physical count on 21 Nov 2026; five additional units verified"
+  "reason": "Physical count correction; five additional units verified"
 }
 ```
 
-- Positive `quantityDelta` adds on-hand stock; negative removes it.
-- Zero adjustments are rejected.
-- The endpoint requires an active location, product and variant, an authenticated admin, a unique idempotency key and a reason.
-- An adjustment cannot reduce on-hand below the quantity reserved for online orders.
-- Balance update and append-only `stock_movements` insert occur in the same transaction.
-- A retry must send the exact same payload and idempotency key. A key cannot be reused for another quantity, SKU or operation.
-- This is an adjustment primitive, not a complete stock-count session workflow. It does not create count sessions, freeze a count snapshot or approve discrepancies.
+Positive `quantityDelta` adds stock; negative removes it. Zero is rejected. Adjustments cannot reduce on-hand below reserved stock. The balance update and append-only stock movement are transactional. A retry must reuse the exact payload and key.
+
+## 7. Staff accounts and roles
+
+All staff endpoints below require an ADMIN role. Passwords are BCrypt-hashed and are never returned by the API.
+
+- `GET /api/admin/staff` — list staff identities without password hashes.
+- `POST /api/admin/staff` — create a staff account.
+
+```json
+{
+  "username": "cashier.one",
+  "password": "use-a-unique-12-plus-character-secret",
+  "role": "CASHIER"
+}
+```
+
+- `PATCH /api/admin/staff/{id}/role` — body: `{"role":"MANAGER"}`.
+- `PATCH /api/admin/staff/{id}/status` — body: `{"enabled":false}`.
+
+Roles are `ADMIN`, `MANAGER`, and `CASHIER`. Usernames are normalized to lowercase. The last active ADMIN cannot be demoted or disabled, and a user cannot disable their own account. Disabled accounts are rejected at login and previously issued JWTs stop working on their next request.
+
+### Current authorization boundary
+
+| Capability | ADMIN | MANAGER | CASHIER |
+|---|---:|---:|---:|
+| POS catalogue and location selection | Yes | Yes | Yes |
+| Complete POS checkout | Yes | Yes | Yes |
+| Browse all POS sales history | Yes | Yes | No |
+| Inventory receipt and adjustment APIs | Yes | Yes | No |
+| Staff account administration | Yes | No | No |
+| Other existing admin APIs | Yes | No | No |
+
+This is the first authorization layer. Shift ownership, per-register restrictions, refund approvals and granular permission codes are not yet implemented.
+
+## Important operational boundaries
+
+- No GST/tax calculation is included pending the shop's tax configuration.
+- Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
+- Manual migrations are under `src/main/resources/db/manual/`. Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- No database migration is executed by these code changes.
