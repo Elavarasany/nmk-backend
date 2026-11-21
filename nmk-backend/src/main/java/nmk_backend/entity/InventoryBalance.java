@@ -51,6 +51,12 @@ public class InventoryBalance {
     @Column(name = "reorder_level", nullable = false)
     private Integer reorderLevel = 0;
 
+    @Column(name = "reorder_level_updated_by", length = 100)
+    private String reorderLevelUpdatedBy;
+
+    @Column(name = "reorder_level_updated_at")
+    private LocalDateTime reorderLevelUpdatedAt;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -107,6 +113,22 @@ public class InventoryBalance {
 
     public void setReorderLevel(Integer reorderLevel) {
         this.reorderLevel = reorderLevel;
+    }
+
+    public String getReorderLevelUpdatedBy() {
+        return reorderLevelUpdatedBy;
+    }
+
+    public void setReorderLevelUpdatedBy(String value) {
+        reorderLevelUpdatedBy = value;
+    }
+
+    public LocalDateTime getReorderLevelUpdatedAt() {
+        return reorderLevelUpdatedAt;
+    }
+
+    public void setReorderLevelUpdatedAt(LocalDateTime value) {
+        reorderLevelUpdatedAt = value;
     }
 
     public Long getVersion() {
