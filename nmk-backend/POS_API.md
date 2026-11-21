@@ -322,9 +322,32 @@ The response includes transaction count, subtotal, discounts, sales after discou
 
 This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
 
+## 15. Full sale voids
+
+Managers and administrators can void a completed sale only when no earlier return has been recorded:
+
+- `POST /api/admin/pos/sales/{saleId}/void`
+
+Example:
+
+```json
+{
+  "shiftId": 9,
+  "reason": "Sale cancelled before customer leaves",
+  "idempotencyKey": "void-device-unique-key",
+  "refundPayments": [
+    { "paymentMethod": "CASH", "amount": 900.00 }
+  ]
+}
+```
+
+A full void records a `VOID` return record, restocks all original sale lines, and records the full refund allocation. It is idempotent and cannot be applied after any partial/full return. The action must be processed against an open shift at the same location. Managers/admins may use another cashier's open shift; cashiers may use only their own. Cash drawer refunds are limited by expected drawer cash. UPI/card refunds require the actual provider/bank refund reference.
+
+This endpoint records a refund; it does not initiate a UPI/card refund with the payment provider. Complete the external refund first and enter its real reference. Only use a full void when the goods are physically returned in resaleable condition before leaving the shop; use the normal return workflow for goods that are damaged or discarded.
+
 ## Important operational boundaries
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
-- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements) and 011 (reorder threshold audit fields). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
+- Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements) and 011 (reorder threshold audit fields) and 012 (distinguish full sale voids). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
