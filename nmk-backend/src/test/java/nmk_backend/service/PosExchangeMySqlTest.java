@@ -12,6 +12,12 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -33,6 +39,7 @@ class PosExchangeMySqlTest {
  @Autowired private PosExchangeCreditSettlementRepository credits;
  @Autowired private PosPaymentRepository payments;
  private record Fixture(Long locationId,Long productId,Long variantId,Long shiftId,String username) {}
+ private record Outcome(boolean successful,Throwable failure) {}
 
  @Test
  void equalValueExchangeAndReplayCommitAtomicallyOnMySql() {
@@ -59,6 +66,49 @@ class PosExchangeMySqlTest {
   assertEquals(1,exchanges.count());
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(1,balance.getOnHandQuantity(),"Restock and replacement sale must both commit");
+ }
+
+ @Test
+ void concurrentExchangesCannotReturnTheSameSoldUnitTwiceOnMySql() throws Exception {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-CONCURRENT-OPEN-"+UUID.randomUUID(),null,"Concurrent exchange opening stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-CONCURRENT-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ExecutorService executor=Executors.newFixedThreadPool(2);
+  CountDownLatch ready=new CountDownLatch(2), start=new CountDownLatch(1);
+  try {
+   Future<Outcome> first=executor.submit(()->exchangeOne(f,original.id(),originalLine,ready,start));
+   Future<Outcome> second=executor.submit(()->exchangeOne(f,original.id(),originalLine,ready,start));
+   assertTrue(ready.await(15,TimeUnit.SECONDS),"Both MySQL exchange workers should be ready");
+   start.countDown();
+   Outcome a=first.get(30,TimeUnit.SECONDS), b=second.get(30,TimeUnit.SECONDS);
+   long successful=List.of(a,b).stream().filter(Outcome::successful).count();
+   long rejected=List.of(a,b).stream().filter(o->o.failure() instanceof IllegalArgumentException).count();
+   assertEquals(1,successful,"Only one exchange may claim the sold unit");
+   assertEquals(1,rejected,"The competing exchange must observe the committed return quantity");
+   assertEquals(1,exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(original.id()).size());
+   assertEquals(1,returns.findBySaleIdOrderByCreatedAtDesc(original.id()).size());
+   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
+   assertEquals(1,balance.getOnHandQuantity(),"The single exchange must restock and resell exactly one unit");
+  } finally {
+   start.countDown();
+   executor.shutdownNow();
+  }
+ }
+
+ private Outcome exchangeOne(Fixture f,Long saleId,Long saleItemId,CountDownLatch ready,CountDownLatch start) {
+  ready.countDown();
+  try {
+   if(!start.await(15,TimeUnit.SECONDS)) return new Outcome(false,new TimeoutException("Exchange start signal timed out"));
+   PosSaleItemRequest replacement=new PosSaleItemRequest();
+   replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+   PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Concurrent MySQL exchange quantity test",
+    "MYSQL-EX-CONCURRENT-KEY-"+UUID.randomUUID(),
+    List.of(new PosReturnItemRequest(saleItemId,1,"RESTOCK",null)),List.of(replacement),
+    new BigDecimal("0.00"),List.of(),List.of());
+   exchangeService.exchange(saleId,request,f.username(),"CASHIER");
+   return new Outcome(true,null);
+  } catch(Throwable failure) { return new Outcome(false,failure); }
  }
 
  @Test
