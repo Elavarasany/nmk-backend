@@ -1,7 +1,7 @@
 -- NMK Opticals — POS migration 014: atomic exchange audit and credit settlement.
 --
--- MANUAL, ADDITIVE MIGRATION. This migration is intentionally not enabled by the
--- application until the exchange entity/service implementation is complete.
+-- MANUAL, ADDITIVE MIGRATION. The application does not execute this script automatically;
+-- run it only after the target schema baseline and disposable staging rehearsal are approved.
 -- Test on a disposable MySQL 8.4 schema first. Never run against the client's
 -- live database without explicit approval, a verified backup, and a rollback plan.
 -- Depends on migrations 005, 007, and 008.
