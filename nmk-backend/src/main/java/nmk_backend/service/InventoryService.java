@@ -159,7 +159,7 @@ public class InventoryService {
         return execute(
                 locationId, variantId, Math.abs(quantityDelta), idempotencyKey,
                 actorStaffId, reason.trim(), "COUNT_VARIANCE", quantityDelta, 0,
-                false, "STOCK_COUNT", stockCountSessionId
+                quantityDelta > 0, "STOCK_COUNT", stockCountSessionId
         );
     }
 
