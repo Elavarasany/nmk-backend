@@ -17,6 +17,17 @@ public class PosReportController {
         this.reportService = reportService;
     }
 
+    @GetMapping("/inventory")
+    public ResponseEntity<?> getInventoryReport(@RequestParam Long locationId) {
+        try {
+            return ResponseEntity.ok(reportService.getInventoryReport(locationId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", exception.getMessage() == null ? "Invalid inventory report request" : exception.getMessage()
+            ));
+        }
+    }
+
     @GetMapping("/sales")
     public ResponseEntity<?> getSalesReport(
             @RequestParam Long locationId,

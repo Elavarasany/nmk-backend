@@ -1,9 +1,11 @@
 package nmk_backend.service;
 
 import nmk_backend.dto.PosSalesReportResponse;
+import nmk_backend.dto.PosInventoryReportResponse;
 import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.InventoryLocationRepository;
+import nmk_backend.repository.InventoryBalanceRepository;
 import nmk_backend.repository.PosReturnRepository;
 import nmk_backend.repository.PosSaleRepository;
 import org.springframework.stereotype.Service;
@@ -23,17 +25,30 @@ public class PosReportService {
     private final PosReturnRepository returnRepository;
     private final InventoryLocationRepository locationRepository;
     private final nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository;
+    private final InventoryBalanceRepository inventoryBalanceRepository;
 
     public PosReportService(
             PosSaleRepository saleRepository,
             PosReturnRepository returnRepository,
             InventoryLocationRepository locationRepository,
-            nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository
+            nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository,
+            InventoryBalanceRepository inventoryBalanceRepository
     ) {
         this.saleRepository = saleRepository;
         this.returnRepository = returnRepository;
         this.locationRepository = locationRepository;
         this.exchangeCreditRepository = exchangeCreditRepository;
+        this.inventoryBalanceRepository = inventoryBalanceRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public PosInventoryReportResponse getInventoryReport(Long locationId) {
+        if (locationId == null || locationId <= 0) {
+            throw new IllegalArgumentException("A valid inventory location is required");
+        }
+        InventoryLocation location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
+        return PosInventoryReportResponse.from(location, inventoryBalanceRepository.findByLocationId(locationId));
     }
 
     @Transactional(readOnly = true)

@@ -21,6 +21,7 @@ class PosReportServiceTest {
     private PosReturnRepository returnRepository;
     private InventoryLocationRepository locationRepository;
     private PosExchangeCreditSettlementRepository exchangeCreditRepository;
+    private InventoryBalanceRepository inventoryBalanceRepository;
     private PosReportService service;
 
     @BeforeEach
@@ -29,7 +30,8 @@ class PosReportServiceTest {
         returnRepository = mock(PosReturnRepository.class);
         locationRepository = mock(InventoryLocationRepository.class);
         exchangeCreditRepository = mock(PosExchangeCreditSettlementRepository.class);
-        service = new PosReportService(saleRepository, returnRepository, locationRepository, exchangeCreditRepository);
+        inventoryBalanceRepository = mock(InventoryBalanceRepository.class);
+        service = new PosReportService(saleRepository, returnRepository, locationRepository, exchangeCreditRepository, inventoryBalanceRepository);
         when(exchangeCreditRepository.sumExchangeCreditApplied(eq(1L), any(), any())).thenReturn(new BigDecimal("0.00"));
 
         InventoryLocation location = new InventoryLocation();
@@ -114,6 +116,27 @@ class PosReportServiceTest {
         assertEquals(2L, report.topProducts().get(0).quantitySold());
         assertEquals(new BigDecimal("600.00"), report.daily().get(0).netAfterRefunds());
         assertEquals(1, report.daily().get(0).returnCount(), "Voids must not be counted as customer returns");
+    }
+
+    @Test
+    void inventoryReportShowsOnHandReservedAvailableAndLowStockWithoutInventingValuation() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L); location.setCode("MAIN"); location.setName("Main Store");
+        Product product = new Product(); product.setId(10L); product.setName("Classic Frame");
+        ProductVariant variant = new ProductVariant(); variant.setId(20L); variant.setProduct(product);
+        variant.setSku("FRAME-20"); variant.setVariantName("Black"); variant.setAttributes(java.util.Map.of("color","Black"));
+        InventoryBalance balance = new InventoryBalance(); balance.setLocation(location); balance.setVariant(variant);
+        balance.setOnHandQuantity(8); balance.setReservedQuantity(2); balance.setReorderLevel(7);
+        when(inventoryBalanceRepository.findByLocationId(1L)).thenReturn(List.of(balance));
+
+        var report = service.getInventoryReport(1L);
+        assertEquals(1, report.variantCount());
+        assertEquals(8L, report.onHandQuantity());
+        assertEquals(2L, report.reservedQuantity());
+        assertEquals(6L, report.availableQuantity());
+        assertEquals(1, report.lowStockCount());
+        assertTrue(report.items().get(0).lowStock());
+        assertEquals(6, report.items().get(0).availableQuantity());
     }
 
     @Test
