@@ -151,13 +151,18 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
-    void managerCanReachExchangeRequestValidation() throws Exception {
+    void managerMustProvideFreshAuthorizationToProcessExchange() throws Exception {
         String managerToken = tokenForRole("MANAGER");
         mockMvc.perform(post("/api/admin/pos/sales/1/exchange")
                 .header("Authorization", "Bearer " + managerToken)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isBadRequest());
+                .content("""
+                  {"shiftId":1,"reason":"test exchange","idempotencyKey":"test-exchange-auth",
+                   "returnItems":[{"saleItemId":1,"quantity":1,"restockDisposition":"RESTOCK"}],
+                   "replacementItems":[{"productId":1,"variantId":1,"quantity":1}],
+                   "replacementDiscountAmount":0.00,"collectionPayments":[],"refundPayments":[]}
+                  """))
+                .andExpect(status().isForbidden());
     }
 
     @Test
