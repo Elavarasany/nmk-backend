@@ -141,6 +141,28 @@ public class InventoryService {
         );
     }
 
+    @Transactional
+    public InventoryBalance adjustStock(
+            Long locationId, Long variantId, int quantityDelta,
+            String idempotencyKey, Long actorStaffId, String reason
+    ) {
+        if (quantityDelta == 0) {
+            throw new InvalidInventoryOperationException(
+                    "Stock adjustment must change the quantity"
+            );
+        }
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException(
+                    "A stock adjustment reason of 1 to 500 characters is required"
+            );
+        }
+        return execute(
+                locationId, variantId, 1, idempotencyKey, actorStaffId,
+                reason.trim(), "ADJUSTMENT", quantityDelta, 0, false,
+                null, null
+        );
+    }
+
     private InventoryBalance execute(
             Long locationId,
             Long variantId,
@@ -269,7 +291,8 @@ public class InventoryService {
         boolean requiresActiveRecords =
                 "RECEIPT".equals(movementType)
                         || "RESERVATION".equals(movementType)
-                        || "SALE".equals(movementType);
+                        || "SALE".equals(movementType)
+                        || "ADJUSTMENT".equals(movementType);
 
         if (requiresActiveRecords) {
             if (!location.isActive()) {
