@@ -10,7 +10,7 @@ import java.util.List;
 public record PosVoidRequest(
         @NotNull @Positive Long shiftId,
         @NotBlank @Size(max = 500) String reason,
-        @NotBlank @Size(max = 150) String idempotencyKey,
+        @NotBlank @Size(max = 100) String idempotencyKey,
         @Size(max = 3) List<@Valid PosRefundPaymentRequest> refundPayments
 ) {
 }
