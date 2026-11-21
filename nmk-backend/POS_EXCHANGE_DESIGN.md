@@ -1,62 +1,59 @@
-# POS Exchange Workflow — Implementation Design
+# POS Exchange Workflow
 
-Status: persistence migration drafted; exchange runtime is NOT implemented or enabled.
+Status: implemented on `feature/pos-operations-v1`; not merged to production.
 
-Migration 014 (`src/main/resources/db/manual/014-create-pos-exchanges.sql`) adds the exchange header and a separate non-cash credit settlement ledger. It is additive and intentionally manual. No application entity, service, controller, UI, or migration execution is implied by this schema-only step. The migration must be exercised on disposable MySQL 8.4 before runtime work is considered complete.
+The feature branch now includes the exchange entities, repositories, request/response DTOs, transactional service, manager/admin API, sales-history audit endpoint, POS exchange UI, replacement invoice credit breakdown, and migration 014. The runtime uses the shared `PosReturnPricing` component for original-sale discount allocation and partial-return rounding. It does not call public return or checkout service methods to simulate an exchange.
 
-This document is the implementation contract for an exchange. Treating an exchange as an ordinary refund plus an unrelated sale would corrupt the audit trail and cash/payment reporting.
+## API
+
+- `GET /api/admin/pos/sales/{saleId}/exchange` — manager/admin exchange audit history for an original sale.
+- `POST /api/admin/pos/sales/{saleId}/exchange` — creates a linked return and replacement sale in one transaction.
+
+The request includes the open shift, reason, idempotency key, returned sale lines and dispositions, replacement product variants, replacement discount, actual collection payments, and actual refund payments. The response links the original sale, return, replacement sale, shift, credit, collection, and refund.
 
 ## Business invariants
+
 1. An exchange references one completed original sale and creates one replacement sale.
-2. Returned quantities must be available on the original sale after subtracting all prior completed returns.
-3. Returned goods use RESTOCK / DAMAGED / DISCARD rules. Only RESTOCK changes sellable on-hand stock.
-4. Return and replacement sale are one database transaction. If validation, payment, inventory movement, or persistence fails, neither side commits.
-5. Exchange credit is non-cash value. It must never create CASH_SALE, CASH_REFUND, UPI refund, or CARD refund ledger movement.
-6. Exchange credit is generated and consumed only inside the authenticated exchange service. Public checkout requests cannot submit or mint exchange credit.
-7. Each exchange has an idempotency key and immutable request fingerprint scoped to authenticated staff. Same-request replay returns the original exchange; changed details or another staff identity are rejected.
-8. Lock order matches existing POS mutations: inventory location -> shift -> original sale -> inventory rows. Exchange entrypoints use READ_COMMITTED to avoid stale return aggregates after waiting on the sale lock.
+2. Returned quantities are checked after all earlier completed returns and exchanges.
+3. Returned goods use RESTOCK / DAMAGED / DISCARD rules. Only RESTOCK increases sellable on-hand stock.
+4. Return, replacement sale, stock movements, exchange credit, and cash drawer entries are in one READ_COMMITTED transaction. A failure rolls the complete operation back.
+5. Exchange credit is non-cash value. It never creates a CASH/UPI/CARD tender or refund row by itself.
+6. Exchange credit is generated and consumed only inside the authenticated exchange service. Ordinary checkout cannot mint or submit it.
+7. Idempotency is staff- and request-fingerprint-scoped. An identical retry returns the original exchange; changed details or another staff identity are rejected.
+8. Lock order is inventory location → shift → original sale → product/variant/inventory rows.
 
-## Value and settlement rules
-Let R be the calculated net value of returned original lines after original-sale discount allocation. Let N be the replacement sale total after its approved discount.
-- N > R: exchange credit covers R; customer pays exactly N - R using CASH / UPI / CARD. Only actual tender enters payment settlement and the cash drawer.
-- N = R: exchange is settled by exchange credit; no cash or provider payment is recorded.
-- N < R: excess R - N is a real customer refund. Record exchange credit consumed for N and actual refund for R - N, using ordinary refund requirements (cash drawer availability or provider-confirmed reference). Never silently turn the excess into store credit.
-All money is DECIMAL(12,2), validated to at most two decimal places. No negative balances or implicit rounding differences are permitted.
+## Settlement
 
-## Persistence model
-Add an immutable pos_exchanges header linking original sale, exchange return, replacement sale, shift, authenticated staff, returned value, replacement value, actual refund, collected difference, idempotency key, request fingerprint, completion timestamp and reason.
-Enforce unique idempotency key, unique return link and unique replacement-sale link. Add restrictive foreign keys and indexes for original sale / creation time.
-Add an exchange-credit settlement record (or equivalent constrained payment linkage) recording the exact return credit consumed by the replacement sale. It must be unique per exchange and cannot be created by ordinary checkout. A free-form client-supplied payment method is not authorization.
-Keep pos_returns.refund_total as the value reversed from the original sale so existing net-sales calculations remain meaningful. Keep actual money refunded in explicitly typed refund-payment rows. Reports must distinguish sales reversals (including exchange credit), actual money refunded by CASH / UPI / CARD, exchange credit consumed, replacement sale value, and net sales after returns.
-Never label exchange credit as a cash/provider refund in the UI or payment reconciliation.
+Let R be the returned original-sale value after proportional discount allocation and partial-return rounding. Let N be the replacement sale value after its approved discount.
 
-## Service transaction design
-Implement a dedicated PosExchangeService.exchange(...) transaction. Refactor return and checkout internals into helpers that accept already locked entities and do not start nested independent transactions. Calling public service methods is not a substitute for one transaction.
-Within the exchange transaction:
-1. Validate request, role, original sale and shift.
-2. Lock location, shift, then original sale in the global lock order.
-3. Recheck exchange idempotency and returnable quantities after locks.
-4. Calculate returned line value using existing discount allocation and partial-return remainder rules.
-5. Validate replacement catalog, variant ownership, active status, prices, discounts and stock.
-6. Calculate exact exchange-credit / tender / refund split.
-7. Persist return, replacement sale, exchange header and credit linkage.
-8. Apply inventory restock and replacement stock deduction using distinct exchange-scoped movement keys.
-9. Record only actual cash collected/refunded in the shift cash ledger.
-10. Return original invoice, return number, replacement invoice, returned value, replacement value, credit applied, amount collected and actual refund.
+- N > R: credit applied = R; collect exactly N − R.
+- N = R: credit applied = R; no collection or refund.
+- N < R: credit applied = N; actually refund exactly R − N.
 
-## Required tests
-- Equal-value exchange: no drawer movement; one return, one replacement sale, stock movements exactly once.
-- Higher-value replacement: only difference is collected; correct cash/UPI/card and split-tender behaviour.
-- Lower-value replacement: only difference is actually refunded; provider reference / cash drawer checks apply.
-- Partial quantity and multiple sale lines with discounts: returned value matches existing return allocation rules.
-- DAMAGED / DISCARD do not increase sellable stock; RESTOCK does.
-- Inactive or mismatched replacement variants are rejected without partial writes.
-- Insufficient stock rejects the entire exchange without committing the return.
-- Same idempotency key and same staff/request replays one exchange; changed request or different staff is rejected.
-- Concurrent exchanges cannot claim the same remaining sold quantity.
-- Failures after return persistence, replacement sale persistence, and during inventory movements roll back all exchange records and stock movements.
-- Reports distinguish sales reversals from actual payment refunds and never count exchange credit as money moved.
-- API authorization enforces the existing manager-approval policy.
+The return record reverses the full returned value for net-sales reporting. The replacement sale records its full value. Payment rows contain only actual money collected/refunded. Non-cash credit is stored in `pos_exchange_credit_settlements` and shown separately as `exchangeCreditApplied`. Cash drawer entries are created only for actual cash collection/refund. UPI/card amounts are operator-entered references after external processing; this POS does not initiate or verify provider transactions.
 
-## Release gates
-Do not enable the exchange UI until the MySQL integration suite proves rollback, idempotency, stock correctness, and concurrency behaviour. Do not run the new manual migration against a client database until it has been reviewed and tested on a disposable schema matching that database.
+## Persistence and stock
+
+Migration `014-create-pos-exchanges.sql` adds an immutable exchange header and separate credit-settlement table, unique idempotency/return/replacement links, restrictive foreign keys, amount equations, and audit indexes. The migration is manual and additive.
+
+The exchange service uses the existing inventory service for RESTOCK and replacement SALE movements, with exchange-scoped idempotency keys. If a stock movement or cash drawer operation fails, the surrounding exchange transaction rolls back the return, replacement sale, exchange header, credit, and all preceding stock/cash mutations.
+
+## Automated verification on the feature branch
+
+- Java 27 Maven test-and-package suite passes.
+- MySQL 8.4 integration suite passes for equal-value credit, same-request replay, insufficient-stock rollback, and concurrent exchanges against the same remaining sold unit.
+- MySQL migration smoke test executes the exact migration 014 SQL in a separate disposable schema, verifies valid settlement insertion, and confirms an invalid settlement equation is rejected.
+- H2-backed integration tests cover equal-value, higher-value collection, lower-value actual refund, and rollback.
+- API authorization tests verify cashiers are denied and managers reach exchange request validation.
+- Frontend build and lint pass for the exchange flow, replacement invoice, and exchange audit history.
+
+These tests do not replace a client-specific migration rehearsal or live operational acceptance test.
+
+## Remaining release gates
+
+- Keep both feature branches and draft PRs separate from production until review and release approval.
+- Rehearse the complete ordered migration set against a disposable schema matching the client's actual schema; verify backup and restore before any production migration.
+- Do not apply migration 014 or any other POS migration to the client's live database without explicit approval.
+- Obtain payment-provider details before implementing provider-side UPI/card refund execution or settlement verification.
+- Obtain accountant approval for GST/HSN treatment, statutory invoice rules, cost accounting, and inventory valuation. Current reports are operational and quantity-based; they do not calculate profit, COGS, GST returns, supplier liabilities, or bank settlement.
+- Reconcile product variants, barcodes, opening quantities, and physical stock before go-live.
