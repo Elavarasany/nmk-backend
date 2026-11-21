@@ -191,11 +191,15 @@ public class PosShiftService {
         assertShiftActor(shift, username, role);
 
         BigDecimal counted = money(request.closingCashCount(), "Closing cash count");
+        String reason = request.reason() == null || request.reason().isBlank()
+                ? null : request.reason().trim();
         if ("CLOSED".equals(shift.getStatus())) {
-            if (shift.getClosingCashCount() != null && shift.getClosingCashCount().compareTo(counted) == 0) {
+            if (shift.getClosingCashCount() != null
+                    && shift.getClosingCashCount().compareTo(counted) == 0
+                    && Objects.equals(shift.getClosingReason(), reason)) {
                 return response(shift);
             }
-            throw new IllegalArgumentException("This shift is already closed with a different cash count");
+            throw new IllegalArgumentException("This shift is already closed with different closing details");
         }
         if (!"OPEN".equals(shift.getStatus())) {
             throw new IllegalArgumentException("Only an open shift can be closed");
@@ -203,7 +207,6 @@ public class PosShiftService {
 
         BigDecimal expected = calculateExpectedCash(shift.getId());
         BigDecimal variance = counted.subtract(expected).setScale(2);
-        String reason = request.reason() == null ? null : request.reason().trim();
         if (variance.compareTo(ZERO) != 0 && (reason == null || reason.isBlank())) {
             throw new IllegalArgumentException("A reason is required when the closing cash count differs from expected cash");
         }
