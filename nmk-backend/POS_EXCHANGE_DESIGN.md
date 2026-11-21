@@ -1,6 +1,8 @@
 # POS Exchange Workflow — Implementation Design
 
-Status: design approved for implementation; NOT implemented yet.
+Status: persistence migration drafted; exchange runtime is NOT implemented or enabled.
+
+Migration 014 (`src/main/resources/db/manual/014-create-pos-exchanges.sql`) adds the exchange header and a separate non-cash credit settlement ledger. It is additive and intentionally manual. No application entity, service, controller, UI, or migration execution is implied by this schema-only step. The migration must be exercised on disposable MySQL 8.4 before runtime work is considered complete.
 
 This document is the implementation contract for an exchange. Treating an exchange as an ordinary refund plus an unrelated sale would corrupt the audit trail and cash/payment reporting.
 
