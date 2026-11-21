@@ -118,6 +118,40 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ void partialExchangesAllocateOriginalSaleDiscountAndFinalRemainderOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),4,"MYSQL-EX-PARTIAL-OPEN-"+UUID.randomUUID(),null,"Partial exchange original stock");
+  PosCheckoutRequest saleRequest=new PosCheckoutRequest();
+  saleRequest.setLocationId(f.locationId()); saleRequest.setShiftId(f.shiftId());
+  saleRequest.setIdempotencyKey("MYSQL-EX-PARTIAL-SALE-"+UUID.randomUUID());
+  saleRequest.setDiscountAmount(new BigDecimal("20.00"));
+  PosSaleItemRequest soldLine=new PosSaleItemRequest();
+  soldLine.setProductId(f.productId()); soldLine.setVariantId(f.variantId()); soldLine.setQuantity(2);
+  saleRequest.setItems(List.of(soldLine));
+  PosPaymentRequest originalPayment=new PosPaymentRequest();
+  originalPayment.setPaymentMethod("CASH"); originalPayment.setAmount(new BigDecimal("180.00"));
+  originalPayment.setTenderedAmount(new BigDecimal("180.00")); saleRequest.setPayments(List.of(originalPayment));
+  PosSaleResponse original=checkoutService.checkout(saleRequest,f.username());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ProductVariant replacementVariant=createReplacementVariant("PARTIAL-"+UUID.randomUUID(),new BigDecimal("90.00"));
+  inventoryService.receiveStock(f.locationId(),replacementVariant.getId(),2,"MYSQL-EX-PARTIAL-NEW-"+UUID.randomUUID(),null,"Partial exchange replacement stock");
+
+  PosExchangeResponse first=partialExchange(f,original.id(),originalLine,replacementVariant,"MYSQL-EX-PARTIAL-KEY-1-"+UUID.randomUUID());
+  PosExchangeResponse second=partialExchange(f,original.id(),originalLine,replacementVariant,"MYSQL-EX-PARTIAL-KEY-2-"+UUID.randomUUID());
+
+  assertEquals(new BigDecimal("90.00"),first.returnedValue(),
+   "A 10% original sale discount must be allocated proportionally to the first returned unit");
+  assertEquals(new BigDecimal("90.00"),second.returnedValue(),
+   "The final returned unit must receive the exact remaining discounted value");
+  assertEquals(new BigDecimal("90.00"),first.creditApplied());
+  assertEquals(new BigDecimal("90.00"),second.creditApplied());
+  List<PosReturn> allReturns=returns.findBySaleIdOrderByCreatedAtDesc(original.id());
+  assertEquals(2,allReturns.size());
+  assertEquals(new BigDecimal("180.00"),allReturns.stream().map(PosReturn::getRefundTotal)
+   .reduce(BigDecimal.ZERO,BigDecimal::add));
+ }
+
+ @Test
  void concurrentExchangesCannotReturnTheSameSoldUnitTwiceOnMySql() throws Exception {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-CONCURRENT-OPEN-"+UUID.randomUUID(),null,"Concurrent exchange opening stock");
@@ -183,6 +217,16 @@ class PosExchangeMySqlTest {
   assertEquals(salesBefore,sales.count(),"Failed exchange must not leave a replacement sale");
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(0,balance.getOnHandQuantity(),"Failed replacement sale must not change stock");
+ }
+
+ private PosExchangeResponse partialExchange(Fixture f,Long saleId,Long saleItemId,ProductVariant replacementVariant,String key) {
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(replacementVariant.getProduct().getId());
+  replacement.setVariantId(replacementVariant.getId()); replacement.setQuantity(1);
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Partial discounted exchange",key,
+   List.of(new PosReturnItemRequest(saleItemId,1,"RESTOCK",null)),List.of(replacement),
+   new BigDecimal("0.00"),List.of(),List.of());
+  return exchangeService.exchange(saleId,request,f.username(),"CASHIER");
  }
 
  private ProductVariant createReplacementVariant(String suffix,BigDecimal price) {
