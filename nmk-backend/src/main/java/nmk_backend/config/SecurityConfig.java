@@ -80,6 +80,8 @@ public class SecurityConfig {
                                 "/api/admin/pos/checkout",
                                 "/api/admin/pos/shifts/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/pos/shifts/history")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/admin/pos/shifts/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
                         .requestMatchers("/api/admin/inventory/**")
