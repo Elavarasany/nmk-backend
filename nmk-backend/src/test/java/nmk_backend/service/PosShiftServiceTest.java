@@ -225,6 +225,32 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void exactShiftCloseRetryReplaysCommittedClosureWithoutChangingTheCount() {
+        shift.setStatus("CLOSED");
+        shift.setExpectedCash(new BigDecimal("100.00"));
+        shift.setClosingCashCount(new BigDecimal("95.00"));
+        shift.setCashVariance(new BigDecimal("-5.00"));
+        shift.setClosingReason("Drawer recounted");
+        shift.setClosedByUsername("cashier.one");
+        shift.setClosedAt(java.time.LocalDateTime.of(2026, 11, 21, 18, 0));
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        var response = service.closeShift(
+                9L,
+                new PosShiftCloseRequest(new BigDecimal("95.00"), "Different retry text"),
+                "cashier.one",
+                "CASHIER"
+        );
+
+        assertEquals("CLOSED", response.status());
+        assertEquals(new BigDecimal("95.00"), response.closingCashCount());
+        assertEquals(new BigDecimal("-5.00"), response.cashVariance());
+        assertEquals("Drawer recounted", response.closingReason());
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
+        verify(movementRepository, never()).findByShiftIdOrderByCreatedAtAscIdAsc(9L);
+    }
+
+    @Test
     void managerCanProcessReturnAgainstAnOpenCashierShiftAtSameLocation() {
         when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
 
