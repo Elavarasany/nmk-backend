@@ -74,6 +74,7 @@ class PosCatalogServiceTest {
         var result = service.getCatalog(1L);
 
         assertEquals(1L, result.locationId());
+        assertFalse(result.stockCountLocked());
         assertEquals(1, result.products().size());
         var item = result.products().get(0).variants().get(0);
         assertEquals(new BigDecimal("125.00"), item.sellingPrice());
