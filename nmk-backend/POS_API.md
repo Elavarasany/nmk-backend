@@ -68,6 +68,8 @@ Every new checkout must reference the authenticated cashier's OPEN shift at the 
 
 The server calculates prices from product and variant records, validates discounts and payment totals, locks inventory in a stable order, writes sale/item/payment snapshots, deducts stock and appends stock movements in one transaction. Failed stock deduction rolls back the sale and payments.
 
+The checkout service rejects any non-zero sale discount submitted by a CASHIER. ADMIN and MANAGER can apply a discount up to the original subtotal; the backend remains authoritative even if a browser client is modified.
+
 ## 5. POS sales history
 
 - `GET /api/admin/pos/sales?page=0&size=20`
@@ -147,6 +149,7 @@ Roles are `ADMIN`, `MANAGER`, and `CASHIER`. Usernames are normalized to lowerca
 |---|---:|---:|---:|
 | POS catalogue and location selection | Yes | Yes | Yes |
 | Complete POS checkout on own open shift | Yes | Yes | Yes |
+| Apply sale discount | Yes | Yes | No |
 | Open/close own shift and cash in/out | Yes | Yes | Yes |
 | Review any shift and cash ledger | Yes | Yes | No |
 | Browse all POS sales history | Yes | Yes | No |
