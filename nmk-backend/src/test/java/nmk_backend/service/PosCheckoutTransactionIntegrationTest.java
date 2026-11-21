@@ -6,6 +6,9 @@ import nmk_backend.dto.PosSaleItemRequest;
 import nmk_backend.dto.PosReturnItemRequest;
 import nmk_backend.dto.PosReturnRequest;
 import nmk_backend.dto.PosRefundPaymentRequest;
+import nmk_backend.dto.PosExchangeRequest;
+import nmk_backend.repository.PosExchangeRepository;
+import nmk_backend.repository.PosExchangeCreditSettlementRepository;
 import nmk_backend.repository.PosReturnItemRepository;
 import nmk_backend.repository.PosReturnRepository;
 import nmk_backend.dto.PosRegisterCreateRequest;
@@ -75,6 +78,15 @@ class PosCheckoutTransactionIntegrationTest {
     private PosReturnService returnService;
 
     @Autowired
+    private PosExchangeService exchangeService;
+
+    @Autowired
+    private PosExchangeRepository exchangeRepository;
+
+    @Autowired
+    private PosExchangeCreditSettlementRepository exchangeCreditRepository;
+
+    @Autowired
     private PosReturnRepository returnRepository;
 
     @Autowired
@@ -100,6 +112,8 @@ class PosCheckoutTransactionIntegrationTest {
     @BeforeEach
     void setUp() {
         cashMovementRepository.deleteAll();
+        exchangeCreditRepository.deleteAll();
+        exchangeRepository.deleteAll();
         returnItemRepository.deleteAll();
         returnRepository.deleteAll();
         saleRepository.deleteAll();
@@ -157,6 +171,44 @@ class PosCheckoutTransactionIntegrationTest {
         balance.setReservedQuantity(0);
         balance.setReorderLevel(0);
         balanceRepository.saveAndFlush(balance);
+    }
+
+    @Test
+    void equalValueExchangeUsesNonCashCreditAndCommitsReturnReplacementAndStockTogether() {
+        InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
+        balance.setOnHandQuantity(2);
+        balanceRepository.saveAndFlush(balance);
+
+        var original = checkoutService.checkout(buildCheckoutRequest("POS-EXCHANGE-ORIGINAL-" + System.nanoTime()),
+                "pos-rollback-test-cashier");
+        Long originalItemId = saleItemRepository.findBySaleId(original.id()).get(0).getId();
+
+        PosSaleItemRequest replacementLine = new PosSaleItemRequest();
+        replacementLine.setProductId(product.getId());
+        replacementLine.setVariantId(variant.getId());
+        replacementLine.setQuantity(1);
+        PosExchangeRequest request = new PosExchangeRequest(
+                shiftId, "Equal value frame exchange", "POS-EXCHANGE-EQUAL-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(originalItemId, 1, "RESTOCK", null)),
+                List.of(replacementLine), new BigDecimal("0.00"), List.of(), List.of());
+
+        var result = exchangeService.exchange(original.id(), request, "pos-rollback-test-cashier", "CASHIER");
+
+        assertEquals(new BigDecimal("100.00"), result.returnedValue());
+        assertEquals(new BigDecimal("100.00"), result.replacementValue());
+        assertEquals(new BigDecimal("100.00"), result.creditApplied());
+        assertEquals(new BigDecimal("0.00"), result.actualRefund());
+        assertEquals(new BigDecimal("0.00"), result.amountCollected());
+        assertEquals(1, exchangeRepository.count());
+        assertEquals(1, exchangeCreditRepository.count());
+        assertEquals(1, returnRepository.count());
+        assertEquals(2, saleRepository.count(), "Original and replacement sales must both be persisted");
+        assertTrue(saleRepository.findById(result.replacementSaleId()).orElseThrow().getPayments().isEmpty(),
+                "Exchange credit must not be represented as a fake tender payment");
+
+        InventoryBalance finalBalance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
+        assertEquals(1, finalBalance.getOnHandQuantity(), "Return restock and replacement sale must net to one unit");
+        assertEquals(0, finalBalance.getReservedQuantity());
     }
 
     @Test
