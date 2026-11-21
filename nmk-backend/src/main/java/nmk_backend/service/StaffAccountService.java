@@ -54,11 +54,14 @@ public class StaffAccountService {
 
     @Transactional
     public StaffAccountResponse setEnabled(Long id, boolean enabled, String actorUsername) {
-        Admin account = findAccount(id);
+        Admin account = findLockedAccount(id);
         preventSelfLockout(account, actorUsername, enabled ? null : "disable");
 
-        if (!enabled && ADMIN.equals(account.getRole())
-                && adminRepository.countByRoleAndEnabledTrue(ADMIN) <= 1) {
+        long activeAdmins = adminRepository.findAllForUpdate().stream()
+                .filter(Admin::isEnabled)
+                .filter(item -> ADMIN.equals(item.getRole()))
+                .count();
+        if (!enabled && ADMIN.equals(account.getRole()) && activeAdmins <= 1) {
             throw new IllegalArgumentException("The last active administrator cannot be disabled");
         }
 
@@ -68,12 +71,16 @@ public class StaffAccountService {
 
     @Transactional
     public StaffAccountResponse setRole(Long id, String requestedRole, String actorUsername) {
-        Admin account = findAccount(id);
+        Admin account = findLockedAccount(id);
         String role = normalizeRole(requestedRole);
 
+        long activeAdmins = adminRepository.findAllForUpdate().stream()
+                .filter(Admin::isEnabled)
+                .filter(item -> ADMIN.equals(item.getRole()))
+                .count();
         if (ADMIN.equals(account.getRole()) && !ADMIN.equals(role)) {
             preventSelfLockout(account, actorUsername, "change the role of");
-            if (account.isEnabled() && adminRepository.countByRoleAndEnabledTrue(ADMIN) <= 1) {
+            if (account.isEnabled() && activeAdmins <= 1) {
                 throw new IllegalArgumentException("The last active administrator cannot be demoted");
             }
         }
@@ -82,11 +89,13 @@ public class StaffAccountService {
         return StaffAccountResponse.from(adminRepository.save(account));
     }
 
-    private Admin findAccount(Long id) {
+    private Admin findLockedAccount(Long id) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("A valid staff account id is required");
         }
-        return adminRepository.findById(id)
+        return adminRepository.findAllForUpdate().stream()
+                .filter(account -> account.getId().equals(id))
+                .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Staff account not found"));
     }
 
