@@ -29,6 +29,9 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:5174}")
     private String allowedOrigins;
 
+    @Value("${app.cors.require-https:false}")
+    private boolean requireHttpsOrigins;
+
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
@@ -125,6 +128,16 @@ public class SecurityConfig {
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
+        if (origins.isEmpty()) {
+            throw new IllegalStateException("At least one explicit CORS origin must be configured");
+        }
+        if (origins.contains("*")) {
+            throw new IllegalStateException("Wildcard CORS origins are not allowed when credentials are enabled");
+        }
+        if (requireHttpsOrigins && origins.stream()
+                .anyMatch(origin -> !origin.toLowerCase(java.util.Locale.ROOT).startsWith("https://"))) {
+            throw new IllegalStateException("Production CORS origins must use HTTPS");
+        }
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
