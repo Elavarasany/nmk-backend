@@ -129,9 +129,6 @@ public class PosShiftService {
             String username,
             String role
     ) {
-        PosShift shift = lockOpenShift(shiftId);
-        assertShiftActor(shift, username, role);
-
         String type = request.movementType().trim().toUpperCase(Locale.ROOT);
         if (!List.of("CASH_IN", "CASH_OUT").contains(type)) {
             throw new IllegalArgumentException("Movement type must be CASH_IN or CASH_OUT");
@@ -142,16 +139,25 @@ public class PosShiftService {
         }
         String key = normalizeKey(request.idempotencyKey());
 
+        // Idempotent retries must still replay after a shift has subsequently closed.
         var previous = cashMovementRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
             PosCashMovement existing = previous.get();
-            if (!Objects.equals(existing.getShift().getId(), shiftId)
+            PosShift existingShift = existing.getShift();
+            assertShiftActor(existingShift, username, role);
+            if (!Objects.equals(existingShift.getId(), shiftId)
                     || !existing.getMovementType().equals(type)
                     || existing.getAmount().compareTo(amount) != 0
                     || !Objects.equals(existing.getReason(), request.reason().trim())) {
                 throw new IllegalArgumentException("Cash movement idempotency key was reused with different details");
             }
-            return response(shift);
+            return response(existingShift);
+        }
+
+        PosShift shift = lockOpenShift(shiftId);
+        assertShiftActor(shift, username, role);
+        if ("CASH_OUT".equals(type) && amount.compareTo(calculateExpectedCash(shiftId)) > 0) {
+            throw new IllegalArgumentException("Cash out cannot exceed the cash currently expected in the drawer");
         }
 
         saveCashMovement(
@@ -184,9 +190,15 @@ public class PosShiftService {
         }
 
         BigDecimal expected = calculateExpectedCash(shift.getId());
+        BigDecimal variance = counted.subtract(expected).setScale(2);
+        String reason = request.reason() == null ? null : request.reason().trim();
+        if (variance.compareTo(ZERO) != 0 && (reason == null || reason.isBlank())) {
+            throw new IllegalArgumentException("A reason is required when the closing cash count differs from expected cash");
+        }
         shift.setExpectedCash(expected);
         shift.setClosingCashCount(counted);
-        shift.setCashVariance(counted.subtract(expected).setScale(2));
+        shift.setCashVariance(variance);
+        shift.setClosingReason(reason);
         shift.setClosedByUsername(username);
         shift.setStatus("CLOSED");
         shift.setClosedAt(java.time.LocalDateTime.now());
