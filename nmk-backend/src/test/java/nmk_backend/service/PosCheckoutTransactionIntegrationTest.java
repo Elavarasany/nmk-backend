@@ -9,6 +9,8 @@ import nmk_backend.dto.PosRefundPaymentRequest;
 import nmk_backend.dto.PosExchangeRequest;
 import nmk_backend.repository.PosExchangeRepository;
 import nmk_backend.repository.PosExchangeCreditSettlementRepository;
+import nmk_backend.repository.PosPaymentRepository;
+import nmk_backend.repository.PosRefundPaymentRepository;
 import nmk_backend.repository.PosReturnItemRepository;
 import nmk_backend.repository.PosReturnRepository;
 import nmk_backend.dto.PosRegisterCreateRequest;
@@ -85,6 +87,12 @@ class PosCheckoutTransactionIntegrationTest {
 
     @Autowired
     private PosExchangeCreditSettlementRepository exchangeCreditRepository;
+
+    @Autowired
+    private PosPaymentRepository posPaymentRepository;
+
+    @Autowired
+    private PosRefundPaymentRepository refundPaymentRepository;
 
     @Autowired
     private PosReturnRepository returnRepository;
@@ -203,7 +211,7 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(1, exchangeCreditRepository.count());
         assertEquals(1, returnRepository.count());
         assertEquals(2, saleRepository.count(), "Original and replacement sales must both be persisted");
-        assertTrue(saleRepository.findById(result.replacementSaleId()).orElseThrow().getPayments().isEmpty(),
+        assertTrue(posPaymentRepository.findBySaleId(result.replacementSaleId()).isEmpty(),
                 "Exchange credit must not be represented as a fake tender payment");
 
         InventoryBalance finalBalance = balanceRepository.findByLocationIdAndVariantId(location.getId(), variant.getId()).orElseThrow();
@@ -232,7 +240,7 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(new BigDecimal("100.00"),result.creditApplied());
         assertEquals(new BigDecimal("50.00"),result.amountCollected());
         assertEquals(new BigDecimal("0.00"),result.actualRefund());
-        assertEquals(new BigDecimal("50.00"),saleRepository.findById(result.replacementSaleId()).orElseThrow().getPayments().get(0).getAmount());
+        assertEquals(new BigDecimal("50.00"),posPaymentRepository.findBySaleId(result.replacementSaleId()).get(0).getAmount());
     }
 
     @Test
@@ -252,8 +260,7 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(new BigDecimal("80.00"),result.creditApplied());
         assertEquals(new BigDecimal("0.00"),result.amountCollected());
         assertEquals(new BigDecimal("20.00"),result.actualRefund());
-        assertEquals(new BigDecimal("20.00"),returnRepository.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0)
-                .getRefundPayments().get(0).getAmount());
+        assertEquals(new BigDecimal("20.00"),refundPaymentRepository.findByReturnRecordId(result.returnId()).get(0).getAmount());
     }
 
     @Test
