@@ -1,8 +1,6 @@
-
 package nmk_backend.config;
 
 import nmk_backend.security.JwtAuthenticationFilter;
-
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -37,70 +35,35 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
         http
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
-
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-
-                        // Permit Spring's error dispatch so the original
-                        // validation or application error can be returned.
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/error").permitAll()
-
-                        // Allow browser CORS preflight requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/auth/login").permitAll()
 
-                        // Admin login remains public
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/admin/auth/login"
-                        ).permitAll()
+                        // Cashiers can operate a sale but cannot browse all staff sales.
+                        .requestMatchers("/api/admin/pos/sales", "/api/admin/pos/sales/**")
+                            .hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/admin/pos/**")
+                            .hasAnyRole("ADMIN", "MANAGER", "CASHIER")
+                        .requestMatchers("/api/admin/inventory/**")
+                            .hasAnyRole("ADMIN", "MANAGER")
 
-                        // Every admin endpoint requires an admin JWT
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // Customer product reads remain public
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/products",
-                                "/api/products/**"
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/products", "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/products", "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/products", "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/products", "/api/products/**").hasRole("ADMIN")
 
-                        // Product writes require an admin JWT
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/products",
-                                "/api/products/**"
-                        ).hasRole("ADMIN")
-
-                        .requestMatchers(
-                                HttpMethod.PUT,
-                                "/api/products",
-                                "/api/products/**"
-                        ).hasRole("ADMIN")
-
-                        .requestMatchers(
-                                HttpMethod.PATCH,
-                                "/api/products",
-                                "/api/products/**"
-                        ).hasRole("ADMIN")
-
-                        .requestMatchers(
-                                HttpMethod.DELETE,
-                                "/api/products",
-                                "/api/products/**"
-                        ).hasRole("ADMIN")
-
-                        // Public marketing and website image GET APIs
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/marketing/banners",
@@ -108,60 +71,21 @@ public class SecurityConfig {
                                 "/api/website-images"
                         ).permitAll()
 
-                        // React frontend files and routes
                         .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/admin",
-                                "/admin/**",
-                                "/track",
-                                "/track/**",
-                                "/assets/**",
-                                "/favicon.ico"
+                                "/", "/index.html", "/admin", "/admin/**",
+                                "/track", "/track/**", "/assets/**", "/favicon.ico"
                         ).permitAll()
 
-                        // Public payment APIs
                         .requestMatchers("/api/payment/**").permitAll()
-
-                        // Public customer checkout API
                         .requestMatchers("/api/orders/checkout").permitAll()
-
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/orders/track/**"
-                        ).permitAll()
-
-                        // Public appointment booking
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/appointments"
-                        ).permitAll()
-
-                        // Appointment management requires an admin JWT
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/appointments",
-                                "/api/appointments/**"
-                        ).hasRole("ADMIN")
-
-                        .requestMatchers(
-                                HttpMethod.PUT,
-                                "/api/appointments/**"
-                        ).hasRole("ADMIN")
-
-                        .requestMatchers(
-                                HttpMethod.DELETE,
-                                "/api/appointments/**"
-                        ).hasRole("ADMIN")
-
-                        // Everything else requires authentication
+                        .requestMatchers(HttpMethod.GET, "/api/orders/track/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/appointments").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/appointments", "/api/appointments/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/appointments/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/appointments/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-
-                .addFilterBefore(
-                        jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                );
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -173,34 +97,19 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-
         CorsConfiguration configuration = new CorsConfiguration();
-
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
-
         configuration.setAllowedOrigins(origins);
-
-        configuration.setAllowedMethods(List.of(
-                "GET",
-                "POST",
-                "PUT",
-                "PATCH",
-                "DELETE",
-                "OPTIONS"
-        ));
-
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
-
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 }
