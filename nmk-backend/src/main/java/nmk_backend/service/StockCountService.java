@@ -54,6 +54,16 @@ public class StockCountService {
                 .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public StockCountSessionResponse getSession(Long sessionId) {
+        if (sessionId == null || sessionId <= 0) {
+            throw new IllegalArgumentException("A valid stock count session id is required");
+        }
+        return sessionRepository.findById(sessionId)
+                .map(StockCountSessionResponse::from)
+                .orElseThrow(() -> new InventoryNotFoundException("Stock count session was not found"));
+    }
+
     @Transactional
     public StockCountSessionResponse start(StockCountStartRequest request, String username) {
         validateActor(username);
@@ -162,6 +172,9 @@ public class StockCountService {
 
         if (!"READY_FOR_REVIEW".equals(session.getStatus())) {
             throw new IllegalArgumentException("Only a submitted stock count can be posted");
+        }
+        if (!location.isActive()) {
+            throw new IllegalArgumentException("Cannot post a stock count for an inactive location");
         }
         if (!location.isStockCountLocked()) {
             throw new InventoryConflictException("The location stock-count freeze was removed unexpectedly");
