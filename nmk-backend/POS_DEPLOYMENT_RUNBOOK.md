@@ -26,7 +26,7 @@ Use only when the inspected database has the original `products`, `customer_orde
 1. `001-legacy-order-and-product-columns.sql`
 2. `002-create-variant-inventory-tables.sql`
 3. `003-create-main-store-location.sql`
-4. `005-create-pos-sales-tables.sql` through `012-distinguish-pos-voids.sql`, in numeric order.
+4. `005-create-pos-sales-tables.sql` through `013-audit-stock-count-cancellations.sql`, in numeric order.
 
 Run each script individually, inspect its output, and stop immediately on any error. Do not continue to the next script after a partial failure.
 
@@ -34,7 +34,7 @@ Run each script individually, inspect its output, and stop immediately on any er
 
 Use `004-staging-schema-reconciliation.sql` only if schema inspection confirms the exact preconditions documented in that file: variant/inventory tables already exist, the existing `AVP-01` location is present, and only the listed legacy order/product columns are missing.
 
-After 004 succeeds and its verification queries match expectations, apply 005 through 012 in numeric order.
+After 004 succeeds and its verification queries match expectations, apply 005 through 013 in numeric order.
 
 Path B is a staging-specific reconciliation, not a generic production migration. Do not assume a new client database matches it.
 

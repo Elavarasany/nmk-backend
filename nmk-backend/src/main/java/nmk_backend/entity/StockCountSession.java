@@ -38,6 +38,9 @@ public class StockCountSession {
     @Column(name = "posted_by_username", length = 100)
     private String postedByUsername;
 
+    @Column(name = "cancelled_by_username", length = 100)
+    private String cancelledByUsername;
+
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 
@@ -46,6 +49,9 @@ public class StockCountSession {
 
     @Column(name = "posted_at")
     private LocalDateTime postedAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<StockCountLine> lines = new ArrayList<>();
@@ -68,10 +74,14 @@ public class StockCountSession {
     public void setSubmittedByUsername(String value) { this.submittedByUsername = value; }
     public String getPostedByUsername() { return postedByUsername; }
     public void setPostedByUsername(String value) { this.postedByUsername = value; }
+    public String getCancelledByUsername() { return cancelledByUsername; }
+    public void setCancelledByUsername(String value) { this.cancelledByUsername = value; }
     public LocalDateTime getStartedAt() { return startedAt; }
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(LocalDateTime value) { this.submittedAt = value; }
     public LocalDateTime getPostedAt() { return postedAt; }
     public void setPostedAt(LocalDateTime value) { this.postedAt = value; }
+    public LocalDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(LocalDateTime value) { this.cancelledAt = value; }
     public List<StockCountLine> getLines() { return lines; }
 }

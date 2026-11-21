@@ -252,6 +252,8 @@ public class StockCountService {
         location.setStockCountLocked(false);
         locationRepository.saveAndFlush(location);
         session.setStatus("CANCELLED");
+        session.setCancelledByUsername(username.trim());
+        session.setCancelledAt(LocalDateTime.now());
         sessionRepository.saveAndFlush(session);
         return StockCountSessionResponse.from(session);
     }

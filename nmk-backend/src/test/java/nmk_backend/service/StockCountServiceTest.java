@@ -133,6 +133,24 @@ class StockCountServiceTest {
     }
 
     @Test
+    void cancellationRecordsTheAuthenticatedActorAndTimestamp() {
+        location.setStockCountLocked(true);
+        when(sessionRepository.findById(8L)).thenReturn(Optional.of(session));
+        when(locationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(location));
+        when(sessionRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(session));
+        when(sessionRepository.saveAndFlush(any(StockCountSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.cancel(8L, "manager.cancel");
+
+        assertEquals("CANCELLED", response.status());
+        assertEquals("manager.cancel", response.cancelledByUsername());
+        assertNotNull(response.cancelledAt());
+        assertFalse(location.isStockCountLocked());
+        verify(sessionRepository).saveAndFlush(session);
+    }
+
+    @Test
     void submitterCannotApproveAndPostTheirOwnStockCount() {
         session.setSubmittedByUsername("manager.one");
         session.setStartedByUsername("manager.one");
