@@ -339,8 +339,8 @@ class InventoryServiceTest {
         var alerts = inventoryService.getLowStockBalances(1L);
 
         assertEquals(1, alerts.size());
-        assertEquals("FRAME-005", alerts.get(0).getVariant().getSku());
-        assertEquals(3, alerts.get(0).getAvailableQuantity());
+        assertEquals("FRAME-005", alerts.get(0).sku());
+        assertEquals(3, alerts.get(0).availableQuantity());
     }
 
     @Test
