@@ -12,6 +12,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +59,7 @@ class InventoryServiceTest {
 
         product = new Product();
         product.setId(3L);
+        product.setName("Test Frame");
         product.setActive(true);
 
         variant = new ProductVariant();
@@ -849,6 +853,43 @@ class InventoryServiceTest {
 
         verify(balanceRepository, never()).saveAndFlush(any());
         verify(movementRepository, never()).saveAndFlush(any());
+    }
+
+
+    @Test
+    void movementHistoryReturnsPaginatedAuditedStockLedgerRows() {
+        StockMovement movement = new StockMovement();
+        ReflectionTestUtils.setField(movement, "id", 44L);
+        movement.setLocation(location);
+        movement.setVariant(variant);
+        movement.setMovementType("RECEIPT");
+        movement.setQuantityDelta(5);
+        movement.setReservedDelta(0);
+        movement.setOnHandAfter(15);
+        movement.setReservedAfter(2);
+        movement.setReferenceType("GOODS_RECEIPT");
+        movement.setReferenceId(9L);
+        movement.setActorStaffId(10L);
+        movement.setReason("Supplier delivery checked");
+        when(movementRepository.findHistory(1L, null, PageRequest.of(0, 50)))
+                .thenReturn(new PageImpl<>(List.of(movement), PageRequest.of(0, 50), 1));
+
+        var result = inventoryService.getMovementHistory(1L, null, 0, 50);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Test Frame", result.getContent().get(0).productName());
+        assertEquals("TEST-SKU", result.getContent().get(0).sku());
+        assertEquals("RECEIPT", result.getContent().get(0).movementType());
+        assertEquals(5, result.getContent().get(0).quantityDelta());
+        assertEquals(15, result.getContent().get(0).onHandAfter());
+        assertEquals("GOODS_RECEIPT", result.getContent().get(0).referenceType());
+    }
+
+    @Test
+    void movementHistoryRejectsInvalidPageSize() {
+        assertThrows(InvalidInventoryOperationException.class,
+                () -> inventoryService.getMovementHistory(1L, null, 0, 101));
+        verifyNoInteractions(movementRepository);
     }
 
 }
