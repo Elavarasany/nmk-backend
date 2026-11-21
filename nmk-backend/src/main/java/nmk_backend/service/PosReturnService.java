@@ -291,8 +291,20 @@ public class PosReturnService {
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("At least one original sale line is required");
         }
+        if (request.reason() == null || request.reason().isBlank() || request.reason().trim().length() > 500) {
+            throw new IllegalArgumentException("A return reason of 1 to 500 characters is required");
+        }
+        if (request.idempotencyKey() == null || request.idempotencyKey().isBlank()) {
+            throw new IllegalArgumentException("A return idempotency key is required");
+        }
+        if (request.items().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Return item rows cannot be null");
+        }
         if (request.refundPayments() == null) {
             throw new IllegalArgumentException("Refund payment list is required (it may be empty for a zero-value return)");
+        }
+        if (request.refundPayments().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Refund payment rows cannot be null");
         }
     }
 
@@ -320,8 +332,8 @@ public class PosReturnService {
     }
 
     private String normalizeKey(String key) {
-        if (key == null || key.isBlank() || key.trim().length() > 150) {
-            throw new IllegalArgumentException("A valid return idempotency key is required");
+        if (key == null || key.isBlank() || key.trim().length() > 100) {
+            throw new IllegalArgumentException("A return idempotency key of 1 to 100 characters is required");
         }
         return key.trim();
     }
