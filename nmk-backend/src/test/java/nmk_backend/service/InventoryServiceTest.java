@@ -280,6 +280,7 @@ class InventoryServiceTest {
     void updatesLocationSpecificReorderLevelWithActorAudit() {
         stubLocation();
         stubActiveProductAndVariant();
+        when(variantRepository.findById(2L)).thenReturn(Optional.of(variant));
         InventoryBalance balance = new InventoryBalance();
         balance.setLocation(location);
         balance.setVariant(variant);
