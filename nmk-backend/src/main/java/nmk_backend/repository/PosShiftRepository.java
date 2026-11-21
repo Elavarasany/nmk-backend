@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface PosShiftRepository extends JpaRepository<PosShift, Long> {
     Optional<PosShift> findByIdempotencyKey(String idempotencyKey);
     Optional<PosShift> findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(Long registerId, String status);
+    List<PosShift> findTop100ByRegisterLocationIdOrderByOpenedAtDesc(Long locationId);
     Optional<PosShift> findFirstByOpenedByUsernameAndStatusOrderByOpenedAtDesc(String username, String status);
     List<PosShift> findByRegisterLocationIdAndStatusOrderByOpenedAtDesc(Long locationId, String status);
 
