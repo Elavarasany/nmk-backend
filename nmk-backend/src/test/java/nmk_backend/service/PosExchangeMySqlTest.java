@@ -69,6 +69,55 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ void higherValueReplacementCollectsOnlyTheDifferenceOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-HIGH-OPEN-"+UUID.randomUUID(),null,"Higher exchange original stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-HIGH-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ProductVariant higher=createReplacementVariant("HIGH-"+UUID.randomUUID(),new BigDecimal("150.00"));
+  inventoryService.receiveStock(f.locationId(),higher.getId(),1,"MYSQL-EX-HIGH-NEW-"+UUID.randomUUID(),null,"Higher exchange replacement stock");
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(higher.getProduct().getId()); replacement.setVariantId(higher.getId()); replacement.setQuantity(1);
+  PosPaymentRequest collection=new PosPaymentRequest();
+  collection.setPaymentMethod("CASH"); collection.setAmount(new BigDecimal("50.00")); collection.setTenderedAmount(new BigDecimal("50.00"));
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Higher value exchange","MYSQL-EX-HIGH-KEY-"+UUID.randomUUID(),
+   List.of(new PosReturnItemRequest(originalLine,1,"RESTOCK",null)),List.of(replacement),
+   new BigDecimal("0.00"),List.of(collection),List.of());
+
+  PosExchangeResponse result=exchangeService.exchange(original.id(),request,f.username(),"CASHIER");
+  assertEquals(new BigDecimal("100.00"),result.creditApplied());
+  assertEquals(new BigDecimal("50.00"),result.amountCollected());
+  assertEquals(new BigDecimal("0.00"),result.actualRefund());
+  assertEquals(1,payments.findBySaleId(result.replacementSaleId()).size());
+  assertEquals(new BigDecimal("50.00"),payments.findBySaleId(result.replacementSaleId()).get(0).getAmount());
+ }
+
+ @Test
+ void lowerValueReplacementRefundsOnlyTheDifferenceOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-LOW-OPEN-"+UUID.randomUUID(),null,"Lower exchange original stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-LOW-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ProductVariant lower=createReplacementVariant("LOW-"+UUID.randomUUID(),new BigDecimal("60.00"));
+  inventoryService.receiveStock(f.locationId(),lower.getId(),1,"MYSQL-EX-LOW-NEW-"+UUID.randomUUID(),null,"Lower exchange replacement stock");
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(lower.getProduct().getId()); replacement.setVariantId(lower.getId()); replacement.setQuantity(1);
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Lower value exchange","MYSQL-EX-LOW-KEY-"+UUID.randomUUID(),
+   List.of(new PosReturnItemRequest(originalLine,1,"RESTOCK",null)),List.of(replacement),
+   new BigDecimal("0.00"),List.of(),List.of(new PosRefundPaymentRequest("CASH",new BigDecimal("40.00"),null)));
+
+  PosExchangeResponse result=exchangeService.exchange(original.id(),request,f.username(),"CASHIER");
+  assertEquals(new BigDecimal("100.00"),result.creditApplied());
+  assertEquals(new BigDecimal("0.00"),result.amountCollected());
+  assertEquals(new BigDecimal("40.00"),result.actualRefund());
+  assertTrue(payments.findBySaleId(result.replacementSaleId()).isEmpty(),
+   "Exchange credit must not be misreported as a cash/card/UPI tender");
+  PosReturn returnRecord=returns.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0);
+  assertEquals(new BigDecimal("100.00"),returnRecord.getRefundTotal(),
+   "Sales reversal is the full returned value, not only the cash refund");
+ }
+
+ @Test
  void concurrentExchangesCannotReturnTheSameSoldUnitTwiceOnMySql() throws Exception {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-CONCURRENT-OPEN-"+UUID.randomUUID(),null,"Concurrent exchange opening stock");
@@ -134,6 +183,14 @@ class PosExchangeMySqlTest {
   assertEquals(salesBefore,sales.count(),"Failed exchange must not leave a replacement sale");
   InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
   assertEquals(0,balance.getOnHandQuantity(),"Failed replacement sale must not change stock");
+ }
+
+ private ProductVariant createReplacementVariant(String suffix,BigDecimal price) {
+  Product product=new Product(); product.setName("MySQL Replacement "+suffix); product.setPrice(price);
+  product.setStockQuantity(0); product.setActive(true); product=products.saveAndFlush(product);
+  ProductVariant variant=new ProductVariant(); variant.setProduct(product); variant.setSku("EX-"+suffix);
+  variant.setVariantName("Replacement "+suffix); variant.setAttributes(Map.of("color","Brown"));
+  variant.setActive(true); return variants.saveAndFlush(variant);
  }
 
  private PosSaleResponse checkout(Fixture f,String key) {
