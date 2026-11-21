@@ -163,6 +163,7 @@ Only ADMIN and MANAGER can process a return. The original sale and sale lines ar
 
 - `GET /api/admin/pos/sales/{saleId}/returns` — return history for the original sale.
 - `POST /api/admin/pos/sales/{saleId}/returns` — create an audited return/refund.
+- `POST /api/admin/pos/sales/{saleId}/void` — manager/admin-only full void of a completed sale that has no prior return.
 
 Example:
 
@@ -202,6 +203,26 @@ Refund tender allocations must add up exactly to the server-calculated refund to
 **Provider limitation:** this POS endpoint records UPI/card refund references; it does not call a UPI/card provider or Razorpay to move funds. The refund must be completed and verified through the relevant provider before recording the reference. Do not treat a saved reference as proof of provider settlement.
 
 The return idempotency key is scoped to the original sale and request fingerprint. Replaying the same request returns the prior return; changing the sale or request while reusing the key is rejected. Returns, refund payments and resaleable stock movements commit in one database transaction.
+
+
+### Full sale void
+
+A full void is distinct from a partial/customer return. It restores every original sale line as resaleable stock, creates one `VOID` audit record, and requires refund allocations to equal the original sale total. It is rejected if any return has already been processed for that sale. The original sale remains immutable and is not deleted or rewritten.
+
+Example:
+
+```json
+{
+  "shiftId": 12,
+  "reason": "Duplicate sale entered by cashier before customer left",
+  "idempotencyKey": "void-unique-device-key",
+  "refundPayments": [
+    { "paymentMethod": "CASH", "amount": 950.00, "transactionReference": null }
+  ]
+}
+```
+
+Cash refunds are recorded as an OUT movement on the open shift and cannot exceed expected drawer cash. UPI/card refunds require a provider-confirmed reference; this API does not execute the provider refund. A full void uses the same transaction, locking and idempotency protections as customer returns. Only ADMIN and MANAGER may call it; CASHIER requests are forbidden.
 
 ## 11. Frozen physical stock counts
 
