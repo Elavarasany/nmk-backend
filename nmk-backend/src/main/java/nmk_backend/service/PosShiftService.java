@@ -284,6 +284,25 @@ public class PosShiftService {
         return shift;
     }
 
+    @Transactional
+    public PosShift requireOpenShiftForManagerAction(
+            Long shiftId, Long locationId, String username, String role
+    ) {
+        PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
+                .orElseThrow(() -> new InventoryNotFoundException("An open POS shift is required"));
+        if (!"OPEN".equals(shift.getStatus())) {
+            throw new IllegalArgumentException("The selected POS shift is not open");
+        }
+        if (!Objects.equals(shift.getRegister().getLocation().getId(), locationId)) {
+            throw new IllegalArgumentException("The shift belongs to a different inventory location");
+        }
+        if (!canManageOtherShifts(role)
+                && !shift.getOpenedByUsername().equalsIgnoreCase(username)) {
+            throw new IllegalArgumentException("You can only process returns on your own open shift");
+        }
+        return shift;
+    }
+
     private PosShift lockOpenShift(Long shiftId) {
         PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("POS shift was not found"));
