@@ -44,7 +44,7 @@ public class PosReturnController {
         }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
-                    returnService.processReturn(saleId, request, authentication.getName())
+                    returnService.processReturn(saleId, request, authentication.getName(), authenticatedRole(authentication))
             );
         } catch (DataIntegrityViolationException exception) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
@@ -70,7 +70,7 @@ public class PosReturnController {
         }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
-                    returnService.processVoid(saleId, request, authentication.getName())
+                    returnService.processVoid(saleId, request, authentication.getName(), authenticatedRole(authentication))
             );
         } catch (DataIntegrityViolationException exception) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
@@ -81,5 +81,13 @@ public class PosReturnController {
                     "message", exception.getMessage() == null ? "Invalid void request" : exception.getMessage()
             ));
         }
+    }
+    private String authenticatedRole(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .filter(authority -> authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring(5))
+                .findFirst()
+                .orElse("CASHIER");
     }
 }
