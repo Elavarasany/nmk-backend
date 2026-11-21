@@ -38,6 +38,7 @@ nmk_staging_restore-before-*.sql
 *.tmp
 *.bak
 # Project migration scripts
+!nmk-backend/src/main/resources/db/manual/*.sql
 !nmk-backend/src/main/resources/db/manual/001-legacy-order-and-product-columns.sql
 !nmk-backend/src/main/resources/db/manual/002-create-variant-inventory-tables.sql
 !nmk-backend/src/main/resources/db/manual/003-create-main-store-location.sql
