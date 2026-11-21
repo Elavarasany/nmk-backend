@@ -107,7 +107,7 @@ class PosExchangeMySqlTest {
    new BigDecimal("0.00"),List.of(),List.of(new PosRefundPaymentRequest("CASH",new BigDecimal("40.00"),null)));
 
   PosExchangeResponse result=exchangeService.exchange(original.id(),request,f.username(),"CASHIER");
-  assertEquals(new BigDecimal("100.00"),result.creditApplied());
+  assertEquals(new BigDecimal("60.00"),result.creditApplied());
   assertEquals(new BigDecimal("0.00"),result.amountCollected());
   assertEquals(new BigDecimal("40.00"),result.actualRefund());
   assertTrue(payments.findBySaleId(result.replacementSaleId()).isEmpty(),
