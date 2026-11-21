@@ -17,10 +17,10 @@ public class Admin {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20) not null default 'ADMIN'")
     private String role = "ADMIN";
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean not null default true")
     private boolean enabled = true;
 
     private LocalDateTime createdAt = LocalDateTime.now();
