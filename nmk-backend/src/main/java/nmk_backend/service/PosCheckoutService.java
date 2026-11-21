@@ -38,6 +38,7 @@ public class PosCheckoutService {
     private final InventoryLocationRepository locationRepository;
     private final AdminRepository adminRepository;
     private final InventoryService inventoryService;
+    private final PosShiftService shiftService;
     private final ObjectMapper objectMapper;
 
     public PosCheckoutService(
@@ -47,6 +48,7 @@ public class PosCheckoutService {
             InventoryLocationRepository locationRepository,
             AdminRepository adminRepository,
             InventoryService inventoryService,
+            PosShiftService shiftService,
             ObjectMapper objectMapper
     ) {
         this.saleRepository = saleRepository;
@@ -55,6 +57,7 @@ public class PosCheckoutService {
         this.locationRepository = locationRepository;
         this.adminRepository = adminRepository;
         this.inventoryService = inventoryService;
+        this.shiftService = shiftService;
         this.objectMapper = objectMapper;
     }
 
@@ -131,6 +134,12 @@ public class PosCheckoutService {
             throw new IllegalArgumentException("Inventory location is inactive");
         }
 
+        // A sale must belong to the authenticated cashier's open shift at this location.
+        // The shift row remains locked until the sale and its cash ledger entries commit.
+        PosShift shift = shiftService.requireOpenShift(
+                request.getShiftId(), location.getId(), authenticatedUsername
+        );
+
         // Recheck after acquiring the location lock. This closes the common
         // same-location race where two retries both initially observed no sale.
         var saleAfterLock = saleRepository.findByIdempotencyKeyForUpdate(idempotencyKey);
@@ -157,6 +166,7 @@ public class PosCheckoutService {
 
         PosSale sale = new PosSale();
         sale.setLocationId(location.getId());
+        sale.setShiftId(shift.getId());
         sale.setCashierUsername(authenticatedUsername);
         sale.setCustomerName(trimToNull(request.getCustomerName()));
         sale.setCustomerPhone(trimToNull(request.getCustomerPhone()));
@@ -250,6 +260,20 @@ public class PosCheckoutService {
 
         // Flush first to obtain the immutable sale ID used by the stock movement audit trail.
         saleRepository.saveAndFlush(sale);
+
+        int paymentIndex = 0;
+        for (PosPayment payment : sale.getPayments()) {
+            if ("CASH".equals(payment.getPaymentMethod())) {
+                shiftService.recordCashSale(
+                        shift,
+                        payment.getAmount(),
+                        "POS-CASH:" + idempotencyKey + ":" + paymentIndex,
+                        authenticatedUsername,
+                        sale.getId()
+                );
+            }
+            paymentIndex++;
+        }
 
         for (PosSaleItem item : sale.getItems()) {
             String movementKey = "POS:" + idempotencyKey + ":" + item.getVariantId();
