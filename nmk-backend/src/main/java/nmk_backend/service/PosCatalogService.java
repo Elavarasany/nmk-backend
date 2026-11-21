@@ -106,6 +106,6 @@ public class PosCatalogService {
                 .filter(product -> !product.variants().isEmpty())
                 .toList();
 
-        return new PosCatalogResponse(locationId, catalog);
+        return new PosCatalogResponse(locationId, location.isStockCountLocked(), catalog);
     }
 }
