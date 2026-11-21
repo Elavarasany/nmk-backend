@@ -54,9 +54,43 @@ public class PosReturnService {
             PosReturnRequest request,
             String username
     ) {
+        return processReturnInternal(saleId, request, username, "RETURN");
+    }
+
+    @Transactional
+    public PosReturnResponse processVoid(
+            Long saleId,
+            PosVoidRequest request,
+            String username
+    ) {
+        if (request == null) {
+            throw new IllegalArgumentException("A void request is required");
+        }
+        PosSale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
+        List<PosReturnItemRequest> fullSaleItems = sale.getItems().stream()
+                .map(item -> new PosReturnItemRequest(
+                        item.getId(), item.getQuantity(), "RESTOCK", null
+                ))
+                .toList();
+        List<PosRefundPaymentRequest> refundPayments = request.refundPayments() == null
+                ? List.of() : request.refundPayments();
+        PosReturnRequest fullReturn = new PosReturnRequest(
+                request.shiftId(), request.reason(), request.idempotencyKey(),
+                fullSaleItems, refundPayments
+        );
+        return processReturnInternal(saleId, fullReturn, username, "VOID");
+    }
+
+    private PosReturnResponse processReturnInternal(
+            Long saleId,
+            PosReturnRequest request,
+            String username,
+            String returnType
+    ) {
         validateRequest(saleId, request, username);
         String key = normalizeKey(request.idempotencyKey());
-        String fingerprint = fingerprint(saleId, request);
+        String fingerprint = fingerprint(saleId, request, returnType);
 
         var previous = returnRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
@@ -73,7 +107,11 @@ public class PosReturnService {
         }
 
         if (!"COMPLETED".equals(sale.getStatus())) {
-            throw new IllegalArgumentException("Only completed POS sales can be returned");
+            throw new IllegalArgumentException("Only completed POS sales can be returned or voided");
+        }
+        if ("VOID".equals(returnType)
+                && !returnRepository.findBySaleIdOrderByCreatedAtDesc(saleId).isEmpty()) {
+            throw new IllegalArgumentException("A sale cannot be voided after any return has been processed");
         }
 
         PosShift shift = shiftService.requireOpenShift(
@@ -92,9 +130,12 @@ public class PosReturnService {
         returnRecord.setProcessedByUsername(username);
         returnRecord.setReason(request.reason().trim());
         returnRecord.setStatus("COMPLETED");
+        returnRecord.setReturnType(returnType);
         returnRecord.setIdempotencyKey(key);
         returnRecord.setRequestFingerprint(fingerprint);
 
+        List<PosRefundPaymentRequest> refundRequests = request.refundPayments() == null
+                ? List.of() : request.refundPayments();
         BigDecimal refundTotal = ZERO;
         for (PosReturnItemRequest itemRequest : request.items()) {
             if (!seenSaleItemIds.add(itemRequest.saleItemId())) {
@@ -160,16 +201,16 @@ public class PosReturnService {
         }
 
         refundTotal = refundTotal.setScale(2, RoundingMode.HALF_UP);
-        if (refundTotal.compareTo(ZERO) <= 0 && !request.refundPayments().isEmpty()) {
+        if (refundTotal.compareTo(ZERO) <= 0 && !refundRequests.isEmpty()) {
             throw new IllegalArgumentException("A zero-value return must not include refund payments");
         }
-        if (refundTotal.compareTo(ZERO) > 0 && request.refundPayments().isEmpty()) {
+        if (refundTotal.compareTo(ZERO) > 0 && refundRequests.isEmpty()) {
             throw new IllegalArgumentException("At least one refund payment is required");
         }
 
         BigDecimal refundPaymentTotal = ZERO;
         int paymentIndex = 0;
-        for (PosRefundPaymentRequest paymentRequest : request.refundPayments()) {
+        for (PosRefundPaymentRequest paymentRequest : refundRequests) {
             String method = normalizePaymentMethod(paymentRequest.paymentMethod());
             BigDecimal paymentAmount = money(paymentRequest.amount(), "Refund payment amount");
             if (paymentAmount.compareTo(ZERO) <= 0) {
@@ -338,10 +379,10 @@ public class PosReturnService {
         return key.trim();
     }
 
-    private String fingerprint(Long saleId, PosReturnRequest request) {
+    private String fingerprint(Long saleId, PosReturnRequest request, String returnType) {
         try {
             byte[] json = objectMapper.writeValueAsBytes(
-                    Map.of("saleId", saleId, "request", request)
+                    Map.of("saleId", saleId, "returnType", returnType, "request", request)
             );
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(json);
             return HexFormat.of().formatHex(digest);
