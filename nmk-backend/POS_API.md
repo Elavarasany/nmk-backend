@@ -358,5 +358,6 @@ This endpoint records a refund; it does not initiate a UPI/card refund with the 
 
 - No GST/tax calculation is included pending the shop's tax configuration.
 - Completed sales are immutable through the current API. Returns/refunds must be separate audited operations; never edit or delete completed sales.
+- There is no atomic linked-exchange endpoint yet. Do not process an exchange as though a return and a new sale were one transaction; confirm the shop's price-difference collection/refund policy before enabling that workflow.
 - Manual migrations are under `src/main/resources/db/manual/`. The current POS migration order includes 002 (variants/inventory), 005 (sales), 006 (staff roles), 007 (registers/shifts/cash) 008 (returns/refunds) and 009 (physical stock counts) and 010 (suppliers, purchase orders and goods movements) and 011 (reorder threshold audit fields) and 012 (distinguish full sale voids). Review and test on a disposable staging database with a backup first. Do not execute against the client's live database without a separately approved migration plan.
 - No database migration is executed by these code changes.
