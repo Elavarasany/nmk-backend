@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 public interface PosExchangeCreditSettlementRepository extends JpaRepository<PosExchangeCreditSettlement, Long> {
+    boolean existsByExchangeId(Long exchangeId);
  @Query("""
   select coalesce(sum(c.amount), 0) from PosExchangeCreditSettlement c
   where c.exchange.originalSale.locationId = :locationId
