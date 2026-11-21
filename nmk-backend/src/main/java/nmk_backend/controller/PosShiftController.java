@@ -39,6 +39,15 @@ public class PosShiftController {
         }
     }
 
+    @GetMapping("/shifts/history")
+    public ResponseEntity<?> getShiftHistory(@RequestParam Long locationId) {
+        try {
+            return ResponseEntity.ok(shiftService.getShiftHistory(locationId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     @GetMapping("/shifts/current")
     public ResponseEntity<?> getCurrentShift(
             @RequestParam Long registerId,
