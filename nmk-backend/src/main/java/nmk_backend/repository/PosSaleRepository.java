@@ -38,4 +38,18 @@ public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
     List<PosSale> findByCashierUsernameOrderByCreatedAtDesc(String cashierUsername);
 
     Page<PosSale> findByLocationId(Long locationId, Pageable pageable);
+
+    @Query("""
+        SELECT s FROM PosSale s
+        WHERE s.locationId = :locationId
+          AND s.status = 'COMPLETED'
+          AND s.createdAt >= :from
+          AND s.createdAt < :to
+        ORDER BY s.createdAt ASC
+    """)
+    List<PosSale> findCompletedSalesForReport(
+            @Param("locationId") Long locationId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to
+    );
 }
