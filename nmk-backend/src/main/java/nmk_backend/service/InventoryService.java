@@ -343,8 +343,7 @@ public class InventoryService {
                         || "RESERVATION".equals(movementType)
                         || "SALE".equals(movementType)
                         || "ADJUSTMENT".equals(movementType)
-                        || "CUSTOMER_RETURN_RESTOCK".equals(movementType)
-                        || "COUNT_VARIANCE".equals(movementType);
+                        || "CUSTOMER_RETURN_RESTOCK".equals(movementType);
 
         if (requiresActiveRecords) {
             if (!location.isActive()) {
