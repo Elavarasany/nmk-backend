@@ -858,6 +858,7 @@ class InventoryServiceTest {
 
     @Test
     void movementHistoryReturnsPaginatedAuditedStockLedgerRows() {
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
         StockMovement movement = new StockMovement();
         ReflectionTestUtils.setField(movement, "id", 44L);
         movement.setLocation(location);
@@ -871,6 +872,7 @@ class InventoryServiceTest {
         movement.setReferenceId(9L);
         movement.setActorStaffId(10L);
         movement.setReason("Supplier delivery checked");
+        when(variantRepository.findById(2L)).thenReturn(Optional.of(variant));
         when(movementRepository.findHistory(1L, null, PageRequest.of(0, 50)))
                 .thenReturn(new PageImpl<>(List.of(movement), PageRequest.of(0, 50), 1));
 
@@ -889,6 +891,15 @@ class InventoryServiceTest {
     void movementHistoryRejectsInvalidPageSize() {
         assertThrows(InvalidInventoryOperationException.class,
                 () -> inventoryService.getMovementHistory(1L, null, 0, 101));
+        verifyNoInteractions(movementRepository);
+    }
+
+
+    @Test
+    void movementHistoryRejectsUnknownLocation() {
+        when(locationRepository.findById(999L)).thenReturn(Optional.empty());
+        assertThrows(InventoryNotFoundException.class,
+                () -> inventoryService.getMovementHistory(999L, null, 0, 50));
         verifyNoInteractions(movementRepository);
     }
 
