@@ -334,6 +334,12 @@ The response includes transaction count, subtotal, discounts, sales after discou
 
 This report does not calculate GST, profit, supplier liabilities or bank settlement. POS sales totals are not a substitute for accountant-approved financial statements.
 
+### Inventory on-hand report
+
+- `GET /api/admin/pos/reports/inventory?locationId=1`
+
+Returns a location-scoped quantity snapshot with variant/product identity, on-hand, reserved, available, reorder level, and low-stock status, plus location totals. It includes variants that currently have an inventory-balance row. It does not calculate inventory value, cost of goods sold, margin, or profit: received stock currently lacks a complete, verified cost-layer/valuation model, so those figures must not be inferred from current product selling prices or the latest purchase cost.
+
 ## 16. Full sale voids
 
 Managers and administrators can void a completed sale only when no earlier return has been recorded:
