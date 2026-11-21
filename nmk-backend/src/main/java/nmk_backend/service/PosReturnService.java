@@ -54,7 +54,17 @@ public class PosReturnService {
             PosReturnRequest request,
             String username
     ) {
-        return processReturnInternal(saleId, request, username, "RETURN");
+        return processReturn(saleId, request, username, "CASHIER");
+    }
+
+    @Transactional
+    public PosReturnResponse processReturn(
+            Long saleId,
+            PosReturnRequest request,
+            String username,
+            String role
+    ) {
+        return processReturnInternal(saleId, request, username, "RETURN", role);
     }
 
     @Transactional
@@ -62,6 +72,16 @@ public class PosReturnService {
             Long saleId,
             PosVoidRequest request,
             String username
+    ) {
+        return processVoid(saleId, request, username, "CASHIER");
+    }
+
+    @Transactional
+    public PosReturnResponse processVoid(
+            Long saleId,
+            PosVoidRequest request,
+            String username,
+            String role
     ) {
         if (request == null) {
             throw new IllegalArgumentException("A void request is required");
@@ -79,14 +99,15 @@ public class PosReturnService {
                 request.shiftId(), request.reason(), request.idempotencyKey(),
                 fullSaleItems, refundPayments
         );
-        return processReturnInternal(saleId, fullReturn, username, "VOID");
+        return processReturnInternal(saleId, fullReturn, username, "VOID", role);
     }
 
     private PosReturnResponse processReturnInternal(
             Long saleId,
             PosReturnRequest request,
             String username,
-            String returnType
+            String returnType,
+            String role
     ) {
         validateRequest(saleId, request, username);
         String key = normalizeKey(request.idempotencyKey());
@@ -114,8 +135,8 @@ public class PosReturnService {
             throw new IllegalArgumentException("A sale cannot be voided after any return has been processed");
         }
 
-        PosShift shift = shiftService.requireOpenShift(
-                request.shiftId(), sale.getLocationId(), username
+        PosShift shift = shiftService.requireOpenShiftForManagerAction(
+                request.shiftId(), sale.getLocationId(), username, role
         );
         Admin actor = adminRepository.findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> new IllegalArgumentException("Authenticated staff account was not found"));
