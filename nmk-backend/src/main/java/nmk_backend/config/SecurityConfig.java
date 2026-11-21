@@ -48,13 +48,25 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/auth/login").permitAll()
 
-                        // Cashiers can operate a sale but cannot browse all staff sales.
-                        .requestMatchers("/api/admin/pos/sales", "/api/admin/pos/sales/**")
-                            .hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/admin/pos/**")
-                            .hasAnyRole("ADMIN", "MANAGER", "CASHIER")
+                        // Register configuration is administrator-only.
+                        .requestMatchers(HttpMethod.POST, "/api/admin/pos/registers")
+                            .hasAuthority("ROLE_ADMIN")
+                        // Cashiers may sell but cannot browse the full sales ledger.
+                        .requestMatchers(HttpMethod.GET, "/api/admin/pos/sales", "/api/admin/pos/sales/**")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/admin/pos/locations",
+                                "/api/admin/pos/catalog",
+                                "/api/admin/pos/registers")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/admin/pos/checkout",
+                                "/api/admin/pos/shifts/**")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/pos/shifts/**")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER")
                         .requestMatchers("/api/admin/inventory/**")
-                            .hasAnyRole("ADMIN", "MANAGER")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
