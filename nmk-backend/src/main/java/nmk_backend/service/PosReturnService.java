@@ -8,6 +8,7 @@ import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,7 +52,7 @@ public class PosReturnService {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PosReturnResponse processReturn(
             Long saleId,
             PosReturnRequest request,
@@ -70,7 +71,7 @@ public class PosReturnService {
         return processReturnInternal(saleId, request, username, "RETURN", role);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PosReturnResponse processVoid(
             Long saleId,
             PosVoidRequest request,
@@ -137,6 +138,10 @@ public class PosReturnService {
                 .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
 
         // Recheck after acquiring the sale lock. All returns for one sale serialize here.
+        // MySQL's default REPEATABLE_READ can retain a pre-lock snapshot for the
+        // aggregate return-quantity query even after this transaction waits for the
+        // sale row lock. READ_COMMITTED ensures the next statement sees the preceding
+        // committed return, preventing concurrent requests from returning the same unit.
         var raced = returnRepository.findByIdempotencyKeyForUpdate(key);
         if (raced.isPresent()) {
             return replay(raced.get(), fingerprint);
