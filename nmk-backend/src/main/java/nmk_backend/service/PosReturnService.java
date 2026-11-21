@@ -56,7 +56,7 @@ public class PosReturnService {
     ) {
         validateRequest(saleId, request, username);
         String key = normalizeKey(request.idempotencyKey());
-        String fingerprint = fingerprint(request);
+        String fingerprint = fingerprint(saleId, request);
 
         var previous = returnRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
@@ -326,9 +326,11 @@ public class PosReturnService {
         return key.trim();
     }
 
-    private String fingerprint(PosReturnRequest request) {
+    private String fingerprint(Long saleId, PosReturnRequest request) {
         try {
-            byte[] json = objectMapper.writeValueAsBytes(request);
+            byte[] json = objectMapper.writeValueAsBytes(
+                    Map.of("saleId", saleId, "request", request)
+            );
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(json);
             return HexFormat.of().formatHex(digest);
         } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
