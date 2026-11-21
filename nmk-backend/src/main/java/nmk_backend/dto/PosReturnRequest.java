@@ -14,6 +14,6 @@ public record PosReturnRequest(
         @NotBlank @Size(max = 500) String reason,
         @NotBlank String idempotencyKey,
         @NotEmpty @Size(max = 100) List<@Valid PosReturnItemRequest> items,
-        @NotEmpty @Size(max = 3) List<@Valid PosRefundPaymentRequest> refundPayments
+        @Size(max = 3) List<@Valid PosRefundPaymentRequest> refundPayments
 ) {
 }
