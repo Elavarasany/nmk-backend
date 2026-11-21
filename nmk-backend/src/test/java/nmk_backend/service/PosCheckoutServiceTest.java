@@ -85,7 +85,7 @@ class PosCheckoutServiceTest {
         cashier.setUsername("admin");
 
         PosRegister register = new PosRegister();
-        register.setId(3L);
+        ReflectionTestUtils.setField(register, "id", 3L);
         register.setLocation(location);
         register.setRegisterCode("MAIN");
         shift = new PosShift();
