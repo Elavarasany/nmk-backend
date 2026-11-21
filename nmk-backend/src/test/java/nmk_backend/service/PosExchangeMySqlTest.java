@@ -39,6 +39,7 @@ class PosExchangeMySqlTest {
  @Autowired private PosExchangeRepository exchanges;
  @Autowired private PosExchangeCreditSettlementRepository credits;
  @Autowired private PosPaymentRepository payments;
+ @Autowired private PosCashMovementRepository cashMovements;
  private record Fixture(Long locationId,Long productId,Long variantId,Long shiftId,String username) {}
  private record Outcome(boolean successful,Throwable failure) {}
 
@@ -96,6 +97,11 @@ class PosExchangeMySqlTest {
   assertEquals(new BigDecimal("0.00"),result.actualRefund());
   assertEquals(1,payments.findBySaleId(result.replacementSaleId()).size());
   assertEquals(new BigDecimal("50.00"),payments.findBySaleId(result.replacementSaleId()).get(0).getAmount());
+  List<PosCashMovement> cashIn=cashMovements.findByShiftIdOrderByCreatedAtAscIdAsc(f.shiftId()).stream()
+   .filter(m->m.getIdempotencyKey().startsWith("POS-EXCHANGE-CASH-IN:")).toList();
+  assertEquals(1,cashIn.size(),"Only the actual cash difference should enter the drawer");
+  assertEquals("IN",cashIn.get(0).getDirection());
+  assertEquals(new BigDecimal("50.00"),cashIn.get(0).getAmount());
  }
 
  @Test
@@ -121,6 +127,11 @@ class PosExchangeMySqlTest {
   PosReturn returnRecord=returns.findBySaleIdOrderByCreatedAtDesc(original.id()).get(0);
   assertEquals(new BigDecimal("100.00"),returnRecord.getRefundTotal(),
    "Sales reversal is the full returned value, not only the cash refund");
+  List<PosCashMovement> cashOut=cashMovements.findByShiftIdOrderByCreatedAtAscIdAsc(f.shiftId()).stream()
+   .filter(m->m.getIdempotencyKey().startsWith("POS-EXCHANGE-CASH-OUT:")).toList();
+  assertEquals(1,cashOut.size(),"Only the actual cash refund should leave the drawer");
+  assertEquals("OUT",cashOut.get(0).getDirection());
+  assertEquals(new BigDecimal("40.00"),cashOut.get(0).getAmount());
  }
 
  @Test
