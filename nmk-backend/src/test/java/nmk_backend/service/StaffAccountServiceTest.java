@@ -66,8 +66,7 @@ class StaffAccountServiceTest {
         admin.setUsername("owner");
         admin.setRole("ADMIN");
         admin.setEnabled(true);
-        when(repository.findById(1L)).thenReturn(Optional.of(admin));
-        when(repository.countByRoleAndEnabledTrue("ADMIN")).thenReturn(1L);
+        when(repository.findAllForUpdate()).thenReturn(java.util.List.of(admin));
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.setEnabled(1L, false, "manager")
@@ -81,7 +80,7 @@ class StaffAccountServiceTest {
         cashier.setId(2L);
         cashier.setUsername("cashier.one");
         cashier.setRole("CASHIER");
-        when(repository.findById(2L)).thenReturn(Optional.of(cashier));
+        when(repository.findAllForUpdate()).thenReturn(java.util.List.of(cashier));
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.setEnabled(2L, false, "CASHIER.ONE")
