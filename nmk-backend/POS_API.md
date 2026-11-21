@@ -117,7 +117,7 @@ The migration provisions one `MAIN` register for each active inventory location.
 - `GET /api/admin/pos/shifts/{shiftId}/cash-movements` — view the append-only drawer ledger (cashier's own shift; ADMIN/MANAGER can review any shift).
 - `POST /api/admin/pos/shifts/{shiftId}/close` — body: `{"closingCashCount":1475.00,"reason":"Short by ₹25 after recount"}`.
 
-Expected drawer cash is calculated from opening float + cash sale tender allocations + cash-in − cash-out. Cash sales add the allocated payment amount, not the higher tendered amount; change returned to the customer is therefore not counted as drawer income. Cash-out cannot exceed the current expected drawer balance. A closing count different from expected cash requires an explanation and is stored with the signed variance.
+Expected drawer cash is calculated from opening float + cash sale tender allocations + cash-in − cash-out. Cash sales add the allocated payment amount, not the higher tendered amount; change returned to the customer is therefore not counted as drawer income. Cash-out cannot exceed the current expected drawer balance. Cash-movement idempotency is scoped to the original authenticated staff username and exact request, so another manager cannot replay a colleague's cash movement key. A closing count different from expected cash requires an explanation and is stored with the signed variance.
 
 Only one OPEN shift can exist per register. The register row is locked during shift opening, and the shift row is locked during checkout/cash movement/close so a checkout cannot race with shift closure. Cashiers can operate their own shift; ADMIN/MANAGER can review and close other shifts. A cashier cannot close another cashier's shift.
 
