@@ -229,8 +229,8 @@ class ProcurementServiceTest {
     @Test
     void procurementAuditHistoryRejectsMissingOrInvalidOrder() {
         when(purchaseOrderRepository.existsById(999L)).thenReturn(false);
-        assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(999L));
-        assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(999L));
+        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getGoodsReceipts(999L));
+        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getSupplierReturns(999L));
         assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(0L));
         assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(null));
         verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
