@@ -3,6 +3,11 @@ package nmk_backend.service;
 import nmk_backend.dto.PosCheckoutRequest;
 import nmk_backend.dto.PosPaymentRequest;
 import nmk_backend.dto.PosSaleItemRequest;
+import nmk_backend.dto.PosReturnItemRequest;
+import nmk_backend.dto.PosReturnRequest;
+import nmk_backend.dto.PosRefundPaymentRequest;
+import nmk_backend.repository.PosReturnItemRepository;
+import nmk_backend.repository.PosReturnRepository;
 import nmk_backend.dto.PosRegisterCreateRequest;
 import nmk_backend.dto.PosRegisterResponse;
 import nmk_backend.dto.PosShiftOpenRequest;
@@ -61,6 +66,15 @@ class PosCheckoutTransactionIntegrationTest {
 
     @Autowired
     private PosSaleRepository saleRepository;
+
+    @Autowired
+    private PosReturnService returnService;
+
+    @Autowired
+    private PosReturnRepository returnRepository;
+
+    @Autowired
+    private PosReturnItemRepository returnItemRepository;
 
     @Autowired
     private PosRegisterRepository registerRepository;
@@ -403,6 +417,102 @@ class PosCheckoutTransactionIntegrationTest {
             start.countDown();
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void concurrentReturnsCannotReturnTheSameSaleUnitTwice() throws Exception {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balanceRepository.saveAndFlush(balance);
+
+        var saleResponse = checkoutService.checkout(
+                buildCheckoutRequest("POS-RETURN-CONCURRENCY-SALE-" + System.nanoTime()),
+                "pos-rollback-test-cashier"
+        );
+        var sale = saleRepository.findById(saleResponse.id()).orElseThrow();
+        Long saleItemId = sale.getItems().get(0).getId();
+
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        try {
+            var first = executor.submit(() -> performConcurrentReturn(
+                    saleResponse.id(), saleItemId,
+                    "POS-RETURN-CONCURRENT-A-" + System.nanoTime(), ready, start
+            ));
+            var second = executor.submit(() -> performConcurrentReturn(
+                    saleResponse.id(), saleItemId,
+                    "POS-RETURN-CONCURRENT-B-" + System.nanoTime(), ready, start
+            ));
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "Both return workers should be ready");
+            start.countDown();
+
+            ReturnOutcome firstOutcome = first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            ReturnOutcome secondOutcome = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+
+            long successfulReturns = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(ReturnOutcome::successful)
+                    .count();
+            long rejectedReturns = java.util.stream.Stream.of(firstOutcome, secondOutcome)
+                    .filter(outcome -> outcome.failure() instanceof IllegalArgumentException)
+                    .count();
+
+            assertEquals(1, successfulReturns,
+                    "Exactly one return may consume the original sold quantity");
+            assertEquals(1, rejectedReturns,
+                    "The competing return must be rejected after the sale lock is acquired");
+            assertEquals(1, returnRepository.count(),
+                    "Only one return record may be committed");
+            assertEquals(1, returnItemRepository.count(),
+                    "Only one return line may be committed");
+            assertEquals(2, movementRepository.count(),
+                    "The sale and single successful return must each create one stock movement");
+
+            InventoryBalance finalBalance = balanceRepository
+                    .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                    .orElseThrow();
+            assertEquals(1, finalBalance.getOnHandQuantity(),
+                    "The returned unit should be restocked exactly once");
+            assertEquals(0, finalBalance.getReservedQuantity());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private ReturnOutcome performConcurrentReturn(
+            Long saleId,
+            Long saleItemId,
+            String idempotencyKey,
+            java.util.concurrent.CountDownLatch ready,
+            java.util.concurrent.CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                return new ReturnOutcome(false,
+                        new IllegalStateException("Timed out waiting to start return"));
+            }
+            PosReturnRequest request = new PosReturnRequest(
+                    shiftId,
+                    "Concurrent return limit integration test",
+                    idempotencyKey,
+                    List.of(new PosReturnItemRequest(saleItemId, 1, "RESTOCK", null)),
+                    List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("100.00"), null))
+            );
+            returnService.processReturn(saleId, request, "pos-rollback-test-cashier");
+            return new ReturnOutcome(true, null);
+        } catch (Throwable failure) {
+            return new ReturnOutcome(false, failure);
+        }
+    }
+
+    private record ReturnOutcome(boolean successful, Throwable failure) {
     }
 
     private CheckoutOutcome performConcurrentCheckout(
