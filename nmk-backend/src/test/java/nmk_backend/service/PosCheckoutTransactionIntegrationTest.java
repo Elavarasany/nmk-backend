@@ -24,6 +24,7 @@ import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.InventoryBalanceRepository;
 import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.PosSaleRepository;
+import nmk_backend.repository.PosSaleItemRepository;
 import nmk_backend.repository.ProductRepository;
 import nmk_backend.repository.ProductVariantRepository;
 import nmk_backend.repository.StockMovementRepository;
@@ -66,6 +67,9 @@ class PosCheckoutTransactionIntegrationTest {
 
     @Autowired
     private PosSaleRepository saleRepository;
+
+    @Autowired
+    private PosSaleItemRepository saleItemRepository;
 
     @Autowired
     private PosReturnService returnService;
@@ -433,8 +437,8 @@ class PosCheckoutTransactionIntegrationTest {
                 buildCheckoutRequest("POS-RETURN-CONCURRENCY-SALE-" + System.nanoTime()),
                 "pos-rollback-test-cashier"
         );
-        var sale = saleRepository.findById(saleResponse.id()).orElseThrow();
-        Long saleItemId = sale.getItems().get(0).getId();
+        Long saleItemId = saleItemRepository.findBySaleId(saleResponse.id())
+                .stream().findFirst().orElseThrow().getId();
 
         var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
         var ready = new java.util.concurrent.CountDownLatch(2);
