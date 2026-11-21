@@ -48,15 +48,17 @@ Path B is a staging-specific reconciliation, not a generic production migration.
 
 ## 5. Product variants and opening stock
 
-The schema scripts deliberately do **not** invent product variants or opening stock. Existing `products.stock_quantity` values are preserved as legacy data; POS availability is calculated from `product_variants` and `inventory_balances`.
+The schema scripts deliberately do **not** invent product variants or opening stock. Existing `products.stock_quantity` values are preserved as legacy data; POS and online variant availability is calculated from `product_variants` and `inventory_balances`.
 
 Before the first live sale:
 
 1. Review every active product and decide its real sellable SKU/variant and barcode. Do not blindly create one default variant for every optical product if frame size, colour, power, lens or other attributes distinguish saleable stock.
 2. Create the variants through the admin product-variant workflow.
-3. Perform a signed physical opening count at the shop. Map every counted sellable unit to exactly one active product variant (SKU/barcode plus the required frame/lens/power/colour/size attributes). Resolve unmatched, damaged, consigned, reserved and unidentifiable items before posting; do not silently map them to a generic variant.\n4. The current application has **no dedicated bulk opening-stock import or `OPENING_BALANCE` movement type**. Load approved quantities through the existing manager/admin-authorized `POST /api/admin/inventory/receive` workflow, one variant/location movement at a time. It records a normal `RECEIPT` movement, so use a clear reason such as `Approved opening stock count YYYY-MM-DD` and a unique idempotency key per variant movement. This is an audited quantity load, not a supplier purchase or proof of acquisition cost. Do not insert balances or movements directly with SQL.\n5. Export the resulting balances and stock-movement history, then reconcile every variant and the location total to the signed worksheet. Investigate every difference before checkout is enabled.
-4. Reconcile the resulting variant balances against the signed physical count. Do not add legacy `stock_quantity` on top of a count that already includes the same units.
-5. Keep the signed opening-count worksheet and movement export as the audit record.
+3. Perform a signed physical opening count at the shop. Map every counted sellable unit to exactly one active product variant (SKU/barcode plus the required frame/lens/power/colour/size attributes). Resolve unmatched, damaged, consigned, reserved and unidentifiable items before posting; do not silently map them to a generic variant.
+4. The current application has **no dedicated bulk opening-stock import or `OPENING_BALANCE` movement type**. Load approved quantities through the existing manager/admin-authorized `POST /api/admin/inventory/receive` workflow, one variant/location movement at a time. It records a normal `RECEIPT` movement, so use a clear reason such as `Approved opening stock count YYYY-MM-DD` and a unique idempotency key per variant movement. This is an audited quantity load, not a supplier purchase or proof of acquisition cost. Do not insert balances or movements directly with SQL.
+5. Export the resulting balances and stock-movement history, then reconcile every variant and the location total to the signed worksheet. Investigate every difference before checkout is enabled.
+6. Do not add legacy `products.stock_quantity` on top of a physical count that already includes the same units. That legacy field is not the POS or online variant-availability source.
+7. Keep the signed opening-count worksheet, approvals, balance export and movement export as the audit record.
 
 No online or POS checkout should be enabled until the active sellable variants and opening balances are verified.
 
