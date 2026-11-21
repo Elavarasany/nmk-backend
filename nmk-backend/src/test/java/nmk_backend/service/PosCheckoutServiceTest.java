@@ -287,7 +287,7 @@ class PosCheckoutServiceTest {
 
     @Test
     void cashierCanCompleteSaleWithoutDiscount() {
-        PosSaleResponse response = service.checkout(validRequest(), "admin", "CASHIER");
+        var response = service.checkout(validRequest(), "admin", "CASHIER");
         assertEquals("100.00", response.grandTotal().toPlainString());
         verify(saleRepository).saveAndFlush(any(PosSale.class));
     }
