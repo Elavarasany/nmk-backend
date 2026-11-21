@@ -280,7 +280,6 @@ class InventoryServiceTest {
     @Test
     void updatesLocationSpecificReorderLevelWithActorAudit() {
         stubLocation();
-        stubActiveProductAndVariant();
         when(variantRepository.findById(2L)).thenReturn(Optional.of(variant));
         InventoryBalance balance = new InventoryBalance();
         balance.setLocation(location);
@@ -304,8 +303,6 @@ class InventoryServiceTest {
 
     @Test
     void lowStockAlertsOnlyIncludeConfiguredThresholdsAtOrBelowAvailableQuantity() {
-        stubLocation();
-        stubActiveProductAndVariant();
         InventoryBalance low = new InventoryBalance();
         low.setLocation(location);
         low.setVariant(variant);
@@ -340,7 +337,7 @@ class InventoryServiceTest {
         var alerts = inventoryService.getLowStockBalances(1L);
 
         assertEquals(1, alerts.size());
-        assertEquals("FRAME-005", alerts.get(0).sku());
+        assertEquals("TEST-SKU", alerts.get(0).sku());
         assertEquals(3, alerts.get(0).availableQuantity());
     }
 
