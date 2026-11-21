@@ -9,4 +9,7 @@ import java.util.Optional;
 public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Long> {
     Optional<GoodsReceipt> findByIdempotencyKey(String idempotencyKey);
     List<GoodsReceipt> findByPurchaseOrderIdOrderByCreatedAtDesc(Long purchaseOrderId);
+    List<GoodsReceipt> findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+            Long locationId, java.time.LocalDateTime from, java.time.LocalDateTime toExclusive
+    );
 }

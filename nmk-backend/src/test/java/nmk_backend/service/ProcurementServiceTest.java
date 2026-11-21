@@ -236,4 +236,67 @@ class ProcurementServiceTest {
         verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
     }
 
+    @Test
+    void procurementCostReportSeparatesGoodsReceivedFromSupplierReturns() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
+        java.time.LocalDateTime receivedAt = day.atTime(10, 0);
+        java.time.LocalDateTime returnedAt = day.atTime(15, 0);
+
+        GoodsReceipt receipt = new GoodsReceipt();
+        ReflectionTestUtils.setField(receipt, "id", 70L);
+        ReflectionTestUtils.setField(receipt, "receiptNumber", "GR-070");
+        ReflectionTestUtils.setField(receipt, "createdAt", receivedAt);
+        receipt.setPurchaseOrder(order);
+        receipt.setReceivedByUsername("manager.one");
+        GoodsReceiptItem received = new GoodsReceiptItem();
+        received.setGoodsReceipt(receipt);
+        received.setPurchaseOrderItem(orderItem);
+        received.setQuantity(4);
+        received.setUnitCost(new BigDecimal("250.00"));
+        receipt.getItems().add(received);
+
+        SupplierReturn supplierReturn = new SupplierReturn();
+        ReflectionTestUtils.setField(supplierReturn, "id", 80L);
+        ReflectionTestUtils.setField(supplierReturn, "returnNumber", "SUP-RET-080");
+        ReflectionTestUtils.setField(supplierReturn, "createdAt", returnedAt);
+        supplierReturn.setPurchaseOrder(order);
+        supplierReturn.setProcessedByUsername("manager.one");
+        SupplierReturnItem returned = new SupplierReturnItem();
+        returned.setSupplierReturn(supplierReturn);
+        returned.setPurchaseOrderItem(orderItem);
+        returned.setQuantity(1);
+        returned.setUnitCost(new BigDecimal("250.00"));
+        supplierReturn.getItems().add(returned);
+
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
+        when(goodsReceiptRepository
+                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+                        eq(1L), any(), any())).thenReturn(List.of(receipt));
+        when(supplierReturnRepository
+                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+                        eq(1L), any(), any())).thenReturn(List.of(supplierReturn));
+
+        ProcurementCostReportResponse report = service.getProcurementCostReport(1L, day, day);
+
+        assertEquals(4L, report.receivedQuantity());
+        assertEquals(1L, report.returnedQuantity());
+        assertEquals(new BigDecimal("1000.00"), report.receivedCost());
+        assertEquals(new BigDecimal("250.00"), report.returnedCost());
+        assertEquals(new BigDecimal("750.00"), report.netRecordedProcurementCost());
+        assertEquals(List.of("RECEIVED", "SUPPLIER_RETURN"),
+                report.entries().stream().map(ProcurementCostReportResponse.Entry::type).toList());
+    }
+
+    @Test
+    void procurementCostReportRejectsInvalidDateRangeAndMissingLocation() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getProcurementCostReport(1L, day, day.minusDays(1)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getProcurementCostReport(1L, day, day.plusDays(367)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getProcurementCostReport(null, day, day));
+        verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
+    }
+
 }

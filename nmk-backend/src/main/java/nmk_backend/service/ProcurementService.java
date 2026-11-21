@@ -57,6 +57,72 @@ public class ProcurementService {
     }
 
     @Transactional(readOnly = true)
+    public ProcurementCostReportResponse getProcurementCostReport(
+            Long locationId, java.time.LocalDate from, java.time.LocalDate to
+    ) {
+        if (locationId == null || locationId <= 0 || from == null || to == null) {
+            throw new IllegalArgumentException("Location, start date and end date are required");
+        }
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 366) {
+            throw new IllegalArgumentException("Report date range cannot exceed 367 calendar days");
+        }
+        InventoryLocation location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toExclusive = to.plusDays(1).atStartOfDay();
+        List<GoodsReceipt> receipts = goodsReceiptRepository
+                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+                        locationId, fromDateTime, toExclusive);
+        List<SupplierReturn> returns = supplierReturnRepository
+                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
+                        locationId, fromDateTime, toExclusive);
+
+        BigDecimal receivedCost = ZERO;
+        BigDecimal returnedCost = ZERO;
+        long receivedQuantity = 0;
+        long returnedQuantity = 0;
+        List<ProcurementCostReportResponse.Entry> entries = new ArrayList<>();
+        for (GoodsReceipt receipt : receipts) {
+            PurchaseOrder order = receipt.getPurchaseOrder();
+            for (GoodsReceiptItem item : receipt.getItems()) {
+                BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
+                        .setScale(2, RoundingMode.HALF_UP);
+                receivedCost = receivedCost.add(total);
+                receivedQuantity += item.getQuantity();
+                entries.add(new ProcurementCostReportResponse.Entry(
+                        "RECEIVED", receipt.getReceiptNumber(), order.getId(), order.getOrderNumber(),
+                        order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
+                        item.getQuantity(), item.getUnitCost(), total, receipt.getReceivedByUsername(),
+                        receipt.getCreatedAt()));
+            }
+        }
+        for (SupplierReturn record : returns) {
+            PurchaseOrder order = record.getPurchaseOrder();
+            for (SupplierReturnItem item : record.getItems()) {
+                BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
+                        .setScale(2, RoundingMode.HALF_UP);
+                returnedCost = returnedCost.add(total);
+                returnedQuantity += item.getQuantity();
+                entries.add(new ProcurementCostReportResponse.Entry(
+                        "SUPPLIER_RETURN", record.getReturnNumber(), order.getId(), order.getOrderNumber(),
+                        order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
+                        item.getQuantity(), item.getUnitCost(), total, record.getProcessedByUsername(),
+                        record.getCreatedAt()));
+            }
+        }
+        entries.sort(Comparator.comparing(ProcurementCostReportResponse.Entry::createdAt)
+                .thenComparing(ProcurementCostReportResponse.Entry::reference));
+        receivedCost = receivedCost.setScale(2, RoundingMode.HALF_UP);
+        returnedCost = returnedCost.setScale(2, RoundingMode.HALF_UP);
+        return new ProcurementCostReportResponse(location.getId(), location.getName(), from, to,
+                receivedQuantity, returnedQuantity, receivedCost, returnedCost,
+                receivedCost.subtract(returnedCost).setScale(2, RoundingMode.HALF_UP), List.copyOf(entries));
+    }
+
+    @Transactional(readOnly = true)
     public List<SupplierResponse> getSuppliers() {
         return supplierRepository.findAllByOrderByNameAsc().stream()
                 .map(SupplierResponse::from).toList();

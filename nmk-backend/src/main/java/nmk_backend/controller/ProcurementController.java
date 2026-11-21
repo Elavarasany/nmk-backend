@@ -49,6 +49,19 @@ public class ProcurementController {
         }
     }
 
+    @GetMapping("/cost-report")
+    public ResponseEntity<?> getProcurementCostReport(
+            @RequestParam Long locationId,
+            @RequestParam java.time.LocalDate from,
+            @RequestParam java.time.LocalDate to
+    ) {
+        try {
+            return ResponseEntity.ok(procurementService.getProcurementCostReport(locationId, from, to));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
     @GetMapping("/purchase-orders")
     public ResponseEntity<?> getPurchaseOrders() {
         return ResponseEntity.ok(procurementService.getPurchaseOrders());
