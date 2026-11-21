@@ -239,7 +239,6 @@ class PosExchangeMySqlTest {
  }
 
  @Test
- @Test
  void concurrentReturnAndExchangeCannotClaimTheSameSoldUnitOnMySql() throws Exception {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-CROSS-OPEN-"+UUID.randomUUID(),null,"Cross-operation concurrency opening stock");
@@ -270,6 +269,7 @@ class PosExchangeMySqlTest {
   }
  }
 
+ @Test
  void insufficientReplacementStockRollsBackExchangeOnMySql() {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),1,"MYSQL-EX-ROLLBACK-OPEN-"+UUID.randomUUID(),null,"Exchange rollback opening stock");
