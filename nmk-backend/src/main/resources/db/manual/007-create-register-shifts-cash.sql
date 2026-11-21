@@ -29,6 +29,7 @@ CREATE TABLE pos_shifts (
     expected_cash DECIMAL(12,2) NULL,
     closing_cash_count DECIMAL(12,2) NULL,
     cash_variance DECIMAL(12,2) NULL,
+    closing_reason VARCHAR(500) NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
     idempotency_key VARCHAR(150) NOT NULL,
     opened_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
