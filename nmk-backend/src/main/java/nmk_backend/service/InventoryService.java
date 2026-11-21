@@ -182,7 +182,7 @@ public class InventoryService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<InventoryBalance> getLowStockBalances(Long locationId) {
+    public java.util.List<nmk_backend.dto.LowStockAlertResponse> getLowStockBalances(Long locationId) {
         if (locationId == null || locationId <= 0) {
             throw new InvalidInventoryOperationException("A valid inventory location is required");
         }
@@ -193,6 +193,7 @@ public class InventoryService {
                         balance -> balance.getVariant().getSku(),
                         java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
                 ))
+                .map(nmk_backend.dto.LowStockAlertResponse::from)
                 .toList();
     }
 
