@@ -64,6 +64,15 @@ public class PosShiftService {
     }
 
     @Transactional(readOnly = true)
+    public List<PosShiftResponse> getShiftHistory(Long locationId) {
+        if (locationId == null || locationId <= 0) {
+            throw new IllegalArgumentException("A valid locationId is required");
+        }
+        return shiftRepository.findTop100ByRegisterLocationIdOrderByOpenedAtDesc(locationId)
+                .stream().map(this::response).toList();
+    }
+
+    @Transactional(readOnly = true)
     public PosShiftResponse getCurrentShift(Long registerId, String username, String role) {
         if (registerId == null || registerId <= 0) {
             throw new IllegalArgumentException("A valid registerId is required");
