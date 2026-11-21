@@ -171,7 +171,7 @@ class PosAuthorizationIntegrationTest {
     void managerCanReadStockMovementHistory() throws Exception {
         String managerToken = tokenForRole("MANAGER");
         InventoryLocation location = new InventoryLocation();
-        location.setCode("POS-MOVEMENT-" + java.util.UUID.randomUUID());
+        location.setCode("PM-" + java.util.UUID.randomUUID().toString().substring(0, 8));
         location.setName("POS movement security test");
         location.setActive(true);
         InventoryLocation saved = locationRepository.saveAndFlush(location);
