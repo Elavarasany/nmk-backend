@@ -362,7 +362,8 @@ This endpoint records a refund; it does not initiate a UPI/card refund with the 
 
 The feature branch provides one transaction for a linked return and replacement sale:
 
-- `POST /api/admin/pos/sales/{saleId}/exchange`
+- `GET /api/admin/pos/sales/{saleId}/exchange` — returns the linked exchange audit records for the original sale (manager/admin only).
+- `POST /api/admin/pos/sales/{saleId}/exchange` — creates the linked return and replacement sale (manager/admin only).
 
 Example request:
 
