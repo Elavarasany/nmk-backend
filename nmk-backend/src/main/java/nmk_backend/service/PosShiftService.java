@@ -97,6 +97,17 @@ public class PosShiftService {
 
         PosRegister register = registerRepository.findByIdForUpdate(request.registerId())
                 .orElseThrow(() -> new InventoryNotFoundException("POS register was not found"));
+        // Recheck after taking the register lock so concurrent retries replay the first shift.
+        var racedShift = shiftRepository.findByIdempotencyKey(key);
+        if (racedShift.isPresent()) {
+            PosShift existing = racedShift.get();
+            if (!Objects.equals(existing.getRegister().getId(), request.registerId())
+                    || !existing.getOpenedByUsername().equalsIgnoreCase(username)
+                    || existing.getOpeningFloat().compareTo(openingFloat) != 0) {
+                throw new IllegalArgumentException("Shift idempotency key was reused with different details");
+            }
+            return response(existing);
+        }
         if (!register.isActive() || !register.getLocation().isActive()) {
             throw new IllegalArgumentException("POS register or its location is inactive");
         }
@@ -142,21 +153,20 @@ public class PosShiftService {
         // Idempotent retries must still replay after a shift has subsequently closed.
         var previous = cashMovementRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
-            PosCashMovement existing = previous.get();
-            PosShift existingShift = existing.getShift();
-            assertShiftActor(existingShift, username, role);
-            if (!Objects.equals(existingShift.getId(), shiftId)
-                    || existing.getActorUsername() == null
-                    || !existing.getActorUsername().equalsIgnoreCase(username)
-                    || !existing.getMovementType().equals(type)
-                    || existing.getAmount().compareTo(amount) != 0
-                    || !Objects.equals(existing.getReason(), request.reason().trim())) {
-                throw new IllegalArgumentException("Cash movement idempotency key was reused with different details");
-            }
-            return response(existingShift);
+            return replayCashMovement(previous.get(), shiftId, type, amount, request.reason(), username, role);
         }
 
-        PosShift shift = lockOpenShift(shiftId);
+        // Lock the shift before the second idempotency lookup. This serializes
+        // same-shift concurrent retries with cash-out and shift-close operations.
+        PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
+                .orElseThrow(() -> new InventoryNotFoundException("POS shift was not found"));
+        var racedMovement = cashMovementRepository.findByIdempotencyKey(key);
+        if (racedMovement.isPresent()) {
+            return replayCashMovement(racedMovement.get(), shiftId, type, amount, request.reason(), username, role);
+        }
+        if (!"OPEN".equals(shift.getStatus())) {
+            throw new IllegalArgumentException("The POS shift is not open");
+        }
         assertShiftActor(shift, username, role);
         if ("CASH_OUT".equals(type) && amount.compareTo(calculateExpectedCash(shiftId)) > 0) {
             throw new IllegalArgumentException("Cash out cannot exceed the cash currently expected in the drawer");
@@ -314,6 +324,28 @@ public class PosShiftService {
             throw new IllegalArgumentException("The POS shift is not open");
         }
         return shift;
+    }
+
+    private PosShiftResponse replayCashMovement(
+            PosCashMovement existing,
+            Long requestedShiftId,
+            String requestedType,
+            BigDecimal requestedAmount,
+            String requestedReason,
+            String username,
+            String role
+    ) {
+        PosShift existingShift = existing.getShift();
+        assertShiftActor(existingShift, username, role);
+        if (!Objects.equals(existingShift.getId(), requestedShiftId)
+                || existing.getActorUsername() == null
+                || !existing.getActorUsername().equalsIgnoreCase(username)
+                || !Objects.equals(existing.getMovementType(), requestedType)
+                || existing.getAmount().compareTo(requestedAmount) != 0
+                || !Objects.equals(existing.getReason(), requestedReason == null ? null : requestedReason.trim())) {
+            throw new IllegalArgumentException("Cash movement idempotency key was reused with different details");
+        }
+        return response(existingShift);
     }
 
     private void assertShiftActor(PosShift shift, String username, String role) {
