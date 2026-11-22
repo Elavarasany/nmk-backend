@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 public class PosPaymentRequest {
 
     @NotBlank
+    @Size(max = 20)
     private String paymentMethod;
 
     @NotNull
