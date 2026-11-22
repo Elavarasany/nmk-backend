@@ -48,6 +48,14 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 - Response includes event ID/type/status/time/attempt count/error and safely extracted provider resource ID, payment ID, order ID, amount in paise, currency and provider status. Raw payload is never returned.
 - This is visibility only. It does not initiate a refund, mark a refund paid, retry an event, or change a review status. Reconciliation remains a documented manual process until a provider-linked ledger and audited resolution workflow are designed.
 
+### Razorpay settlement exception queue API
+
+- `GET /api/admin/pos/payments/settlements/exceptions?page=0&size=50` lists unmatched, mismatched, manual-review and pending provider settlement entries across all synced settlement batches.
+- Optional `status` filter accepts exactly `UNMATCHED`, `MISMATCH`, `MANUAL_REVIEW` or `PENDING`.
+- Access is administrator-only under the current security rules.
+- The response includes the provider settlement ID/status/UTR/amount and the provider entry identity, debit/credit/gross/fee/tax amounts, currency, timestamps, match status/message and any linked local order/refund/dispute IDs. Raw provider payload is not exposed.
+- This is a read-only visibility queue. It does not resolve exceptions, validate walk-in POS UPI/card tenders, or match bank statement credits. A provider entry marked `UNMATCHED` is not proof that funds are missing; it means no corresponding local ledger record was found.
+
 ### Interim manual handling procedure
 
 1. Open POS → Payment exceptions using a manager/admin account. Do not share screenshots containing customer or payment identifiers outside approved business channels.
@@ -63,7 +71,7 @@ This procedure applies only to unmatched or conflicting events in the MANUAL_REV
 1. Provider-backed validation of POS UPI/card payments.
 2. Durable mapping from POS tender rows to provider account, provider payment ID, order ID, capture status and settlement batch.
 3. Bank payout/settlement import and matching of gross captured amounts, fees, taxes on fees, refunds, chargebacks and net deposits.
-4. Exception queues for unmatched, duplicate, short-paid, late, reversed or disputed POS transactions and bank settlements.
+4. Audited resolution of provider settlement exceptions, plus exception queues for unmatched, duplicate, short-paid, late, reversed or disputed walk-in POS tenders and bank-statement transactions.
 5. A daily settlement reconciliation report that proves POS tender totals against provider settlement statements and bank credits.
 
 The current POS payment-method report is an operational total of amounts entered at checkout. It is not a Razorpay settlement report, bank reconciliation, or proof of cleared funds.
@@ -86,6 +94,6 @@ The current POS payment-method report is an operational total of amounts entered
 
 ## Release status
 
-POS cash drawer controls are implemented. Online-order Razorpay normal-speed refunds now have an admin-only, password-authorized, idempotent initiation path with signed webhook reconciliation. Read-only Razorpay provider settlement report synchronization and local order/refund matching are implemented on the feature branch; deployment still requires migration 020 and client API credentials. Signed Razorpay dispute lifecycle webhooks now populate an Admin chargeback ledger; deployment requires migration 021 and merchant webhook event configuration. Walk-in POS non-cash tender/refund records remain operator-entered operational records. Bank-statement UTR matching, provider validation of POS tenders, chargeback reconciliation and full financial close remain unimplemented.
+POS cash drawer controls are implemented. Online-order Razorpay normal-speed refunds now have an admin-only, password-authorized, idempotent initiation path with signed webhook reconciliation. Read-only Razorpay provider settlement report synchronization, local order/refund/dispute matching, and a paginated global exception queue for UNMATCHED/MISMATCH/MANUAL_REVIEW/PENDING provider entries are implemented on the feature branch; deployment still requires migration 020 and client API credentials. Signed Razorpay dispute lifecycle webhooks now populate an Admin chargeback ledger; deployment requires migration 021 and merchant webhook event configuration. Walk-in POS non-cash tender/refund records remain operator-entered operational records. Bank-statement UTR matching, provider validation of POS tenders, chargeback reconciliation and full financial close remain unimplemented.
 
 No provider credentials, client bank data or live settlement files were accessed during this review. No live database was changed.

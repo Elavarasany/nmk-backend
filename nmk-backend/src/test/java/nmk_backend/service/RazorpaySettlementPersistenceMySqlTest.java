@@ -27,6 +27,32 @@ class RazorpaySettlementPersistenceMySqlTest {
     @Autowired private RazorpaySettlementEntryRepository entryRepository;
 
     @Test
+    void unmatchedProviderRowsAreVisibleInGlobalExceptionQueue() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String settlementId = "setl_unmatched_" + suffix;
+        String paymentId = "pay_unmatched_" + suffix;
+        String orderId = "order_missing_" + suffix;
+        LocalDateTime now = LocalDateTime.now();
+
+        RazorpaySettlementProviderSummary summary = new RazorpaySettlementProviderSummary(
+                settlementId, 97000L, "processed", 3000L, 0L,
+                "INR", "utr_" + suffix, now, "{}");
+        RazorpaySettlementReconEntry unmatchedPayment = new RazorpaySettlementReconEntry(
+                paymentId, "payment", 0L, 97000L, 100000L, "INR",
+                3000L, 0L, false, true, now, now, settlementId,
+                "utr_" + suffix, "", orderId, "card", "", "{}");
+
+        persistenceService.persist(List.of(summary), List.of(unmatchedPayment), 1, 0);
+
+        var exceptions = persistenceService.exceptions("UNMATCHED", 0, 25);
+
+        assertEquals(1, exceptions.getTotalElements());
+        assertEquals(settlementId, exceptions.getContent().getFirst().providerSettlementId());
+        assertEquals(paymentId, exceptions.getContent().getFirst().providerEntityId());
+        assertEquals("UNMATCHED", exceptions.getContent().getFirst().matchStatus());
+    }
+
+    @Test
     void settlementSyncIsIdempotentAndPersistsProviderMatchedPaymentRows() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String paymentId = "pay_" + suffix;

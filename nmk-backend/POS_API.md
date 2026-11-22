@@ -452,6 +452,15 @@ The automated integration suite covers equal-value credit, higher-value collecti
 - No database migration is executed by these code changes.
 
 
+### Razorpay settlement reconciliation and exception visibility
+
+- `POST /api/admin/pos/payments/settlements/sync?year=2026&month=11` synchronizes provider settlement batches for the requested month; optional `day` narrows the period. Requires configured Razorpay API credentials.
+- `GET /api/admin/pos/payments/settlements?page=0&size=50` lists stored settlement batches.
+- `GET /api/admin/pos/payments/settlements/{settlementId}/entries?page=0&size=100` lists the provider rows for one batch.
+- `GET /api/admin/pos/payments/settlements/exceptions?page=0&size=50` lists all non-matched provider rows. Optional `status` filters to `UNMATCHED`, `MISMATCH`, `MANUAL_REVIEW` or `PENDING`.
+- These endpoints are administrator-only. The exception queue is read-only and exposes provider settlement identifiers, amount/fee/tax snapshots and local match outcome without returning raw provider payloads.
+- This is not bank reconciliation. It does not ingest bank statements, match settlement UTRs to bank credits, resolve exceptions, or link walk-in POS UPI/card tenders to provider payment IDs. Do not treat a provider settlement batch as proof that a bank credit has cleared.
+
 ### Procurement audit history
 
 - `GET /api/admin/procurement/purchase-orders/{purchaseOrderId}/receipts` returns the chronological goods receipts for one purchase order, including receipt number, receiver, reason, timestamp, SKU, quantity and captured unit cost.

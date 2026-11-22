@@ -9,6 +9,7 @@ The POS now has an additive supplier-accounting ledger:
 - Supplier bills with invoice number/date, optional due date, bill type, supplier, optional purchase order, amount, status, creator and idempotency fingerprint.
 - Confirmed partial supplier payments and supplier credit notes linked to one bill. Payments and credit notes both reduce the outstanding balance and cannot exceed the remaining amount. Supplier advances and unallocated credit balances are not supported.
 - Bill balances are calculated as posted bill amount less confirmed payments and confirmed credit notes; the records are source-linked and idempotent.
+- A read-only supplier payables-aging summary is available at `GET /api/admin/procurement/suppliers/{supplierId}/payables-aging`; optional `asOfDate` uses the supplied business date, or defaults to the current Asia/Kolkata date. It groups outstanding bills into not-due, 1–30, 31–60, 61–90 and over-90-day buckets.
 - Supplier bill posting, payment recording and credit-note recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
 - Cash supplier payments require an open POS shift, verify that the shift belongs to the bill's purchase-order location, ensure the drawer has sufficient expected cash, and create one linked OUT movement in the cash ledger.
 - Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed. Credit notes may optionally link to a supplier return and must match the bill's supplier and purchase order.
@@ -66,6 +67,7 @@ Before production AP postings or valuation reports are treated as accounting rec
 - Weighted-average valuation acceptance and the treatment of negative/zero inventory, stock write-offs and returns.
 - Whether landed costs are allocated at PO, shipment or goods-receipt level and how late freight invoices adjust already-sold stock/COGS.
 - Supplier statement reconciliation frequency and required audit evidence.
+- Confirm the payables-aging buckets and whether bills without a due date should be grouped as not due before treating the summary as a formal accounting report.
 - Whether any customer credit/AR facility is intended; if yes, define a separate policy before implementation.
 
 ## 7. Release gate
