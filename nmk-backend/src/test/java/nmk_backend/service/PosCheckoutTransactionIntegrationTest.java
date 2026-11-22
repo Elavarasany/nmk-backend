@@ -138,8 +138,8 @@ class PosCheckoutTransactionIntegrationTest {
         balanceRepository.deleteAll();
         variantRepository.deleteAll();
         productRepository.deleteAll();
-        locationRepository.deleteAll();
         adminRepository.deleteAll();
+        locationRepository.deleteAll();
 
         Admin cashier = new Admin();
         cashier.setUsername("pos-rollback-test-cashier");
