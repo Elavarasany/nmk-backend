@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/admin/procurement")
@@ -217,6 +218,21 @@ public class ProcurementController {
             );
         } catch (DataIntegrityViolationException exception) {
             return conflict("Supplier return idempotency key was already used or a related record changed");
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @GetMapping("/suppliers/{supplierId}/payables-aging")
+    public ResponseEntity<?> getSupplierPayablesAging(
+            @PathVariable Long supplierId,
+            @RequestParam(required = false) LocalDate asOfDate,
+            Authentication authentication
+    ) {
+        try {
+            return ResponseEntity.ok(supplierAccountService.getPayablesAging(
+                    supplierId, asOfDate, authentication.getName()
+            ));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
