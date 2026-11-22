@@ -4,11 +4,15 @@ import nmk_backend.entity.Admin;
 import nmk_backend.entity.InventoryLocation;
 import nmk_backend.entity.Order;
 import nmk_backend.entity.Product;
+import nmk_backend.entity.ProductVariant;
+import nmk_backend.entity.InventoryBalance;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.AdminAuditEventRepository;
 import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.OrderRepository;
 import nmk_backend.repository.ProductRepository;
+import nmk_backend.repository.ProductVariantRepository;
+import nmk_backend.repository.InventoryBalanceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-@SpringBootTest
+@SpringBootTest(properties = "inventory.checkout.location-code=AVP-01")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PosAuthorizationIntegrationTest {
@@ -57,6 +61,12 @@ class PosAuthorizationIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private ProductVariantRepository productVariantRepository;
+
+    @Autowired
+    private InventoryBalanceRepository inventoryBalanceRepository;
+
     private String adminToken;
     private InventoryLocation testLocation;
 
@@ -85,6 +95,46 @@ class PosAuthorizationIntegrationTest {
     @Test
     void anonymousRequestCannotAccessPosEndpoint() throws Exception {
         mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void publicProductCatalogueReturnsPagedProductsWithVariantStock() throws Exception {
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("AVP-01");
+        location.setName("Public Catalogue Test Store");
+        location.setActive(true);
+        location = locationRepository.saveAndFlush(location);
+
+        Product product = new Product();
+        product.setName("Public Paged Frame");
+        product.setCategory("Eyeglasses");
+        product.setGender("Unisex");
+        product.setPrice(new java.math.BigDecimal("100.00"));
+        product.setStockQuantity(0);
+        product = productRepository.saveAndFlush(product);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setProduct(product);
+        variant.setSku("PUBLIC-PAGE-" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        variant.setVariantName("Black");
+        variant.setAttributes(java.util.Map.of("color", "Black"));
+        variant.setActive(true);
+        variant = productVariantRepository.saveAndFlush(variant);
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(7);
+        balance.setReservedQuantity(2);
+        inventoryBalanceRepository.saveAndFlush(balance);
+
+        mockMvc.perform(get("/api/products?page=0&size=24"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(product.getId()))
+                .andExpect(jsonPath("$.content[0].variants[0].id").value(variant.getId()))
+                .andExpect(jsonPath("$.content[0].variants[0].availableQuantity").value(5));
     }
 
     @Test
