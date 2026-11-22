@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public class RazorpayRefundReconciliationService {
     private static final Pattern REFUND_ID = Pattern.compile("rfnd_[A-Za-z0-9]+");
     private static final Pattern PAYMENT_ID = Pattern.compile("pay_[A-Za-z0-9]+");
+    private static final Pattern RECEIPT = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
     private final OrderRepository orderRepository;
     private final OrderRefundRepository refundRepository;
@@ -39,12 +40,28 @@ public class RazorpayRefundReconciliationService {
             String currency,
             String providerStatus
     ) {
+        reconcile(providerEventId, eventType, refundId, paymentId, amountPaise,
+                currency, providerStatus, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void reconcile(
+            String providerEventId,
+            String eventType,
+            String refundId,
+            String paymentId,
+            long amountPaise,
+            String currency,
+            String providerStatus,
+            String receipt
+    ) {
         if (providerEventId == null || providerEventId.isBlank()
                 || eventType == null
                 || refundId == null || !REFUND_ID.matcher(refundId).matches()
                 || paymentId == null || !PAYMENT_ID.matcher(paymentId).matches()
                 || amountPaise <= 0
-                || !"INR".equalsIgnoreCase(currency)) {
+                || !"INR".equalsIgnoreCase(currency)
+                || (receipt != null && !receipt.isBlank() && !RECEIPT.matcher(receipt).matches())) {
             throw new IllegalArgumentException("Razorpay refund payload is incomplete or invalid");
         }
 
@@ -61,43 +78,40 @@ public class RazorpayRefundReconciliationService {
             );
         }
 
-        long orderAmountPaise;
-        try {
-            orderAmountPaise = order.getTotalAmount()
-                    .setScale(2, RoundingMode.UNNECESSARY)
-                    .movePointRight(2)
-                    .longValueExact();
-        } catch (Exception invalidAmount) {
-            throw new IllegalArgumentException("Local order amount cannot be verified");
+        long orderAmountPaise = toPaise(order);
+        Optional<OrderRefund> existing = refundRepository.findByRazorpayRefundIdForUpdate(refundId);
+        if (existing.isEmpty() && receipt != null && !receipt.isBlank()) {
+            existing = refundRepository.findByReceiptForUpdate(receipt);
         }
 
-        Optional<OrderRefund> existing = refundRepository.findByRazorpayRefundIdForUpdate(refundId);
         OrderRefund refund;
         if (existing.isPresent()) {
             refund = existing.get();
             if (!refund.getOrder().getId().equals(order.getId())
                     || !paymentId.equals(refund.getRazorpayPaymentId())
                     || refund.getAmountPaise() != amountPaise
-                    || !"INR".equalsIgnoreCase(refund.getCurrency())) {
+                    || !"INR".equalsIgnoreCase(refund.getCurrency())
+                    || (refund.getRazorpayRefundId() != null
+                    && !refundId.equals(refund.getRazorpayRefundId()))
+                    || (receipt != null && !receipt.isBlank()
+                    && refund.getReceipt() != null && !receipt.equals(refund.getReceipt()))) {
                 throw new IllegalArgumentException(
-                        "Razorpay refund ID conflicts with its previously recorded order or amount"
+                        "Razorpay refund ID conflicts with its previously recorded order, receipt or amount"
                 );
             }
 
             String currentStatus = refund.getStatus();
             if ("PROCESSED".equals(currentStatus)) {
-                if ("PROCESSED".equals(targetStatus) || "PENDING".equals(targetStatus)) {
-                    return;
-                }
+                if ("PROCESSED".equals(targetStatus) || "PENDING".equals(targetStatus)) return;
                 throw new IllegalArgumentException("A processed refund cannot be changed to failed");
             }
             if ("FAILED".equals(currentStatus)) {
-                if ("FAILED".equals(targetStatus) || "PENDING".equals(targetStatus)) {
-                    return;
-                }
+                if ("FAILED".equals(targetStatus) || "PENDING".equals(targetStatus)) return;
                 throw new IllegalArgumentException("A failed refund cannot later be marked processed");
             }
 
+            refund.setRazorpayRefundId(refundId);
+            if (receipt != null && !receipt.isBlank()) refund.setReceipt(receipt);
             refund.setStatus(targetStatus);
             refund.setLastProviderEventId(providerEventId);
         } else {
@@ -107,28 +121,43 @@ public class RazorpayRefundReconciliationService {
             refund.setRazorpayPaymentId(paymentId);
             refund.setAmountPaise(amountPaise);
             refund.setCurrency("INR");
+            refund.setReceipt(receipt == null || receipt.isBlank() ? null : receipt);
             refund.setStatus(targetStatus);
             refund.setLastProviderEventId(providerEventId);
         }
 
         refundRepository.saveAndFlush(refund);
+        recalculateOrderRefundStatus(order, orderAmountPaise);
+        orderRepository.save(order);
+    }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void markInitiationFailed(String idempotencyKey) {
+        OrderRefund refund = refundRepository.findByRequestIdempotencyKeyForUpdate(idempotencyKey)
+                .orElse(null);
+        if (refund == null || !"PENDING".equals(refund.getStatus())
+                || refund.getRazorpayRefundId() != null) {
+            return;
+        }
+        refund.setStatus("FAILED");
+        refund.setLastProviderEventId("API_REJECTED");
+        refundRepository.saveAndFlush(refund);
+        Order order = orderRepository.findByIdForUpdate(refund.getOrder().getId())
+                .orElseThrow(() -> new IllegalStateException("Refund order was not found"));
+        recalculateOrderRefundStatus(order, toPaise(order));
+        orderRepository.save(order);
+    }
+
+    private void recalculateOrderRefundStatus(Order order, long orderAmountPaise) {
         long activeRefundTotal = Optional.ofNullable(
                 refundRepository.sumActiveAmountPaiseByOrderId(order.getId())
         ).orElse(0L);
-        if (activeRefundTotal > orderAmountPaise) {
-            throw new IllegalArgumentException(
-                    "Active Razorpay refunds exceed the original captured order amount"
-            );
-        }
-
         long processedRefundTotal = Optional.ofNullable(
                 refundRepository.sumProcessedAmountPaiseByOrderId(order.getId())
         ).orElse(0L);
-        if (processedRefundTotal > orderAmountPaise) {
-            throw new IllegalArgumentException(
-                    "Processed Razorpay refunds exceed the original captured order amount"
-            );
+
+        if (activeRefundTotal > orderAmountPaise || processedRefundTotal > orderAmountPaise) {
+            throw new IllegalArgumentException("Active Razorpay refunds exceed the original captured order amount");
         }
 
         if (processedRefundTotal == orderAmountPaise) {
@@ -144,8 +173,17 @@ public class RazorpayRefundReconciliationService {
             order.setRefundStatus("FAILED");
             order.setPaymentStatus("PAID");
         }
+    }
 
-        orderRepository.save(order);
+    private long toPaise(Order order) {
+        try {
+            return order.getTotalAmount()
+                    .setScale(2, RoundingMode.UNNECESSARY)
+                    .movePointRight(2)
+                    .longValueExact();
+        } catch (Exception invalidAmount) {
+            throw new IllegalArgumentException("Local order amount cannot be verified");
+        }
     }
 
     private String expectedStatus(String eventType, String providerStatus) {
