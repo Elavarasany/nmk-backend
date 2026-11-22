@@ -1,18 +1,31 @@
 package nmk_backend.dto;
 
 import java.util.List;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
 
 public class CreateOrderRequest {
 
+    @Size(max = 255)
     private String customerName;
+    @Email
+    @Size(max = 255)
     private String email;
+    @Size(max = 255)
     private String phone;
+    @Size(max = 1000)
     private String address;
+    @Size(max = 255)
     private String city;
+    @Size(max = 255)
     private String state;
+    @Size(max = 255)
     private String pincode;
 
-    private List<OrderItemRequest> items;
+    @Size(max = 100)
+    @Valid
+    private List<@jakarta.validation.constraints.NotNull @Valid OrderItemRequest> items;
 
     public String getCustomerName() {
         return customerName;
