@@ -1,5 +1,6 @@
 package nmk_backend.entity;
 
+import nmk_backend.dto.AppointmentStatusRequest;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
@@ -48,6 +49,20 @@ class AppointmentValidationTest {
     @Test
     void acceptsValidBookingFields() {
         assertTrue(validator.validate(validAppointment()).isEmpty());
+    }
+
+    @Test
+    void acceptsOnlySupportedAppointmentStatuses() {
+        for (String status : java.util.List.of("PENDING", "CONFIRMED", "COMPLETED", "CANCELLED")) {
+            assertTrue(validator.validate(new AppointmentStatusRequest(status)).isEmpty());
+        }
+    }
+
+    @Test
+    void rejectsBlankUnknownOrCaseAlteredAppointmentStatuses() {
+        for (String status : java.util.Arrays.asList(null, "", "BOOKED", "confirmed")) {
+            assertFalse(validator.validate(new AppointmentStatusRequest(status)).isEmpty());
+        }
     }
 
     private Appointment validAppointment() {
