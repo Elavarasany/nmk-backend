@@ -341,22 +341,24 @@ class ProcurementServiceTest {
     @Test
     void procurementAuditHistoryReturnsEmptyListsForExistingOrder() {
         when(purchaseOrderRepository.existsById(20L)).thenReturn(true);
-        when(goodsReceiptRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(20L)).thenReturn(List.of());
-        when(supplierReturnRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(20L)).thenReturn(List.of());
+        when(goodsReceiptRepository.findHistoryIds(eq(20L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
+        when(supplierReturnRepository.findHistoryIds(eq(20L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0));
 
-        assertTrue(service.getGoodsReceipts(20L).isEmpty());
-        assertTrue(service.getSupplierReturns(20L).isEmpty());
-        verify(goodsReceiptRepository).findByPurchaseOrderIdOrderByCreatedAtDesc(20L);
-        verify(supplierReturnRepository).findByPurchaseOrderIdOrderByCreatedAtDesc(20L);
+        assertTrue(service.getGoodsReceipts(20L, 0, 25).isEmpty());
+        assertTrue(service.getSupplierReturns(20L, 0, 25).isEmpty());
+        verify(goodsReceiptRepository).findHistoryIds(eq(20L), any(Pageable.class));
+        verify(supplierReturnRepository).findHistoryIds(eq(20L), any(Pageable.class));
     }
 
     @Test
     void procurementAuditHistoryRejectsMissingOrInvalidOrder() {
         when(purchaseOrderRepository.existsById(999L)).thenReturn(false);
-        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getGoodsReceipts(999L));
-        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getSupplierReturns(999L));
-        assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(0L));
-        assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(null));
+        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getGoodsReceipts(999L, 0, 25));
+        assertThrows(nmk_backend.exception.InventoryNotFoundException.class, () -> service.getSupplierReturns(999L, 0, 25));
+        assertThrows(IllegalArgumentException.class, () -> service.getGoodsReceipts(0L, 0, 25));
+        assertThrows(IllegalArgumentException.class, () -> service.getSupplierReturns(null, 0, 25));
         verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
     }
 
