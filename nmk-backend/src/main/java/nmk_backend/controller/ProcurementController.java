@@ -74,6 +74,23 @@ public class ProcurementController {
         }
     }
 
+    @GetMapping("/cost-report/entries")
+    public ResponseEntity<?> getProcurementCostReportEntries(
+            @RequestParam Long locationId,
+            @RequestParam java.time.LocalDate from,
+            @RequestParam java.time.LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        try {
+            return ResponseEntity.ok(procurementService.getProcurementCostReportEntries(
+                    locationId, from, to, page, size
+            ));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
     @GetMapping("/purchase-orders")
     public ResponseEntity<?> getPurchaseOrders(
             @RequestParam(defaultValue = "0") int page,
