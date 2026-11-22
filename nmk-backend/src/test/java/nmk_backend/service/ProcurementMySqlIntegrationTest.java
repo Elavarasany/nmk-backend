@@ -196,7 +196,7 @@ class ProcurementMySqlIntegrationTest {
         secondProduct.setActive(false);
         products.saveAndFlush(secondProduct);
 
-        assertThrows(RuntimeException.class, () -> procurement.receiveGoods(
+        assertThrows(nmk_backend.exception.InvalidInventoryOperationException.class, () -> procurement.receiveGoods(
                 draft.id(),
                 new GoodsReceiptRequest(
                         "Second line is intentionally no longer receivable",
