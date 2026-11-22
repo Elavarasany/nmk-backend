@@ -57,7 +57,7 @@ public class AdminProductController {
         productService.deleteProduct(id);
 
         return ResponseEntity.ok(
-                Map.of("message", "Product deleted successfully")
+                Map.of("message", "Product deactivated successfully")
         );
     }
 }
