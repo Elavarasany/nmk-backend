@@ -420,8 +420,9 @@ public class PosShiftService {
     }
 
     private BigDecimal money(BigDecimal amount, String label) {
-        if (amount == null || amount.scale() > 2 || amount.precision() > 12) {
-            throw new IllegalArgumentException(label + " must be a valid amount with up to two decimal places");
+        if (amount == null || amount.scale() > 2 || amount.precision() > 12
+                || amount.compareTo(ZERO) < 0) {
+            throw new IllegalArgumentException(label + " must be a non-negative amount with up to two decimal places");
         }
         return amount.setScale(2);
     }
