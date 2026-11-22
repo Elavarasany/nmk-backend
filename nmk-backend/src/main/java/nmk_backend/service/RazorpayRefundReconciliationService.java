@@ -134,6 +134,10 @@ public class RazorpayRefundReconciliationService {
         if (processedRefundTotal == orderAmountPaise) {
             order.setRefundStatus("REFUNDED");
             order.setPaymentStatus("REFUNDED");
+            if ("PENDING".equalsIgnoreCase(order.getOrderStatus())
+                    || "CONFIRMED".equalsIgnoreCase(order.getOrderStatus())) {
+                order.setOrderStatus("CANCELLED");
+            }
         } else if (processedRefundTotal > 0) {
             order.setRefundStatus("PARTIALLY_REFUNDED");
             order.setPaymentStatus("PAID");
