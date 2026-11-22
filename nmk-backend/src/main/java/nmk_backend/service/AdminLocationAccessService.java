@@ -40,6 +40,18 @@ public class AdminLocationAccessService {
     }
 
     @Transactional(readOnly = true)
+    public List<Long> getAccessibleLocationIds(String username, String role) {
+        if ("ADMIN".equals(normalizeRole(role))) {
+            return locationRepository.findByActiveTrue().stream().map(InventoryLocation::getId).sorted().toList();
+        }
+        Admin staff = adminRepository.findWithLocationsByUsername(username)
+                .filter(Admin::isEnabled)
+                .orElseThrow(() -> new IllegalArgumentException("Staff account is disabled or missing"));
+        return staff.getAssignedLocations().stream().filter(InventoryLocation::isActive)
+                .map(InventoryLocation::getId).sorted().toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<Long> getAssignedLocationIds(Long staffId) {
         Admin staff = adminRepository.findById(staffId)
                 .orElseThrow(() -> new IllegalArgumentException("Staff account was not found"));
