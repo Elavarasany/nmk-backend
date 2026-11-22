@@ -33,6 +33,7 @@ public class RazorpayWebhookProcessor {
     private final RazorpayService razorpayService;
     private final PaymentVerificationService paymentVerificationService;
     private final RazorpayRefundReconciliationService refundReconciliationService;
+    private final RazorpayDisputeReconciliationService disputeReconciliationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -43,6 +44,7 @@ public class RazorpayWebhookProcessor {
             PaymentVerificationService paymentVerificationService,
             ObjectMapper objectMapper,
             RazorpayRefundReconciliationService refundReconciliationService,
+            RazorpayDisputeReconciliationService disputeReconciliationService,
             PlatformTransactionManager transactionManager) {
 
         this.eventRepository = eventRepository;
@@ -51,6 +53,7 @@ public class RazorpayWebhookProcessor {
         this.paymentVerificationService = paymentVerificationService;
         this.objectMapper = objectMapper;
         this.refundReconciliationService = refundReconciliationService;
+        this.disputeReconciliationService = disputeReconciliationService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -218,6 +221,51 @@ public class RazorpayWebhookProcessor {
                 );
             } catch (IllegalArgumentException invalidRefund) {
                 throw new ManualReviewException(safeMessage(invalidRefund));
+            }
+            return;
+        }
+
+        if (eventType.startsWith("payment.dispute.")) {
+            JsonNode dispute = root.path("payload").path("dispute").path("entity");
+            JsonNode payment = root.path("payload").path("payment").path("entity");
+            String disputeId = dispute.path("id").asText("");
+            String paymentId = dispute.path("payment_id").asText(
+                    payment.path("id").asText(""));
+            JsonNode amountNode = dispute.path("amount");
+            if (dispute.isMissingNode() || dispute.isNull()
+                    || !amountNode.canConvertToLong()
+                    || disputeId.isBlank() || paymentId.isBlank()) {
+                throw new ManualReviewException("Razorpay dispute payload is incomplete");
+            }
+
+            long amountDeducted = dispute.path("amount_deducted").canConvertToLong()
+                    ? dispute.path("amount_deducted").longValue() : 0L;
+            Long respondBy = dispute.path("respond_by").canConvertToLong()
+                    ? dispute.path("respond_by").longValue() : null;
+            Long createdAt = dispute.path("created_at").canConvertToLong()
+                    ? dispute.path("created_at").longValue() : null;
+            Long eventAt = root.path("created_at").canConvertToLong()
+                    ? root.path("created_at").longValue() : null;
+
+            try {
+                disputeReconciliationService.reconcile(
+                        providerEventId,
+                        eventType,
+                        disputeId,
+                        paymentId,
+                        amountNode.longValue(),
+                        dispute.path("currency").asText(""),
+                        amountDeducted,
+                        dispute.path("reason_code").asText(""),
+                        dispute.path("reason_description").asText(""),
+                        respondBy,
+                        dispute.path("status").asText(""),
+                        dispute.path("phase").asText(""),
+                        createdAt,
+                        eventAt
+                );
+            } catch (IllegalArgumentException invalidDispute) {
+                throw new ManualReviewException(safeMessage(invalidDispute));
             }
             return;
         }
