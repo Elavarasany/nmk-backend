@@ -259,7 +259,7 @@ public class AdminOrderController {
                         return ResponseEntity.badRequest().body(
                                 Map.of(
                                         "message",
-                                        "Paid orders cannot be cancelled here. Refund handling is not implemented."
+                                        "Paid orders cannot be cancelled through this status action. Initiate the refund with Razorpay; signed provider webhooks update the refund ledger."
                                 )
                         );
                     }
