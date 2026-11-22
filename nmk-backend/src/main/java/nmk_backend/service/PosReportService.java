@@ -1,6 +1,8 @@
 package nmk_backend.service;
 
 import nmk_backend.dto.PosSalesReportResponse;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import nmk_backend.dto.PosInventoryReportResponse;
 import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
@@ -31,6 +33,9 @@ public class PosReportService {
     private final nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository;
     private final InventoryBalanceRepository inventoryBalanceRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public PosReportService(
             PosSaleRepository saleRepository,
             PosReturnRepository returnRepository,
@@ -52,7 +57,26 @@ public class PosReportService {
         }
         InventoryLocation location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
-        return PosInventoryReportResponse.from(location, inventoryBalanceRepository.findByLocationId(locationId));
+        Long reportLocationId = location.getId();
+        String locationCode = location.getCode();
+        String locationName = location.getName();
+        List<PosInventoryReportResponse.VariantStock> rows = new ArrayList<>();
+        int pageNumber = 0;
+        Page<InventoryBalance> page;
+        do {
+            page = inventoryBalanceRepository.findByLocationId(
+                    locationId,
+                    PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "id"))
+            );
+            page.getContent().stream()
+                    .map(PosInventoryReportResponse.VariantStock::from)
+                    .forEach(rows::add);
+            // DTOs are fully materialized before clearing; this prevents the persistence
+            // context from retaining every inventory entity and its product/variant graph.
+            entityManager.clear();
+        } while (page.hasNext());
+
+        return PosInventoryReportResponse.fromRows(reportLocationId, locationCode, locationName, rows);
     }
 
     @Transactional(readOnly = true)
