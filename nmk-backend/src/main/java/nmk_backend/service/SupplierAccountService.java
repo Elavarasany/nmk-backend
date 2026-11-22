@@ -190,7 +190,8 @@ public class SupplierAccountService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SupplierBillResponse> getBills(Long supplierId, int page, int size) {
+    public Page<SupplierBillResponse> getBills(Long supplierId, int page, int size, String username) {
+        requireActor(username);
         if (supplierId == null || supplierId <= 0 || page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("Valid supplier, page and size are required");
         }
@@ -203,7 +204,8 @@ public class SupplierAccountService {
     }
 
     @Transactional(readOnly = true)
-    public List<SupplierPaymentResponse> getPayments(Long billId) {
+    public List<SupplierPaymentResponse> getPayments(Long billId, String username) {
+        requireActor(username);
         if (billId == null || billId <= 0 || !billRepository.existsById(billId)) {
             throw new InventoryNotFoundException("Supplier bill was not found");
         }
@@ -212,7 +214,8 @@ public class SupplierAccountService {
     }
 
     @Transactional(readOnly = true)
-    public List<SupplierBillLandedCostAllocationResponse> getLandedCostAllocations(Long billId) {
+    public List<SupplierBillLandedCostAllocationResponse> getLandedCostAllocations(Long billId, String username) {
+        requireActor(username);
         SupplierBill bill = billRepository.findById(billId)
                 .orElseThrow(() -> new InventoryNotFoundException("Supplier bill was not found"));
         if (!"LANDED_COST".equals(bill.getBillType())) {
