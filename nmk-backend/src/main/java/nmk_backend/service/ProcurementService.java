@@ -2,6 +2,11 @@ package nmk_backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import nmk_backend.dto.*;
 import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
@@ -20,6 +25,10 @@ import java.util.*;
 public class ProcurementService {
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
+    private static final int REPORT_BATCH_SIZE = 200;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -73,46 +82,68 @@ public class ProcurementService {
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         LocalDateTime fromDateTime = from.atStartOfDay();
         LocalDateTime toExclusive = to.plusDays(1).atStartOfDay();
-        List<GoodsReceipt> receipts = goodsReceiptRepository
-                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
-                        locationId, fromDateTime, toExclusive);
-        List<SupplierReturn> returns = supplierReturnRepository
-                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
-                        locationId, fromDateTime, toExclusive);
-
+        List<ProcurementCostReportResponse.Entry> entries = new ArrayList<>();
         BigDecimal receivedCost = ZERO;
         BigDecimal returnedCost = ZERO;
         long receivedQuantity = 0;
         long returnedQuantity = 0;
-        List<ProcurementCostReportResponse.Entry> entries = new ArrayList<>();
-        for (GoodsReceipt receipt : receipts) {
-            PurchaseOrder order = receipt.getPurchaseOrder();
-            for (GoodsReceiptItem item : receipt.getItems()) {
-                BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
-                        .setScale(2, RoundingMode.HALF_UP);
-                receivedCost = receivedCost.add(total);
-                receivedQuantity += item.getQuantity();
-                entries.add(new ProcurementCostReportResponse.Entry(
-                        "RECEIVED", receipt.getReceiptNumber(), order.getId(), order.getOrderNumber(),
-                        order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
-                        item.getQuantity(), item.getUnitCost(), total, receipt.getReceivedByUsername(),
-                        receipt.getCreatedAt()));
+        Sort reportSort = Sort.by(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
+
+        int pageNumber = 0;
+        Page<Long> receiptIds;
+        do {
+            receiptIds = goodsReceiptRepository.findReportIds(
+                    locationId, fromDateTime, toExclusive,
+                    PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, reportSort)
+            );
+            if (!receiptIds.isEmpty()) {
+                List<GoodsReceipt> receipts = goodsReceiptRepository.findAllByIdIn(receiptIds.getContent());
+                for (GoodsReceipt receipt : receipts) {
+                    PurchaseOrder order = receipt.getPurchaseOrder();
+                    for (GoodsReceiptItem item : receipt.getItems()) {
+                        BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        receivedCost = receivedCost.add(total);
+                        receivedQuantity += item.getQuantity();
+                        entries.add(new ProcurementCostReportResponse.Entry(
+                                "RECEIVED", receipt.getReceiptNumber(), order.getId(), order.getOrderNumber(),
+                                order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
+                                item.getQuantity(), item.getUnitCost(), total, receipt.getReceivedByUsername(),
+                                receipt.getCreatedAt()));
+                    }
+                }
+                // The entry DTOs are detached values; clear entity graphs before loading the next page.
+                entityManager.clear();
             }
-        }
-        for (SupplierReturn record : returns) {
-            PurchaseOrder order = record.getPurchaseOrder();
-            for (SupplierReturnItem item : record.getItems()) {
-                BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
-                        .setScale(2, RoundingMode.HALF_UP);
-                returnedCost = returnedCost.add(total);
-                returnedQuantity += item.getQuantity();
-                entries.add(new ProcurementCostReportResponse.Entry(
-                        "SUPPLIER_RETURN", record.getReturnNumber(), order.getId(), order.getOrderNumber(),
-                        order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
-                        item.getQuantity(), item.getUnitCost(), total, record.getProcessedByUsername(),
-                        record.getCreatedAt()));
+        } while (receiptIds.hasNext());
+
+        pageNumber = 0;
+        Page<Long> returnIds;
+        do {
+            returnIds = supplierReturnRepository.findReportIds(
+                    locationId, fromDateTime, toExclusive,
+                    PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, reportSort)
+            );
+            if (!returnIds.isEmpty()) {
+                List<SupplierReturn> returns = supplierReturnRepository.findAllByIdIn(returnIds.getContent());
+                for (SupplierReturn record : returns) {
+                    PurchaseOrder order = record.getPurchaseOrder();
+                    for (SupplierReturnItem item : record.getItems()) {
+                        BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        returnedCost = returnedCost.add(total);
+                        returnedQuantity += item.getQuantity();
+                        entries.add(new ProcurementCostReportResponse.Entry(
+                                "SUPPLIER_RETURN", record.getReturnNumber(), order.getId(), order.getOrderNumber(),
+                                order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
+                                item.getQuantity(), item.getUnitCost(), total, record.getProcessedByUsername(),
+                                record.getCreatedAt()));
+                    }
+                }
+                entityManager.clear();
             }
-        }
+        } while (returnIds.hasNext());
+
         entries.sort(Comparator.comparing(ProcurementCostReportResponse.Entry::createdAt)
                 .thenComparing(ProcurementCostReportResponse.Entry::reference));
         receivedCost = receivedCost.setScale(2, RoundingMode.HALF_UP);
