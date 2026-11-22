@@ -137,6 +137,44 @@ class PosReportServiceTest {
     }
 
     @Test
+    void reportGroupsRefundsByProcessingDateEvenWhenOriginalSaleWasEarlier() {
+        LocalDate saleDay = LocalDate.of(2026, 11, 20);
+        LocalDate refundDay = LocalDate.of(2026, 11, 21);
+
+        PosSale originalSale = new PosSale();
+        originalSale.setLocationId(1L);
+        originalSale.setCashierUsername("cashier.one");
+        originalSale.setStatus("COMPLETED");
+        originalSale.setSubtotal(new BigDecimal("500.00"));
+        originalSale.setDiscountAmount(new BigDecimal("0.00"));
+        originalSale.setGrandTotal(new BigDecimal("500.00"));
+        ReflectionTestUtils.setField(originalSale, "createdAt", saleDay.atTime(11, 0));
+
+        PosReturn processedRefund = new PosReturn();
+        processedRefund.setSale(originalSale);
+        processedRefund.setStatus("COMPLETED");
+        processedRefund.setReturnType("RETURN");
+        processedRefund.setRefundTotal(new BigDecimal("125.00"));
+        ReflectionTestUtils.setField(processedRefund, "createdAt", refundDay.atTime(14, 30));
+
+        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any()))
+                .thenReturn(List.of());
+        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any()))
+                .thenReturn(List.of(processedRefund));
+
+        var report = service.getSalesReport(1L, refundDay, refundDay);
+
+        assertEquals(0, report.transactionCount(),
+                "The original sale is outside the selected processing date");
+        assertEquals(1, report.returnCount());
+        assertEquals(new BigDecimal("125.00"), report.refunds());
+        assertEquals(new BigDecimal("-125.00"), report.netSalesAfterRefunds(),
+                "A refund processed today remains visible even when its original sale was earlier");
+        assertEquals(refundDay, report.daily().get(0).date());
+        assertEquals(new BigDecimal("125.00"), report.daily().get(0).refunds());
+    }
+
+    @Test
     void inventoryReportShowsOnHandReservedAvailableAndLowStockWithoutInventingValuation() {
         InventoryLocation location = new InventoryLocation();
         location.setId(1L); location.setCode("MAIN"); location.setName("Main Store");
