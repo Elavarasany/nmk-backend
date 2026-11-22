@@ -374,6 +374,26 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void cashierCannotOpenStaffAdministrationEndpoints() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/staff")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotAuthorizeAdministratorOnlyDataClearingAction() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/auth/authorize-action")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"password":"test-only-password","action":"CLEAR_ORDERS"}
+                  """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void disabledStaffAccountCannotUsePreviouslyIssuedJwt() throws Exception {
         String username = "disabled-" + java.util.UUID.randomUUID();
         Admin admin = new Admin();
