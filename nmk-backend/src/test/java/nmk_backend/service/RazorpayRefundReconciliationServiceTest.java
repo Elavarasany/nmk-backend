@@ -73,6 +73,20 @@ class RazorpayRefundReconciliationServiceTest {
     }
 
     @Test
+    void pendingRefundRemainderKeepsOrderBlockedFromShipment() {
+        Order order = paidOrder();
+        stubNewRefund(order, 10000L, 5000L);
+
+        service().reconcile("evt_pending_remainder", "refund.processed", "rfnd_123",
+                "pay_123", 5000L, "INR", "processed");
+
+        assertEquals("PAID", order.getPaymentStatus());
+        assertEquals("PENDING", order.getRefundStatus());
+        assertEquals("PENDING", order.getOrderStatus());
+        verify(orderRepository).save(order);
+    }
+
+    @Test
     void fullRefundMarksPaymentAsRefunded() {
         Order order = paidOrder();
         stubNewRefund(order, 12500L, 12500L);
