@@ -41,7 +41,7 @@ public class ProductVariantService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variant details are required");
         }
 
-        Product product = getActiveProduct(productId);
+        Product product = getActiveProductForUpdate(productId);
 
         String sku = normalizeRequired(request.sku(), "SKU")
                 .toUpperCase(Locale.ROOT);
@@ -86,11 +86,21 @@ public class ProductVariantService {
     }
 
     private Product getActiveProduct(Long productId) {
+        return findActiveProduct(productId, false);
+    }
+
+    private Product getActiveProductForUpdate(Long productId) {
+        return findActiveProduct(productId, true);
+    }
+
+    private Product findActiveProduct(Long productId, boolean lock) {
         if (productId == null || productId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid product ID is required");
         }
 
-        Product product = productRepository.findByIdForUpdate(productId)
+        Product product = (lock
+                ? productRepository.findByIdForUpdate(productId)
+                : productRepository.findById(productId))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Product not found"
                 ));
