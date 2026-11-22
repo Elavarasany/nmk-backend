@@ -434,4 +434,37 @@ class PosAuthorizationIntegrationTest {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void cashierCannotCreatePosRegister() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(post("/api/admin/pos/registers")
+                .header("Authorization", "Bearer " + cashierToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"locationId":1,"registerCode":"SECOND","name":"Second Register"}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotCreatePosRegister() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(post("/api/admin/pos/registers")
+                .header("Authorization", "Bearer " + managerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"locationId":1,"registerCode":"SECOND","name":"Second Register"}
+                  """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanReachRegisterCreationValidation() throws Exception {
+        mockMvc.perform(post("/api/admin/pos/registers")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
 }
