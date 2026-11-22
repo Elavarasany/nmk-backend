@@ -155,6 +155,22 @@ class PosReturnServiceTest {
     }
 
     @Test
+    void rejectsRefundReferenceLongerThanDatabaseColumnBeforePersisting() {
+        PosReturnRequest request = new PosReturnRequest(
+                99L, "Customer changed mind", "return-key-long-ref",
+                List.of(new PosReturnItemRequest(11L, 1, "RESTOCK", null)),
+                List.of(new PosRefundPaymentRequest("UPI", new BigDecimal("90.00"), "R".repeat(151)))
+        );
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.processReturn(1L, request, "manager.one"));
+
+        assertTrue(exception.getMessage().contains("150 characters"));
+        verify(returnRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
     void rejectsNonCashRefundWithoutProviderReference() {
         PosReturnRequest request = new PosReturnRequest(
                 99L, "Customer changed mind", "return-key-3",
