@@ -10,6 +10,7 @@ CREATE TABLE supplier_bills (
     due_date DATE NULL,
     amount DECIMAL(14,2) NOT NULL,
     paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    credited_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     bill_type VARCHAR(20) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'POSTED',
     created_by_username VARCHAR(100) NOT NULL,
@@ -66,4 +67,29 @@ CREATE TABLE supplier_bill_landed_cost_allocations (
     CONSTRAINT fk_landed_cost_receipt_item FOREIGN KEY (goods_receipt_item_id) REFERENCES goods_receipt_items(id),
     CONSTRAINT chk_landed_cost_base CHECK (base_goods_value > 0),
     CONSTRAINT chk_landed_cost_amount CHECK (allocated_amount >= 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE supplier_bill_credit_notes (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    supplier_bill_id BIGINT NOT NULL,
+    supplier_id BIGINT NOT NULL,
+    supplier_return_id BIGINT NULL,
+    credit_note_number VARCHAR(100) NOT NULL,
+    issue_date DATE NOT NULL,
+    amount DECIMAL(14,2) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED',
+    created_by_username VARCHAR(100) NOT NULL,
+    idempotency_key VARCHAR(100) NOT NULL,
+    request_fingerprint CHAR(64) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_supplier_credit_note_number UNIQUE (supplier_id, credit_note_number),
+    CONSTRAINT uk_supplier_credit_note_idempotency UNIQUE (idempotency_key),
+    CONSTRAINT fk_supplier_credit_note_bill FOREIGN KEY (supplier_bill_id) REFERENCES supplier_bills(id),
+    CONSTRAINT fk_supplier_credit_note_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CONSTRAINT fk_supplier_credit_note_return FOREIGN KEY (supplier_return_id) REFERENCES supplier_returns(id),
+    CONSTRAINT chk_supplier_credit_note_amount CHECK (amount > 0),
+    CONSTRAINT chk_supplier_credit_note_status CHECK (status IN ('CONFIRMED')),
+    INDEX idx_supplier_credit_notes_bill_date (supplier_bill_id, issue_date)
 ) ENGINE=InnoDB;
