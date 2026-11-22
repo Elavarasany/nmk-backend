@@ -89,7 +89,11 @@ public class CustomerProductCatalogService {
                                     ))
                                     .map(variant -> {
                                         InventoryBalance balance = balances.get(variant.getId());
-                                        int available = balance == null
+                                        // A stock count freezes every stock movement at this
+                                        // location. Do not advertise purchasable quantity while
+                                        // the physical count is in progress; reservation attempts
+                                        // are intentionally rejected by InventoryService.
+                                        int available = location.isStockCountLocked() || balance == null
                                                 ? 0
                                                 : balance.getAvailableQuantity();
                                         BigDecimal price = variant.getSellingPriceOverride() != null
