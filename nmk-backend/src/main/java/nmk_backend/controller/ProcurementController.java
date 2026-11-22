@@ -3,6 +3,7 @@ package nmk_backend.controller;
 import jakarta.validation.Valid;
 import nmk_backend.dto.*;
 import nmk_backend.service.ProcurementService;
+import nmk_backend.service.SupplierAccountService;
 import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -17,10 +18,13 @@ import java.util.Map;
 public class ProcurementController {
 
     private final ProcurementService procurementService;
+    private final SupplierAccountService supplierAccountService;
     private final AdminActionAuthorizationService authorizationService;
 
-    public ProcurementController(ProcurementService procurementService, AdminActionAuthorizationService authorizationService) {
+    public ProcurementController(ProcurementService procurementService, SupplierAccountService supplierAccountService,
+                                 AdminActionAuthorizationService authorizationService) {
         this.procurementService = procurementService;
+        this.supplierAccountService = supplierAccountService;
         this.authorizationService = authorizationService;
     }
 
@@ -216,6 +220,87 @@ public class ProcurementController {
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
+    }
+
+    @GetMapping("/suppliers/{supplierId}/bills")
+    public ResponseEntity<?> getSupplierBills(
+            @PathVariable Long supplierId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        try {
+            return ResponseEntity.ok(supplierAccountService.getBills(supplierId, page, size));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @PostMapping("/supplier-bills")
+    public ResponseEntity<?> createSupplierBill(
+            @Valid @RequestBody SupplierBillCreateRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
+            Authentication authentication
+    ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "SUPPLIER_BILL_POST");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(supplierAccountService.createBill(request, authentication.getName()));
+        } catch (DataIntegrityViolationException exception) {
+            return conflict("Supplier bill invoice number or idempotency key already exists");
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @PostMapping("/supplier-bills/{billId}/payments")
+    public ResponseEntity<?> recordSupplierPayment(
+            @PathVariable Long billId,
+            @Valid @RequestBody SupplierPaymentRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
+            Authentication authentication
+    ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "SUPPLIER_PAYMENT");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(supplierAccountService.recordPayment(
+                    billId, request, authentication.getName(), role(authentication)
+            ));
+        } catch (DataIntegrityViolationException exception) {
+            return conflict("Supplier payment idempotency key already exists or the bill balance changed");
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @GetMapping("/supplier-bills/{billId}/payments")
+    public ResponseEntity<?> getSupplierPayments(@PathVariable Long billId) {
+        try {
+            return ResponseEntity.ok(supplierAccountService.getPayments(billId));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @GetMapping("/supplier-bills/{billId}/landed-cost-allocations")
+    public ResponseEntity<?> getLandedCostAllocations(@PathVariable Long billId) {
+        try {
+            return ResponseEntity.ok(supplierAccountService.getLandedCostAllocations(billId));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    private String role(Authentication authentication) {
+        return authentication.getAuthorities().stream().map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .filter(value -> value.startsWith("ROLE_")).map(value -> value.substring(5))
+                .findFirst().orElse("CASHIER");
     }
 
     private ResponseEntity<?> badRequest(IllegalArgumentException exception) {
