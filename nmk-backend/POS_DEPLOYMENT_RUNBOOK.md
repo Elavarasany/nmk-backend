@@ -170,3 +170,14 @@ If credentials are missing, upload is disabled and returns HTTP 503. Do not re-e
 Checkout verifies Cloudinary's upload-response signature and stores the opaque asset ID and verification metadata. Admin access is scoped to the owning order and item and returns a five-minute private download URL. Existing orders with legacy public `imageUrl` values remain readable for compatibility; they are not retroactively made private. A separate migration/re-upload plan is required to replace those legacy files.
 
 The upload endpoint has a dedicated rate limit and a 6 MB multipart transport ceiling (5 MB file plus multipart overhead). The general JSON request-body limit remains unchanged. Configure the reverse proxy to allow at least 6 MB for this endpoint and keep request timeouts bounded.
+
+
+## Online Razorpay refund initiation
+
+- Backend uses normal-speed Razorpay refunds only; instant refunds are intentionally not exposed.
+- Admin → Orders requires a fresh admin password authorization for each initiation. The manager role is not authorized by default.
+- The amount is in paise, must be at least ₹1.00, and cannot exceed the captured amount less all pending/processed refunds. A reason is required.
+- The backend stores a pending local request and unique receipt before calling Razorpay. It sends `X-Refund-Idempotency` and the same request body on retry. If a timeout or provider 409/5xx leaves the outcome uncertain, retry with the same idempotency key; do not create a new one.
+- Signed refund webhooks match the pending local request by receipt, including when the webhook arrives before the API response is stored.
+- Apply manual schema migration `019-add-idempotent-refund-requests.sql` after migration 017 and before deploying this code. Stage, inspect exact existing columns/indexes/constraints, rehearse on a disposable MySQL 8.4 restore, and take a verified backup. Do not apply to the client database without explicit approval.
+- Refund completion does not automatically cancel an order or restore stock. Use the approved audited stock adjustment/return process after provider confirmation. Bank settlement reconciliation remains a separate task.
