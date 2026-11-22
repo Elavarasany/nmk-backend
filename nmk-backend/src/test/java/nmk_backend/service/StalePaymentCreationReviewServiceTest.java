@@ -34,7 +34,7 @@ class StalePaymentCreationReviewServiceTest {
         ReflectionTestUtils.setField(order, "orderDate", now.minusMinutes(30));
         order.setStockReserved(true);
         order.setInventoryLocationId(7L);
-        order.setReservationExpiresAt(now.plusMinutes(15));
+        order.setReservationExpiresAt(now.minusMinutes(5));
 
         when(orderRepository.findExpiredStalePaymentCreations(
                 eq(List.of("IN_PROGRESS", "CREATED")),
