@@ -82,6 +82,7 @@ class RazorpayRefundReconciliationServiceTest {
 
         assertEquals("REFUNDED", order.getPaymentStatus());
         assertEquals("REFUNDED", order.getRefundStatus());
+        assertEquals("CANCELLED", order.getOrderStatus());
         verify(orderRepository).save(order);
     }
 
