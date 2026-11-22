@@ -336,6 +336,28 @@ class InventoryServiceTest {
     }
 
     @Test
+    void sellStockByAdminRecordsAdminActorWithoutStaffActor() {
+        stubLocation();
+        stubActiveProductAndVariant();
+        stubNewMovement();
+        stubExistingBalance();
+
+        inventoryService.sellStockByAdmin(
+                1L, 2L, 2, "ADMIN-SALE-001", 42L,
+                "Admin POS sale", "POS_SALE", 123L
+        );
+
+        ArgumentCaptor<StockMovement> captor =
+                ArgumentCaptor.forClass(StockMovement.class);
+
+        verify(movementRepository).saveAndFlush(captor.capture());
+
+        assertEquals(42L, captor.getValue().getActorAdminId());
+        assertNull(captor.getValue().getActorStaffId());
+        assertEquals("SALE", captor.getValue().getMovementType());
+    }
+
+    @Test
     void sellStockRejectsInsufficientAvailableQuantity() {
         stubLocation();
         stubActiveProductAndVariant();
