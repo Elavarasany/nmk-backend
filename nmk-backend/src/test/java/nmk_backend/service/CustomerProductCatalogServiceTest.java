@@ -156,6 +156,49 @@ class CustomerProductCatalogServiceTest {
 
 
     @Test
+    void loadsOnlyRequestedProductAndItsVariantsForPublicDetail() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setActive(true);
+
+        Product product = new Product();
+        product.setId(10L);
+        product.setName("Classic Frame");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setActive(true);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setId(25L);
+        variant.setProduct(product);
+        variant.setVariantName("Black");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setSellingPriceOverride(new BigDecimal("125.00"));
+        variant.setActive(true);
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(8);
+        balance.setReservedQuantity(3);
+
+        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(locationRepository.findByCode("AVP-01")).thenReturn(Optional.of(location));
+        when(variantRepository.findByProductIdAndActiveTrue(10L)).thenReturn(List.of(variant));
+        when(balanceRepository.findByLocationIdAndVariantIdIn(1L, List.of(25L)))
+                .thenReturn(List.of(balance));
+
+        var result = service.getActiveProductById(10L);
+
+        assertEquals(10L, result.id());
+        assertEquals(new BigDecimal("125.00"), result.price());
+        assertEquals(5, result.stockQuantity());
+        assertEquals(25L, result.variants().get(0).id());
+        verify(productRepository, never()).findAll();
+        verify(variantRepository, never()).findAll();
+        verify(balanceRepository, never()).findByLocationId(1L);
+    }
+
+    @Test
     void publicProductDetailReturnsNotFoundForMissingOrInactiveProducts() {
         InventoryLocation location = new InventoryLocation();
         location.setId(1L);
@@ -168,10 +211,8 @@ class CustomerProductCatalogServiceTest {
         inactive.setPrice(new BigDecimal("100.00"));
         inactive.setActive(false);
 
-        when(locationRepository.findByCode("AVP-01")).thenReturn(Optional.of(location));
-        when(balanceRepository.findByLocationId(1L)).thenReturn(List.of());
-        when(variantRepository.findAll()).thenReturn(List.of());
-        when(productRepository.findAll()).thenReturn(List.of(inactive));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(inactive));
+        when(productRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(ResponseStatusException.class,
                 () -> service.getActiveProductById(10L));
@@ -179,6 +220,7 @@ class CustomerProductCatalogServiceTest {
                 () -> service.getActiveProductById(999L));
         assertThrows(ResponseStatusException.class,
                 () -> service.getActiveProductById(0L));
+        verifyNoInteractions(locationRepository, balanceRepository, variantRepository);
     }
 
     @Test
