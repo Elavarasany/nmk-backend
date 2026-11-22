@@ -99,7 +99,7 @@ public class RazorpayRefundInitiationService {
                     provider.refundId(),
                     provider.paymentId(),
                     provider.amountPaise(),
-                    provider.currency().isBlank() ? "INR" : provider.currency(),
+                    provider.currency() == null || provider.currency().isBlank() ? "INR" : provider.currency(),
                     status,
                     provider.receipt()
             );
@@ -123,7 +123,7 @@ public class RazorpayRefundInitiationService {
                 && REFUND_ID.matcher(response.refundId()).matches()
                 && expected.paymentId().equals(response.paymentId())
                 && expected.amountPaise() == response.amountPaise()
-                && (response.currency().isBlank() || "INR".equalsIgnoreCase(response.currency()))
+                && (response.currency() == null || response.currency().isBlank() || "INR".equalsIgnoreCase(response.currency()))
                 && expected.receipt().equals(response.receipt())
                 && response.status() != null
                 && !response.status().isBlank();
