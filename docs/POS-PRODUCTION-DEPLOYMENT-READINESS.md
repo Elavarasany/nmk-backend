@@ -117,3 +117,13 @@ No deployment, live database access, migration execution, PR merge, or productio
 - [ ] Verify refund webhooks arriving before the API response link through the unique receipt and do not create duplicate ledger rows.
 - [ ] Confirm order shipment is blocked while a refund is pending; confirm completed refunds do not auto-cancel or restock stock.
 - [ ] Keep bank settlement matching, POS tender provider verification and chargeback reconciliation as separate go-live gaps.
+
+
+## Razorpay settlement reconciliation release checks
+
+- [ ] Apply and verify manual migration 020 after migrations 017, 018 and 019 on the approved target schema.
+- [ ] Configure Razorpay API key ID/secret on the backend only; verify the intended test/live account.
+- [ ] Verify Admin-only access, provider API pagination, rate limiting and idempotent repeated synchronization.
+- [ ] Verify provider settlement net amount, fee, tax and UTR totals; verify payment rows match local paid orders and refund rows match processed refund ledger rows.
+- [ ] Review all transfer, adjustment, unmatched, mismatch and on-hold entries before treating a settlement as complete.
+- [ ] Do not label provider reconciliation as bank reconciliation. Bank statement import, UTR-to-bank-credit matching and settlement variance approval remain outstanding.
