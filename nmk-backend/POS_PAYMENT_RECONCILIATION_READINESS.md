@@ -1,0 +1,61 @@
+# POS payment and settlement reconciliation readiness
+
+## Audit scope
+
+Reviewed the feature branch payment records, POS checkout/return/exchange services, sales report aggregation, Razorpay payment verification and webhook processing. This is a code-level readiness assessment, not a live Razorpay or bank settlement reconciliation.
+
+## What is currently enforced
+
+### Walk-in POS tenders
+
+- A sale can use CASH, UPI and CARD, with up to three distinct methods.
+- Each non-cash allocation must include a transaction reference (maximum 150 characters).
+- The allocations must add up exactly to the sale grand total.
+- The backend stores method, amount, reference, cash tendered and change in `pos_payments`.
+- The backend does not verify that a UPI UTR/card reference exists at the provider, belongs to this shop, is successful, or matches the amount. The reference is operator-entered evidence only.
+- Cash allocations update the shift cash ledger. UPI/card allocations do not change drawer cash.
+
+### POS refunds and exchanges
+
+- UPI/card refund allocations require a reference and are stored in `pos_refund_payments`; the backend does not initiate or verify the provider refund.
+- Exchange collection and refund allocations follow the same operational-recording model. Cash portions affect the drawer; non-cash portions do not.
+- The return/refund report separately exposes refund totals and recorded refund-payment totals. This distinction is useful: a refund record is not proof that money reached the customer.
+
+### Online Razorpay orders
+
+- Checkout signatures are verified, and payment confirmation fetches the payment from Razorpay to confirm captured status, matching Razorpay order ID and exact amount.
+- Signed webhook events are durably stored and deduplicated by event ID. Only `payment.captured` can confirm an online order; the worker verifies provider state before confirmation and sends conflicts/late captures to manual review.
+- Other signed event types, including refund-related events, are stored/processed for webhook audit but do not update a POS refund or online-order refund state.
+- The online-order Razorpay payment flow is separate from the walk-in POS UPI/card tender records. A POS transaction reference is not automatically linked to a Razorpay order/payment ID.
+
+## What is not implemented
+
+1. Provider-backed validation of POS UPI/card payments.
+2. Durable mapping from POS tender rows to provider account, provider payment ID, order ID, capture status and settlement batch.
+3. Automated Razorpay refund creation, refund ID storage, provider status polling/webhook reconciliation and idempotent retry.
+4. Bank payout/settlement import and matching of gross captured amounts, fees, taxes on fees, refunds, chargebacks and net deposits.
+5. Exception queues for unmatched, duplicate, short-paid, late, reversed or disputed transactions.
+6. A daily settlement reconciliation report that proves POS tender totals against provider settlement statements and bank credits.
+
+The current POS payment-method report is an operational total of amounts entered at checkout. It is not a Razorpay settlement report, bank reconciliation, or proof of cleared funds.
+
+## Required operating controls until reconciliation is built
+
+- Cash: reconcile expected drawer cash against the physical count at shift close; investigate and document variance.
+- UPI/card: independently confirm successful payment in the merchant/provider app before completing the sale. Record the actual provider transaction reference, not a customer screenshot or arbitrary note.
+- Refunds: complete and verify the refund through the provider/bank first; only then record the confirmed reference and allocation in POS. Do not treat a POS refund record as evidence of provider transfer.
+- Daily close: compare POS UPI/card totals against provider transaction exports, then compare provider net settlement against bank credits after fees/refunds. Keep the provider statement and reconciliation evidence.
+- Escalate any amount/reference mismatch; do not silently edit or delete a completed POS sale.
+
+## Design decisions required before implementation
+
+- Confirm the actual merchant acquiring setup: Razorpay, direct UPI QR, bank POS terminal, or a combination.
+- Confirm whether UPI and card receipts can be fetched through provider APIs and whether all in-store transactions share one merchant account.
+- Confirm provider fee/GST treatment, settlement frequency, refund timelines and chargeback handling with the merchant/accountant.
+- Approve the reconciliation ownership, exception workflow and evidence-retention policy.
+
+## Release status
+
+POS cash drawer controls are implemented, but non-cash POS tender and refund records remain operator-entered operational records. Do not describe POS financial close as fully reconciled or enable automated provider refunds until provider integration, settlement matching and exception handling are implemented and tested.
+
+No provider credentials, client bank data or live settlement files were accessed during this review. No live database was changed.
