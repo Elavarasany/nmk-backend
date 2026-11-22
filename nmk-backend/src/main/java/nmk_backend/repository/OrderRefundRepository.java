@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface OrderRefundRepository extends JpaRepository<OrderRefund, Long> {
+    Optional<OrderRefund> findByRazorpayRefundId(String refundId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT refund FROM OrderRefund refund WHERE refund.razorpayRefundId = :refundId")
     Optional<OrderRefund> findByRazorpayRefundIdForUpdate(@Param("refundId") String refundId);
