@@ -69,6 +69,16 @@ class PosReportServiceTest {
         item.setLineTotal(new BigDecimal("1000.00"));
         sale.getItems().add(item);
 
+        // A second variant of the same product must roll up to the product total;
+        // the report must not display an arbitrary single-variant SKU.
+        PosSaleItem secondVariant = new PosSaleItem();
+        secondVariant.setProductId(15L);
+        secondVariant.setProductName("Classic Frame");
+        secondVariant.setSku("FRAME-015-BLACK");
+        secondVariant.setQuantity(1);
+        secondVariant.setLineTotal(new BigDecimal("300.00"));
+        sale.getItems().add(secondVariant);
+
         PosReturn returned = new PosReturn();
         returned.setSale(sale);
         returned.setStatus("COMPLETED");
@@ -119,7 +129,8 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("200.00"), report.refundsByPaymentMethod().get("UPI"));
         assertEquals(new BigDecimal("100.00"), report.refundsByPaymentMethod().get("CASH"));
         assertEquals("cashier.one", report.cashiers().get(0).cashierUsername());
-        assertEquals(2L, report.topProducts().get(0).quantitySold());
+        assertEquals(3L, report.topProducts().get(0).quantitySold());
+        assertEquals(new BigDecimal("1300.00"), report.topProducts().get(0).grossLineTotal());
         assertEquals(new BigDecimal("600.00"), report.daily().get(0).netAfterRefunds());
         assertEquals(1, report.daily().get(0).returnCount(), "Voids must not be counted as customer returns");
     }
