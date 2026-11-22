@@ -100,13 +100,13 @@ public class RazorpayRefundReconciliationService {
                 // A webhook without receipt may have created a second provider row.
                 // When the API response later supplies the receipt, retain the
                 // original idempotency row and merge the provider state into it.
-                String providerStatus = providerRow.getStatus();
-                String providerEventId = providerRow.getLastProviderEventId();
+                String existingProviderStatus = providerRow.getStatus();
+                String existingProviderEventId = providerRow.getLastProviderEventId();
                 refundRepository.delete(providerRow);
                 refundRepository.flush();
                 localRequest.setRazorpayRefundId(refundId);
-                localRequest.setStatus(providerStatus);
-                localRequest.setLastProviderEventId(providerEventId);
+                localRequest.setStatus(existingProviderStatus);
+                localRequest.setLastProviderEventId(existingProviderEventId);
                 existing = Optional.of(localRequest);
                 mergedReceiptDuplicate = true;
             }
