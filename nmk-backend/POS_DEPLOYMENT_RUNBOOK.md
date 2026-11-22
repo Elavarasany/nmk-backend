@@ -34,7 +34,7 @@ Run each script individually, inspect its output, and stop immediately on any er
 
 ### Path B — the specific partially migrated staging schema
 
-Use `004-staging-schema-reconciliation.sql` only if schema inspection confirms the exact preconditions documented in that file: variant/inventory tables already exist, the existing `AVP-01` location is present, and only the listed legacy order/product columns are missing.
+Use `004-staging-schema-reconciliation.sql` only if schema inspection confirms all of these exact preconditions: variant/inventory tables already exist; the existing `AVP-01` location is present; `products.version` already exists; `customer_orders.payment_creation_status` already exists; `order_items.variant_id` already exists with its expected foreign key; and only the specific columns added by script 004 are missing. Script 004 does **not** add `products.version` or `order_items.variant_id`, and it modifies rather than creates `customer_orders.payment_creation_status`. If any precondition is absent or uncertain, do not run Path B.
 
 After 004 succeeds and its verification queries match expectations, apply 005 through 014 in numeric order.
 
