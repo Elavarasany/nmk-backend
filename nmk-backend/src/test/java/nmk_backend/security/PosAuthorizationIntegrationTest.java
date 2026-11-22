@@ -41,9 +41,15 @@ class PosAuthorizationIntegrationTest {
     private InventoryLocationRepository locationRepository;
 
     private String adminToken;
+    private InventoryLocation testLocation;
 
     @BeforeEach
     void setUp() {
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("POS-AUTH-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+        location.setName("POS Authorization Test Location");
+        location.setActive(true);
+        testLocation = locationRepository.saveAndFlush(location);
         adminToken = tokenForRole("ADMIN");
     }
 
@@ -54,6 +60,7 @@ class PosAuthorizationIntegrationTest {
         account.setPassword(passwordEncoder.encode("test-only-password"));
         account.setRole(role);
         account.setEnabled(true);
+        if (!"ADMIN".equals(role)) account.setAssignedLocations(java.util.Set.of(testLocation));
         adminRepository.saveAndFlush(account);
         return jwtService.generateToken(username);
     }
@@ -110,7 +117,7 @@ class PosAuthorizationIntegrationTest {
     @Test
     void cashierCannotReadManagerShiftHistory() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
-        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=1")
+        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=" + testLocation.getId())
                 .header("Authorization", "Bearer " + cashierToken))
                 .andExpect(status().isForbidden());
     }
@@ -471,10 +478,10 @@ class PosAuthorizationIntegrationTest {
     @Test
     void cashierCannotReadSalesOrInventoryReports() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
-        mockMvc.perform(get("/api/admin/pos/reports/sales?locationId=1&from=2026-11-22&to=2026-11-22")
+        mockMvc.perform(get("/api/admin/pos/reports/sales?locationId=" + testLocation.getId() + "&from=2026-11-22&to=2026-11-22")
                 .header("Authorization", "Bearer " + cashierToken))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/admin/pos/reports/inventory?locationId=1")
+        mockMvc.perform(get("/api/admin/pos/reports/inventory?locationId=" + testLocation.getId())
                 .header("Authorization", "Bearer " + cashierToken))
                 .andExpect(status().isForbidden());
     }
