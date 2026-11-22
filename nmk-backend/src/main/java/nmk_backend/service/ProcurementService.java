@@ -155,9 +155,10 @@ public class ProcurementService {
     }
 
     @Transactional(readOnly = true)
-    public List<SupplierResponse> getSuppliers() {
-        return supplierRepository.findAllByOrderByNameAsc().stream()
-                .map(SupplierResponse::from).toList();
+    public Page<SupplierResponse> getSuppliers(int page, int size) {
+        validateListPage(page, size);
+        return supplierRepository.findAllByOrderByNameAsc(PageRequest.of(page, size))
+                .map(SupplierResponse::from);
     }
 
     @Transactional
@@ -184,9 +185,23 @@ public class ProcurementService {
     }
 
     @Transactional(readOnly = true)
-    public List<PurchaseOrderResponse> getPurchaseOrders() {
-        return purchaseOrderRepository.findAllByOrderByCreatedAtDesc().stream()
+    public Page<PurchaseOrderResponse> getPurchaseOrders(int page, int size) {
+        validateListPage(page, size);
+        var pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        Page<Long> ids = purchaseOrderRepository.findHistoryIds(pageable);
+        List<PurchaseOrderResponse> content = ids.isEmpty() ? List.of()
+                : purchaseOrderRepository.findAllByIdIn(ids.getContent()).stream()
+                .sorted(Comparator.comparing(PurchaseOrder::getCreatedAt).reversed()
+                        .thenComparing(PurchaseOrder::getId, Comparator.reverseOrder()))
                 .map(PurchaseOrderResponse::from).toList();
+        return new PageImpl<>(content, pageable, ids.getTotalElements());
+    }
+
+    private void validateListPage(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
     }
 
     @Transactional(readOnly = true)
