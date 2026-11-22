@@ -91,6 +91,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     )
     Page<CustomerOrderSummaryProjection> findCustomerSummaries(Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE (:email IS NOT NULL AND LOWER(TRIM(o.email)) = :email)
+                   OR (:email IS NULL AND o.phone = :phone)
+                """,
+            countQuery = """
+                SELECT COUNT(o)
+                FROM Order o
+                WHERE (:email IS NOT NULL AND LOWER(TRIM(o.email)) = :email)
+                   OR (:email IS NULL AND o.phone = :phone)
+                """
+    )
+    Page<Long> findCustomerOrderIds(
+            @Param("email") String email,
+            @Param("phone") String phone,
+            Pageable pageable
+    );
+
     @Query("""
         SELECT DISTINCT o
         FROM Order o
