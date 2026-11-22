@@ -8,6 +8,7 @@ import org.springframework.security.core.Authentication;
 import nmk_backend.dto.UpdateDeliveryDetailsRequest;
 import nmk_backend.service.SmsService;
 import nmk_backend.dto.AdminOrderResponse;
+import nmk_backend.dto.AdminCustomerSummaryResponse;
 import nmk_backend.dto.UpdateOrderStatusRequest;
 import nmk_backend.entity.Order;
 import nmk_backend.repository.OrderRepository;
@@ -107,66 +108,22 @@ public class AdminOrderController {
         return ResponseEntity.ok(new PageImpl<>(content, idPage.getPageable(), idPage.getTotalElements()));
     }
 
-    // Get unique customers from existing orders
+    // Get customer summaries without loading every order and item into memory.
     @GetMapping("/customers")
     @Transactional(readOnly = true)
-    public ResponseEntity<?> getAllCustomers() {
+    public ResponseEntity<?> getAllCustomers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
 
-        List<Map<String, Object>> customers =
-                orderRepository.findAllWithItems()
-                        .stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                                order -> order.getEmail() != null
-                                        ? order.getEmail().trim().toLowerCase()
-                                        : String.valueOf(order.getPhone()),
-                                order -> {
-                                    Map<String, Object> customer =
-                                            new java.util.LinkedHashMap<>();
-
-                                    customer.put("customerName", order.getCustomerName());
-                                    customer.put("email", order.getEmail());
-                                    customer.put("phone", order.getPhone());
-                                    customer.put("totalOrders", 1);
-                                    customer.put(
-                                            "totalSpent",
-                                            "PAID".equalsIgnoreCase(order.getPaymentStatus())
-                                                    ? order.getTotalAmount()
-                                                    : java.math.BigDecimal.ZERO
-                                    );
-
-                                    return customer;
-                                },
-                                (existing, current) -> {
-                                    existing.put(
-                                            "totalOrders",
-                                            (int) existing.get("totalOrders") + 1
-                                    );
-
-                                    java.math.BigDecimal oldAmount =
-                                            (java.math.BigDecimal) existing.get("totalSpent");
-
-                                    java.math.BigDecimal newAmount =
-                                            (java.math.BigDecimal) current.get("totalSpent");
-
-                                    if (newAmount == null) {
-                                        newAmount = java.math.BigDecimal.ZERO;
-                                    }
-
-                                    existing.put(
-                                            "totalSpent",
-                                            oldAmount.add(newAmount != null
-                                                    ? newAmount
-                                                    : java.math.BigDecimal.ZERO)
-                                    );
-
-                                    return existing;
-                                },
-                                java.util.LinkedHashMap::new
-                        ))
-                        .values()
-                        .stream()
-                        .toList();
-
+        Page<AdminCustomerSummaryResponse> customers = orderRepository
+                .findCustomerSummaries(PageRequest.of(page, size))
+                .map(AdminCustomerSummaryResponse::from);
         return ResponseEntity.ok(customers);
     }
 
