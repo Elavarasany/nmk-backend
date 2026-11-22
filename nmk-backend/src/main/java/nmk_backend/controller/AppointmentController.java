@@ -6,6 +6,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 import nmk_backend.entity.Appointment;
+import nmk_backend.dto.AppointmentResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import nmk_backend.dto.AppointmentStatusRequest;
 import nmk_backend.repository.AppointmentRepository;
 
@@ -119,16 +123,31 @@ public class AppointmentController {
         appointment.setCreatedAt(null);
 
         Appointment saved = appointmentRepository.save(appointment);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AppointmentResponse.from(saved));
     }
 
-    // Admin: View all appointments
+    // Admin: View appointments in bounded, deterministic pages.
     @GetMapping
-    public List<Appointment> getAllAppointments() {
-        List<Appointment> appointments =
-                appointmentRepository.findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
+    public ResponseEntity<?> getAllAppointments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
 
-        return appointments;
+        Page<AppointmentResponse> result = appointmentRepository
+                .findAllByOrderByAppointmentDateAscAppointmentTimeAscIdAsc(
+                        PageRequest.of(page, size, Sort.by(
+                                Sort.Order.asc("appointmentDate"),
+                                Sort.Order.asc("appointmentTime"),
+                                Sort.Order.asc("id")
+                        ))
+                )
+                .map(AppointmentResponse::from);
+        return ResponseEntity.ok(result);
     }
 
     // Admin: Update appointment status
@@ -147,6 +166,6 @@ public class AppointmentController {
         String status = request.status();
         appointment.setStatus(status);
 
-        return ResponseEntity.ok(appointmentRepository.save(appointment));
+        return ResponseEntity.ok(AppointmentResponse.from(appointmentRepository.save(appointment)));
     }
 }
