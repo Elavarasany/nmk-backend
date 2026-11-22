@@ -164,6 +164,26 @@ class InventoryServiceTest {
     }
 
     @Test
+    void receiveStockByAdminRecordsAdminActorWithoutStaffActor() {
+        stubLocation();
+        stubActiveProductAndVariant();
+        stubNewMovement();
+        stubExistingBalance();
+
+        inventoryService.receiveStockByAdmin(
+                1L, 2L, 4, "ADMIN-RECEIVE-001", 42L, "Admin stock receipt"
+        );
+
+        ArgumentCaptor<StockMovement> captor =
+                ArgumentCaptor.forClass(StockMovement.class);
+
+        verify(movementRepository).saveAndFlush(captor.capture());
+
+        assertEquals(42L, captor.getValue().getActorAdminId());
+        assertNull(captor.getValue().getActorStaffId());
+    }
+
+    @Test
     void reserveStockIncreasesReservedWithoutReducingOnHand() {
         stubLocation();
         stubActiveProductAndVariant();
