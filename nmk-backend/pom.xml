@@ -133,6 +133,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Cloudinary secure prescription storage -->
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http5</artifactId>
+			<version>2.6.0</version>
+		</dependency>
+
 		<!-- Razorpay -->
 		<dependency>
 			<groupId>com.razorpay</groupId>
