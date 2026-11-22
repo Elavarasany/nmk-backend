@@ -183,7 +183,7 @@ public class RazorpayWebhookProcessor {
 
     /**
      * Runs outside the claim transaction.
-     * Only a verified payment.captured event can confirm an order.
+     * Captured-payment events confirm payment; refund events update only the refund ledger.
      */
     private void processPayload(String rawPayload, String providerEventId) throws Exception {
 
