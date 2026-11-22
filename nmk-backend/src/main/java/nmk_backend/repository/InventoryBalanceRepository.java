@@ -33,6 +33,8 @@ public interface InventoryBalanceRepository
 
     List<InventoryBalance> findByLocationId(Long locationId);
 
+    List<InventoryBalance> findByLocationIdAndVariantIdIn(Long locationId, List<Long> variantIds);
+
     List<InventoryBalance> findByVariantId(Long variantId);
 
     List<InventoryBalance> findByLocationIdAndOnHandQuantityLessThanEqual(
