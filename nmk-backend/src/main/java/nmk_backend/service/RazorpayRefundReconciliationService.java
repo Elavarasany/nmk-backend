@@ -59,7 +59,7 @@ public class RazorpayRefundReconciliationService {
                 || refundId == null || !REFUND_ID.matcher(refundId).matches()
                 || paymentId == null || !PAYMENT_ID.matcher(paymentId).matches()
                 || amountPaise <= 0
-                || !"INR".equalsIgnoreCase(currency)
+                || (currency != null && !currency.isBlank() && !"INR".equalsIgnoreCase(currency))
                 || (receipt != null && (receipt.length() > 64 || receipt.chars().anyMatch(Character::isISOControl)))) {
             throw new IllegalArgumentException("Razorpay refund payload is incomplete or invalid");
         }
