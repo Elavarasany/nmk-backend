@@ -64,7 +64,7 @@ class StalePaymentCreationReviewServiceTest {
 
     @Test
     void validatesPaginationAndReviewAgeWithoutQueryingDatabase() {
-        var service = new StalePaymentCreationReviewService(orderRepository);
+        var service = new StalePaymentCreationReviewService(orderRepository, providerGateway);
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(-1, 25, 10));
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(0, 101, 10));
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(0, 25, 0));
