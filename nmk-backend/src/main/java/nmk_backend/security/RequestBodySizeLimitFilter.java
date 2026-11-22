@@ -46,9 +46,19 @@ public class RequestBodySizeLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        int requestLimit = "POST".equalsIgnoreCase(method)
-                && "/api/prescriptions/upload".equals(request.getRequestURI())
-                ? 6 * 1024 * 1024 : maxRequestBodyBytes;
+        // Let the servlet multipart resolver consume the original request. Buffering
+        // multipart bytes here would consume the container's request stream before getParts().
+        if ("POST".equalsIgnoreCase(method)
+                && "/api/prescriptions/upload".equals(request.getRequestURI())) {
+            if (request.getContentLengthLong() > 6L * 1024 * 1024) {
+                reject(response);
+                return;
+            }
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        int requestLimit = maxRequestBodyBytes;
         long contentLength = request.getContentLengthLong();
         if (contentLength > requestLimit) {
             reject(response);
