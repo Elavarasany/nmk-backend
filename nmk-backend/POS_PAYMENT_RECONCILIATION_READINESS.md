@@ -28,6 +28,16 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 - Other signed non-refund event types are stored/processed for webhook audit. Signed `refund.*` events are now routed to `MANUAL_REVIEW` rather than marked `PROCESSED`, because no provider-refund-to-POS-ledger reconciliation exists yet. They do not automatically update a POS refund or online-order refund state.
 - The online-order Razorpay payment flow is separate from the walk-in POS UPI/card tender records. A POS transaction reference is not automatically linked to a Razorpay order/payment ID.
 
+### Webhook retry and worker recovery controls
+
+- Webhook event IDs have a database uniqueness constraint; duplicate deliveries are acknowledged without creating a second event record.
+- A worker claims an event under a short row-locking transaction, then performs provider calls outside that transaction. Finalization checks the worker's claim token so a worker whose lease was reclaimed cannot overwrite the newer worker's result.
+- A processing lease expires after five minutes. Retryable provider/processing failures use bounded backoff and stop after eight claims.
+- If a worker repeatedly disappears after claiming an event, stale claims are also counted toward the eight-attempt limit; an event at the limit is moved to `MANUAL_REVIEW` rather than reclaimed indefinitely.
+- `MANUAL_REVIEW` is a terminal operational queue state in the current implementation. It requires an operator to inspect the provider dashboard and local order/refund records, document the outcome, and resolve the case through an approved operational procedure. There is no automated admin review screen or retry/reconciliation workflow in this branch.
+- Operations must monitor `RETRY`, stale `PROCESSING`, and `MANUAL_REVIEW` records. The current scheduler logs processing failures but does not send alerts or provide a dashboard/metrics view.
+- The retry/claim SQL scripts are manual staging-first schema changes. The POS migration chain does not create the pre-existing webhook event table; verify that table and all expected columns/indexes exist during the client-schema inspection. Do not apply these scripts to a live database without backup, exact schema comparison and an approved migration record.
+
 ## What is not implemented
 
 1. Provider-backed validation of POS UPI/card payments.
