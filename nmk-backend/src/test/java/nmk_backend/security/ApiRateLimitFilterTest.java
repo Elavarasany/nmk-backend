@@ -85,6 +85,26 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    void appliesDedicatedLimitToSettlementSynchronization() throws Exception {
+        when(service.isEnabled()).thenReturn(true);
+        when(service.increment("razorpay-settlement-sync", "192.0.2.10", 3, 60))
+                .thenReturn(new ApiRateLimitService.RateLimitDecision(false, 45, 4, 3));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("POST");
+        request.setRequestURI("/api/admin/pos/payments/settlements/sync");
+        request.setRemoteAddr("192.0.2.10");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter().doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertEquals(429, response.getStatus());
+        assertEquals("45", response.getHeader("Retry-After"));
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
     void providerWebhooksAreNeverRateLimited() throws Exception {
         when(service.isEnabled()).thenReturn(true);
         MockHttpServletRequest request = new MockHttpServletRequest();
