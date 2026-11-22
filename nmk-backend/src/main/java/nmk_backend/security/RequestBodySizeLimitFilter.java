@@ -19,7 +19,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 20)
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class RequestBodySizeLimitFilter extends OncePerRequestFilter {
 
     private final int maxRequestBodyBytes;
