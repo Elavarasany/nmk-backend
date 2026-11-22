@@ -554,6 +554,31 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void procurementCostReportEntriesArePagedAndValidateBounds() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
+        when(locationRepository.existsById(1L)).thenReturn(true);
+        when(goodsReceiptRepository.findCostReportEntries(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(
+                        List.of(reportRow("RECEIVED", "GR-071", day.atTime(10, 0))),
+                        PageRequest.of(1, 1), 3
+                ));
+
+        var page = service.getProcurementCostReportEntries(1L, day, day, 1, 1);
+
+        assertEquals(3L, page.getTotalElements());
+        assertEquals(1, page.getNumber());
+        assertEquals(1, page.getSize());
+        assertTrue(page.hasNext());
+        assertEquals("GR-071", page.getContent().get(0).reference());
+        verify(goodsReceiptRepository).findCostReportEntries(eq(1L), any(), any(), any(Pageable.class));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getProcurementCostReportEntries(1L, day, day, -1, 25));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getProcurementCostReportEntries(1L, day, day, 0, 101));
+    }
+
+    @Test
     void procurementCostReportRejectsInvalidDateRangeAndMissingLocation() {
         java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
         assertThrows(IllegalArgumentException.class,
