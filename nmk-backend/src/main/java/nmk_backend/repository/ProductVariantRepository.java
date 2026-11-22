@@ -23,6 +23,8 @@ public interface ProductVariantRepository
 
     List<ProductVariant> findByProductIdAndActiveTrue(Long productId);
 
+    List<ProductVariant> findByProductIdInAndActiveTrue(List<Long> productIds);
+
     boolean existsBySku(String sku);
 
     boolean existsByBarcode(String barcode);
