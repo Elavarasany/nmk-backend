@@ -3,6 +3,8 @@ package nmk_backend.service;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+import java.util.Set;
 
 import nmk_backend.entity.RazorpayWebhookEvent;
 import nmk_backend.repository.RazorpayWebhookEventRepository;
@@ -27,6 +29,12 @@ public class RazorpayWebhookService {
 
     private static final long LEASE_MINUTES = 5;
     private static final int BATCH_SIZE = 25;
+    private static final Set<String> SENSITIVE_WEBHOOK_FIELDS = Set.of(
+            "email", "contact", "phone", "phone_number", "vpa", "notes",
+            "card", "card_id", "bank", "wallet", "acquirer_data",
+            "evidence", "customer", "billing_address", "shipping_address",
+            "description"
+    );
 
     private final RazorpayWebhookEventRepository eventRepository;
     private final ObjectMapper objectMapper;
@@ -65,12 +73,19 @@ public class RazorpayWebhookService {
                 );
             }
 
+            // Keep only the fields required for payment/refund/dispute processing.
+            // Razorpay payment webhooks may also contain email, phone, VPA,
+            // card metadata, customer notes and dispute evidence references.
+            JsonNode sanitizedPayload = root.deepCopy();
+            removeSensitiveFields(sanitizedPayload);
+            String sanitizedJson = objectMapper.writeValueAsString(sanitizedPayload);
+
             RazorpayWebhookEvent event =
                     new RazorpayWebhookEvent();
 
             event.setEventId(eventId);
             event.setEventType(eventType);
-            event.setRawPayload(rawPayload);
+            event.setRawPayload(sanitizedJson);
             event.setStatus("RECEIVED");
 
             eventRepository.saveAndFlush(event);
@@ -88,6 +103,18 @@ public class RazorpayWebhookService {
             throw new IllegalArgumentException(
                     "Webhook body is not valid JSON"
             );
+        }
+    }
+
+    private void removeSensitiveFields(JsonNode node) {
+        if (node == null || node.isNull()) return;
+        if (node instanceof ObjectNode object) {
+            for (String field : SENSITIVE_WEBHOOK_FIELDS) {
+                object.remove(field);
+            }
+            object.forEach(this::removeSensitiveFields);
+        } else if (node.isArray()) {
+            node.forEach(this::removeSensitiveFields);
         }
     }
 
