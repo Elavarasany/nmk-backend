@@ -282,7 +282,9 @@ public class RazorpaySettlementPersistenceService {
                         "No local paid order and processed refund ledger row match this provider refund.");
             }
             if (!refund.getOrder().getId().equals(order.getId())
+                    || !row.paymentId().equals(refund.getRazorpayPaymentId())
                     || refund.getAmountPaise() != row.amountPaise()
+                    || !"INR".equalsIgnoreCase(refund.getCurrency())
                     || !"PROCESSED".equalsIgnoreCase(refund.getStatus())) {
                 return new MatchResult("MISMATCH", order.getId(), refund.getId(),
                         "Provider refund does not match the local refund amount, order or processed status.");
