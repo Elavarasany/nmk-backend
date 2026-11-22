@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -54,13 +55,19 @@ class RazorpayRefundRequestMySqlTest {
                             CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
         start.await();
-        try {
-            requestService.prepare(orderId, 7000L, "Concurrent partial refund",
-                    "refund_" + suffix + "_" + label, "admin");
-            return true;
-        } catch (IllegalStateException exception) {
-            return false;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                requestService.prepare(orderId, 7000L, "Concurrent partial refund",
+                        "refund_" + suffix + "_" + label, "admin");
+                return true;
+            } catch (PessimisticLockingFailureException lockFailure) {
+                if (attempt == 2) throw lockFailure;
+                Thread.sleep(40L * (attempt + 1));
+            } catch (IllegalStateException pendingRequest) {
+                return false;
+            }
         }
+        return false;
     }
 
     @Test
