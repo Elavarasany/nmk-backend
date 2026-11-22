@@ -383,6 +383,13 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void cashierCannotReadLocationWideShiftHistory() {
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getShiftHistory(1L, 0, 25, "cashier.one", "CASHIER"));
+        verifyNoInteractions(shiftRepository, locationRepository);
+    }
+
+    @Test
     void dailyCashReconciliationIsRestrictedToManagersAndAdministrators() {
         assertThrows(IllegalArgumentException.class, () -> service.getDailyCashReconciliation(
                 1L, java.time.LocalDate.of(2026, 11, 22), "cashier.one", "CASHIER"
