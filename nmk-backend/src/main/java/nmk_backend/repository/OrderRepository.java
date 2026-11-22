@@ -69,6 +69,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     """)
     List<Order> findWithItemsByIdIn(@Param("ids") List<Long> ids);
 
+    @Query(
+            value = """
+                SELECT
+                    COALESCE(NULLIF(LOWER(TRIM(o.email)), ''), o.phone) AS customerKey,
+                    MAX(o.customerName) AS customerName,
+                    MAX(o.email) AS email,
+                    MAX(o.phone) AS phone,
+                    COUNT(o.id) AS totalOrders,
+                    COALESCE(SUM(CASE WHEN UPPER(o.paymentStatus) = 'PAID'
+                                      THEN o.totalAmount ELSE 0 END), 0) AS totalSpent
+                FROM Order o
+                GROUP BY COALESCE(NULLIF(LOWER(TRIM(o.email)), ''), o.phone)
+                ORDER BY MAX(o.orderDate) DESC,
+                         COALESCE(NULLIF(LOWER(TRIM(o.email)), ''), o.phone) ASC
+                """,
+            countQuery = """
+                SELECT COUNT(DISTINCT COALESCE(NULLIF(LOWER(TRIM(o.email)), ''), o.phone))
+                FROM Order o
+                """
+    )
+    Page<CustomerOrderSummaryProjection> findCustomerSummaries(Pageable pageable);
+
     @Query("""
         SELECT DISTINCT o
         FROM Order o
