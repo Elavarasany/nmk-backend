@@ -49,4 +49,31 @@ class CorsConfigurationTest {
 
         assertThrows(IllegalStateException.class, config::corsConfigurationSource);
     }
+    @Test
+    void rejectsWildcardSubdomainsAndNonOriginUrlComponents() {
+        for (String value : java.util.List.of(
+                "https://*.example.com",
+                "https://shop.example.com/path",
+                "https://shop.example.com?next=/admin",
+                "https://user@shop.example.com",
+                "ftp://shop.example.com",
+                "https://shop.example.com#fragment"
+        )) {
+            SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+            ReflectionTestUtils.setField(config, "allowedOrigins", value);
+            ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
+
+            assertThrows(IllegalStateException.class, config::corsConfigurationSource, value);
+        }
+    }
+
+    @Test
+    void acceptsExplicitHttpOriginForLocalDevelopment() {
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+        ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173");
+        ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
+
+        assertDoesNotThrow(config::corsConfigurationSource);
+    }
+
 }
