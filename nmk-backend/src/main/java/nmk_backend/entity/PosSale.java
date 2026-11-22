@@ -2,6 +2,7 @@
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -73,6 +74,8 @@ public class PosSale {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @BatchSize(size = 50)
+    @BatchSize(size = 50)
     @OneToMany(
             mappedBy = "sale",
             cascade = CascadeType.ALL,
