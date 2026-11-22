@@ -43,16 +43,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public Product getProductById(@PathVariable Long id) {
-        Product product = productService.getProductById(id);
-
-        if (!product.isActive()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.NOT_FOUND,
-                    "Product not found"
-            );
-        }
-
-        return product;
+    public CustomerProductCatalogResponse.ProductItem getProductById(@PathVariable Long id) {
+        return customerProductCatalogService.getActiveProductById(id);
     }
 }
