@@ -9,6 +9,7 @@ CREATE TABLE supplier_bills (
     invoice_date DATE NOT NULL,
     due_date DATE NULL,
     amount DECIMAL(14,2) NOT NULL,
+    paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     bill_type VARCHAR(20) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'POSTED',
     created_by_username VARCHAR(100) NOT NULL,
