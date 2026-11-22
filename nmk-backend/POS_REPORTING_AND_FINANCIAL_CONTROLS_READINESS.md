@@ -56,3 +56,13 @@ It is a **net recorded procurement-cost activity measure** only. It is not proof
 8. Accounting review and test cases against representative real-world transactions.
 
 Until those controls exist, label these screens as operational POS reports. Do not use them as audited financial statements or claim profit from them.
+
+
+## POS idempotency-key scope and retention
+
+- The database enforces uniqueness within each owning table, not across the entire POS domain: sales, returns, exchanges, shifts and cash movements each have their own unique idempotency-key constraint. This is appropriate for replay within each operation type, but it is not one global key registry.
+- Checkout, return, exchange and shift keys are trimmed and limited to 100 characters by service validation, while the corresponding SQL columns allow 150 characters. Cash movement keys are also limited to 100 characters; internally generated movement keys add operation prefixes and suffixes but remain within the 150-character column limit.
+- Exchange creates linked return and replacement-sale keys by prefixing the supplied exchange key (POS-EXCHANGE-RETURN: and POS-EXCHANGE-SALE:). Checkout accepts arbitrary caller-provided keys in the same pos_sales namespace. Therefore, a checkout key deliberately or accidentally matching a reserved exchange-generated key can block that exchange through the unique constraint. The current design relies on prefixes rather than a typed/global key namespace.
+- Cash movement records also share one key namespace across manual cash-in/out and internally generated opening-float, cash-sale and refund movements. Replay validation checks shift, actor, movement type, amount and reason, which prevents a mismatched request from silently replaying, but a conflicting key still causes an operation to fail.
+- There is no automatic TTL or cleanup job for POS idempotency records. These keys are stored on durable financial/operational records and should not be deleted independently: doing so can remove the database's replay guard and allow an old request to be processed again. Retention/deletion must be governed by an approved financial-record retention policy, with dependent records and backups considered together.
+- Before production, reserve and validate internal prefixes for client-supplied keys (or introduce operation-specific key namespaces), test conflicting-key behavior, and document retention. Do not add automatic deletion of sales/returns/exchanges/cash movements merely to reduce table size.
