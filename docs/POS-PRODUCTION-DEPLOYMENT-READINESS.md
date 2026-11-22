@@ -79,3 +79,11 @@ SMS remains disabled in the current base configuration. Do not enable it until c
 - Development/test default remains enabled, preserving existing local behavior.
 
 No deployment, live database access, migration execution, PR merge, or production credential change was performed.
+
+
+## HTTP ingress limits and rate limiting
+
+- The application now rejects request bodies larger than 1 MiB before MVC/Jackson controller deserialization. This applies to non-read-only HTTP methods, including chunked requests without a declared content length.
+- Keep the webhook's existing 1 MiB raw-body limit aligned with `app.http.max-request-body-bytes`; if either limit changes, update and test both together.
+- This in-process body cap does not replace reverse-proxy limits. Configure the hosting edge to cap request headers and body sizes, enforce HTTPS, and apply per-IP rate limits to login, checkout, appointment booking and public order tracking. Exclude or separately tune Razorpay webhook traffic so legitimate provider retries are not dropped.
+- No hosting provider or reverse proxy is defined in this repository, so edge rate limiting, header limits and TLS policy remain deployment tasks. Do not trust client-supplied forwarded-IP headers unless the hosting proxy is configured to overwrite them and the application is configured to trust only that proxy.
