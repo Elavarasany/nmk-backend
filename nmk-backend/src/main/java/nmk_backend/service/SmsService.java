@@ -28,15 +28,7 @@ public class SmsService {
             String trackingUrl) {
 
         if (!smsEnabled) {
-            System.out.println("\n========== TEST SMS ==========");
-            System.out.println("Phone: " + phone);
-            System.out.println("Order: " + orderId);
-            System.out.println("Status: " + status);
-            System.out.println("Courier: " + courierName);
-            System.out.println("Tracking Number: " + trackingNumber);
-            System.out.println("Tracking URL: " + trackingUrl);
-            System.out.println("SMS NOT SENT - TEST MODE");
-            System.out.println("=============================\n");
+            // Deliberately do not log customer contact or tracking details.
             return;
         }
 
