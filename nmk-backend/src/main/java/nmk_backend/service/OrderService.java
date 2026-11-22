@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -728,7 +730,7 @@ public class OrderService {
 
             String url = urlText(rx.get("imageUrl"));
 
-            if (!url.startsWith("https://")) {
+            if (!isAllowedPrescriptionImageUrl(url)) {
                 throw new IllegalArgumentException(
                         "The prescription image link is not valid."
                 );
@@ -878,6 +880,27 @@ public class OrderService {
         }
 
         return eye;
+    }
+
+    static boolean isAllowedPrescriptionImageUrl(String value) {
+        if (value == null || value.isBlank() || value.length() > 2048) {
+            return false;
+        }
+        try {
+            URI uri = new URI(value.trim());
+            String path = uri.getRawPath();
+            return "https".equalsIgnoreCase(uri.getScheme())
+                    && "res.cloudinary.com".equalsIgnoreCase(uri.getHost())
+                    && uri.getUserInfo() == null
+                    && uri.getPort() == -1
+                    && uri.getRawQuery() == null
+                    && uri.getRawFragment() == null
+                    && path != null
+                    && path.contains("/nmk-prescriptions/")
+                    && !path.contains("\\..");
+        } catch (URISyntaxException invalidUri) {
+            return false;
+        }
     }
 
     private String urlText(Object value) {
