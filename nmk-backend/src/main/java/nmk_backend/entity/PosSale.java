@@ -13,19 +13,14 @@ import java.util.UUID;
 @Table(
         name = "pos_sales",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_pos_sales_invoice_number",
-                        columnNames = "invoice_number"
-                ),
-                @UniqueConstraint(
-                        name = "uk_pos_sales_idempotency_key",
-                        columnNames = "idempotency_key"
-                )
+                @UniqueConstraint(name = "uk_pos_sales_invoice_number", columnNames = "invoice_number"),
+                @UniqueConstraint(name = "uk_pos_sales_idempotency_key", columnNames = "idempotency_key")
         },
         indexes = {
                 @Index(name = "idx_pos_sales_created_at", columnList = "created_at"),
                 @Index(name = "idx_pos_sales_location", columnList = "location_id"),
-                @Index(name = "idx_pos_sales_cashier", columnList = "cashier_username")
+                @Index(name = "idx_pos_sales_cashier", columnList = "cashier_username"),
+                @Index(name = "idx_pos_sales_location_status_created", columnList = "location_id, status, created_at, id")
         }
 )
 public class PosSale {
@@ -74,38 +69,20 @@ public class PosSale {
     private LocalDateTime createdAt;
 
     @BatchSize(size = 50)
-    @OneToMany(
-            mappedBy = "sale",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PosSaleItem> items = new ArrayList<>();
 
     @BatchSize(size = 50)
-    @OneToMany(
-            mappedBy = "sale",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PosPayment> payments = new ArrayList<>();
 
     @PrePersist
     public void prePersist() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-
-        if (status == null || status.isBlank()) {
-            status = "COMPLETED";
-        }
-
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (status == null || status.isBlank()) status = "COMPLETED";
         if (invoiceNumber == null || invoiceNumber.isBlank()) {
-            invoiceNumber = "NMK-" +
-                    LocalDateTime.now().toLocalDate().toString().replace("-", "") +
-                    "-" +
-                    UUID.randomUUID().toString()
-                            .replace("-", "")
-                            .substring(0, 10).toUpperCase();
+            invoiceNumber = "NMK-" + LocalDateTime.now().toLocalDate().toString().replace("-", "")
+                    + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
         }
     }
 
