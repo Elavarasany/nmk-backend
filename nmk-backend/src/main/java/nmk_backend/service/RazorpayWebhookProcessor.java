@@ -143,6 +143,21 @@ public class RazorpayWebhookProcessor {
                 return null;
             }
 
+            // A worker may repeatedly disappear after claiming an event.
+            // Such abandoned claims count toward the same retry budget as
+            // ordinary failures; never reclaim indefinitely past the limit.
+            if (event.getAttemptCount() >= MAX_ATTEMPTS) {
+                event.setStatus("MANUAL_REVIEW");
+                event.setProcessingError(
+                        "Retry limit reached before processing could be completed"
+                );
+                event.setNextAttemptAt(null);
+                event.setClaimToken(null);
+                event.setProcessingStartedAt(null);
+                eventRepository.save(event);
+                return null;
+            }
+
             String claimToken = UUID.randomUUID().toString();
 
             event.setStatus("PROCESSING");
