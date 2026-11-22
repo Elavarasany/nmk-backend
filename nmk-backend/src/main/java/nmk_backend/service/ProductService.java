@@ -2,6 +2,9 @@
 package nmk_backend.service;
 
 import nmk_backend.entity.Product;
+import nmk_backend.dto.AdminProductResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import nmk_backend.repository.ProductRepository;
 
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,11 @@ public class ProductService {
 
     public List<Product> getAllProducts() {
         return productRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminProductResponse> getAllProducts(Pageable pageable) {
+        return productRepository.findAll(pageable).map(AdminProductResponse::from);
     }
 
     public Product getProductById(Long id) {
