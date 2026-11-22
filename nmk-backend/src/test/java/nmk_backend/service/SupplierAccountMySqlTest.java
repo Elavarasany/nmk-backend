@@ -130,7 +130,6 @@ class SupplierAccountMySqlTest {
         bill.setCreatedByUsername("test");
         bill.setIdempotencyKey("supplierbill_" + suffix);
         bill.setRequestFingerprint("a".repeat(64));
-        bill.setCreatedAt(LocalDateTime.now());
         return billRepository.saveAndFlush(bill);
     }
 }
