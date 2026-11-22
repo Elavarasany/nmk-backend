@@ -82,6 +82,15 @@ public class PosCheckoutService {
 
     @Transactional(readOnly = true)
     public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable) {
+        return getSales(locationId, pageable, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable, String username, String role) {
+        if (locationAccessService != null && locationId == null && !"ADMIN".equalsIgnoreCase(role)) {
+            throw new IllegalArgumentException("A location filter is required for non-administrator sales history");
+        }
+        if (locationId != null && locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
         Page<PosSale> sales = locationId == null
                 ? saleRepository.findAll(pageable)
                 : saleRepository.findByLocationId(locationId, pageable);
@@ -90,8 +99,14 @@ public class PosCheckoutService {
 
     @Transactional(readOnly = true)
     public PosSaleResponse getSale(Long saleId) {
+        return getSale(saleId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PosSaleResponse getSale(Long saleId, String username, String role) {
         PosSale sale = saleRepository.findById(saleId)
                 .orElseThrow(() -> new InventoryNotFoundException("POS sale was not found"));
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, sale.getLocationId());
         return PosSaleResponse.from(sale);
     }
 
