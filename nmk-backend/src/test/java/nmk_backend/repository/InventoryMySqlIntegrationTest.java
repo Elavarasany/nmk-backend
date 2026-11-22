@@ -1,7 +1,8 @@
 package nmk_backend.repository;
 
-import nmk_backend.entity.Product;
-import nmk_backend.entity.ProductVariant;
+import nmk_backend.entity.*;
+import nmk_backend.service.InventoryService;
+import nmk_backend.service.ProductService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,7 +28,7 @@ class InventoryMySqlIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
-    private ProductService productService;
+    private ProductVariantRepository variantRepository;
 
     @Autowired
     private InventoryBalanceRepository balanceRepository;
@@ -38,19 +40,10 @@ class InventoryMySqlIntegrationTest {
     private InventoryService inventoryService;
 
     @Autowired
-    private ProductVariantRepository variantRepository;
+    private ProductService productService;
 
     @PersistenceContext
     private EntityManager entityManager;
-
-    @Autowired
-    private ProductService productService;
-
-    @Autowired
-    private InventoryBalanceRepository balanceRepository;
-
-    @Autowired
-    private StockMovementRepository movementRepository;
 
     @Test
     void deletingProductDeactivatesItAndPreservesInventoryAndMovementHistory() {
@@ -63,14 +56,14 @@ class InventoryMySqlIntegrationTest {
 
         ProductVariant variant = new ProductVariant();
         variant.setProduct(product);
-        variant.setSku("SOFT-DELETE-" + java.util.UUID.randomUUID());
+        variant.setSku("SOFT-DELETE-" + UUID.randomUUID());
         variant.setVariantName("Preserved Variant");
         variant.setAttributes(Map.of("color", "Black"));
         variant.setActive(true);
         variant = variantRepository.saveAndFlush(variant);
 
         InventoryLocation location = new InventoryLocation();
-        location.setCode("SD-" + java.util.UUID.randomUUID());
+        location.setCode("SD-" + UUID.randomUUID());
         location.setName("Soft Delete Test Location");
         location.setActive(true);
         location = entityManager.persist(location);
@@ -79,34 +72,37 @@ class InventoryMySqlIntegrationTest {
         InventoryBalance balance = new InventoryBalance();
         balance.setLocation(location);
         balance.setVariant(variant);
-        balance.setOnHandQuantity(4);
+        balance.setOnHandQuantity(3);
         balance.setReservedQuantity(0);
         balance.setReorderLevel(0);
         balanceRepository.saveAndFlush(balance);
 
-        ProductVariant savedVariant = variant;
+        Long productId = product.getId();
+        Long variantId = variant.getId();
+        Long locationId = location.getId();
+
         inventoryService.receiveStock(
-                location.getId(), savedVariant.getId(), 0,
-                "SOFT-DELETE-TEST-" + java.util.UUID.randomUUID(),
+                locationId, variantId, 1,
+                "SOFT-DELETE-TEST-" + UUID.randomUUID(),
                 null, "Audit movement before product deactivation"
         );
 
-        productService.deleteProduct(product.getId());
+        productService.deleteProduct(productId);
         entityManager.flush();
         entityManager.clear();
 
-        Product persistedProduct = productRepository.findById(product.getId()).orElseThrow();
-        ProductVariant persistedVariant = variantRepository.findById(savedVariant.getId()).orElseThrow();
+        Product persistedProduct = productRepository.findById(productId).orElseThrow();
+        ProductVariant persistedVariant = variantRepository.findById(variantId).orElseThrow();
         InventoryBalance persistedBalance = balanceRepository
-                .findByLocationIdAndVariantId(location.getId(), savedVariant.getId())
+                .findByLocationIdAndVariantId(locationId, variantId)
                 .orElseThrow();
 
         assertFalse(persistedProduct.isActive());
         assertTrue(persistedVariant.isActive());
         assertEquals(4, persistedBalance.getOnHandQuantity());
-        assertTrue(movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
-                location.getId(), savedVariant.getId()
-        ).size() >= 1);
+        assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+                locationId, variantId
+        ).size());
     }
 
     @Test
@@ -121,7 +117,7 @@ class InventoryMySqlIntegrationTest {
 
         ProductVariant variant = new ProductVariant();
         variant.setProduct(product);
-        variant.setSku("MYSQL-JSON-SKU-001");
+        variant.setSku("MYSQL-JSON-SKU-" + UUID.randomUUID());
         variant.setVariantName("Black Rectangle Frame");
         variant.setAttributes(Map.of(
                 "color", "Black",
@@ -136,16 +132,13 @@ class InventoryMySqlIntegrationTest {
         entityManager.clear();
 
         ProductVariant result = variantRepository
-                .findBySku("MYSQL-JSON-SKU-001")
+                .findBySku(variant.getSku())
                 .orElseThrow();
 
         assertEquals("Black Rectangle Frame", result.getVariantName());
         assertEquals("Black", result.getAttributes().get("color"));
         assertEquals("Rectangle", result.getAttributes().get("shape"));
         assertEquals("TR90", result.getAttributes().get("material"));
-        assertEquals(
-                new BigDecimal("1199.00"),
-                result.getSellingPriceOverride()
-        );
+        assertEquals(new BigDecimal("1199.00"), result.getSellingPriceOverride());
     }
 }
