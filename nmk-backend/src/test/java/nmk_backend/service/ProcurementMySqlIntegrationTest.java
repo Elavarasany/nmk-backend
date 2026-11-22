@@ -130,4 +130,90 @@ class ProcurementMySqlIntegrationTest {
         assertEquals(new BigDecimal("70.00"), report.returnedCost());
         assertEquals(new BigDecimal("105.00"), report.netRecordedProcurementCost());
     }
+
+    @Test
+    void failedMultiLineGoodsReceiptRollsBackEarlierInventoryAndPurchaseOrderChanges() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String username = "mysql-procurement-rollback-" + suffix;
+
+        Admin manager = new Admin();
+        manager.setUsername(username);
+        manager.setPassword("test-only-password");
+        admins.saveAndFlush(manager);
+
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("PR-RB-" + suffix);
+        location.setName("MySQL Procurement Rollback " + suffix);
+        location.setActive(true);
+        location = locations.saveAndFlush(location);
+
+        Product firstProduct = new Product();
+        firstProduct.setName("Rollback First " + suffix);
+        firstProduct.setPrice(new BigDecimal("100.00"));
+        firstProduct.setStockQuantity(0);
+        firstProduct.setActive(true);
+        firstProduct = products.saveAndFlush(firstProduct);
+
+        ProductVariant firstVariant = new ProductVariant();
+        firstVariant.setProduct(firstProduct);
+        firstVariant.setSku("PR-RB-A-" + suffix);
+        firstVariant.setVariantName("Black");
+        firstVariant.setAttributes(Map.of("color", "Black"));
+        firstVariant.setActive(true);
+        firstVariant = variants.saveAndFlush(firstVariant);
+
+        Product secondProduct = new Product();
+        secondProduct.setName("Rollback Second " + suffix);
+        secondProduct.setPrice(new BigDecimal("100.00"));
+        secondProduct.setStockQuantity(0);
+        secondProduct.setActive(true);
+        secondProduct = products.saveAndFlush(secondProduct);
+
+        ProductVariant secondVariant = new ProductVariant();
+        secondVariant.setProduct(secondProduct);
+        secondVariant.setSku("PR-RB-B-" + suffix);
+        secondVariant.setVariantName("Brown");
+        secondVariant.setAttributes(Map.of("color", "Brown"));
+        secondVariant.setActive(true);
+        secondVariant = variants.saveAndFlush(secondVariant);
+
+        SupplierResponse supplier = procurement.createSupplier(
+                new SupplierCreateRequest("Rollback Supplier " + suffix, "Contact", "9876543210", null, "Test address")
+        );
+        PurchaseOrderResponse draft = procurement.createPurchaseOrder(
+                new PurchaseOrderCreateRequest(
+                        supplier.id(), location.getId(), "Verify receipt transaction rollback",
+                        List.of(
+                                new PurchaseOrderItemRequest(firstVariant.getId(), 2, new BigDecimal("35.00")),
+                                new PurchaseOrderItemRequest(secondVariant.getId(), 2, new BigDecimal("40.00"))
+                        ),
+                        "MYSQL-PO-RB-" + suffix
+                ),
+                username
+        );
+        procurement.submitPurchaseOrder(draft.id());
+
+        secondProduct.setActive(false);
+        products.saveAndFlush(secondProduct);
+
+        assertThrows(RuntimeException.class, () -> procurement.receiveGoods(
+                draft.id(),
+                new GoodsReceiptRequest(
+                        "Second line is intentionally no longer receivable",
+                        "MYSQL-GR-RB-" + suffix,
+                        List.of(
+                                new GoodsReceiptItemRequest(draft.items().get(0).id(), 1),
+                                new GoodsReceiptItemRequest(draft.items().get(1).id(), 1)
+                        )
+                ),
+                username
+        ));
+
+        assertEquals("ORDERED", procurement.getPurchaseOrder(draft.id()).status());
+        assertTrue(procurement.getGoodsReceipts(draft.id()).isEmpty(),
+                "The failed receipt document must roll back");
+        assertTrue(balances.findByLocationIdAndVariantId(location.getId(), firstVariant.getId()).isEmpty(),
+                "The first line's stock increase must roll back when a later line fails");
+        assertTrue(balances.findByLocationIdAndVariantId(location.getId(), secondVariant.getId()).isEmpty());
+    }
 }
