@@ -133,6 +133,13 @@ public class RazorpayRefundReconciliationService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void markInitiationFailed(String idempotencyKey) {
+        OrderRefund snapshot = refundRepository.findByRequestIdempotencyKey(idempotencyKey)
+                .orElse(null);
+        if (snapshot == null) return;
+
+        // Keep the same lock order as webhook reconciliation: order first, then refund.
+        Order order = orderRepository.findByIdForUpdate(snapshot.getOrder().getId())
+                .orElseThrow(() -> new IllegalStateException("Refund order was not found"));
         OrderRefund refund = refundRepository.findByRequestIdempotencyKeyForUpdate(idempotencyKey)
                 .orElse(null);
         if (refund == null || !"PENDING".equals(refund.getStatus())
@@ -142,8 +149,6 @@ public class RazorpayRefundReconciliationService {
         refund.setStatus("FAILED");
         refund.setLastProviderEventId("API_REJECTED");
         refundRepository.saveAndFlush(refund);
-        Order order = orderRepository.findByIdForUpdate(refund.getOrder().getId())
-                .orElseThrow(() -> new IllegalStateException("Refund order was not found"));
         recalculateOrderRefundStatus(order, toPaise(order));
         orderRepository.save(order);
     }
