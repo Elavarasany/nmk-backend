@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_order_refunds_razorpay_refund_id", columnNames = "razorpay_refund_id"),
                 @UniqueConstraint(name = "uk_order_refunds_request_key", columnNames = "request_idempotency_key"),
-                @UniqueConstraint(name = "uk_order_refunds_receipt", columnNames = "receipt")
+                @UniqueConstraint(name = "uk_order_refunds_payment_receipt", columnNames = "razorpay_payment_id, receipt")
         },
         indexes = {
                 @Index(name = "idx_order_refunds_order_status", columnList = "order_id, status"),
