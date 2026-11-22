@@ -5,6 +5,7 @@ Status: configuration review in progress. This document is a deployment gate, no
 ## Verified repository configuration
 
 - Activate the production profile with `SPRING_PROFILES_ACTIVE=prod`.
+- Backend listens on the hosting platform's `PORT` environment variable when supplied, and defaults to `8080` for local use.
 - The base datasource requires `AIVEN_HOST`, `AIVEN_PORT`, `AIVEN_DATABASE`, `AIVEN_USER`, and `AIVEN_PASSWORD`. JDBC uses `sslMode=REQUIRED`; confirm the selected database provider's TLS requirements and certificate-validation policy before launch.
 - `JWT_SECRET` is required. The application builds an HMAC signing key with JJWT; provision a cryptographically random key of at least 32 bytes (prefer 32+ random bytes encoded as Base64) and keep it outside source control. Rotating it invalidates existing sessions.
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` are required by the base configuration. Use live credentials only in the production secret store, never in frontend `VITE_*` variables.
@@ -18,6 +19,7 @@ Status: configuration review in progress. This document is a deployment gate, no
 
 Backend:
 - `SPRING_PROFILES_ACTIVE=prod`
+- `PORT` (only when required by the selected hosting platform; otherwise the backend defaults to `8080`)
 - `AIVEN_HOST`, `AIVEN_PORT`, `AIVEN_DATABASE`, `AIVEN_USER`, `AIVEN_PASSWORD`
 - `JWT_SECRET` (random, high entropy, at least 32 bytes)
 - `APP_CORS_ALLOWED_ORIGINS` (exact HTTPS origins)
