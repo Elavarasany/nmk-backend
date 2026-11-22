@@ -6,7 +6,8 @@
 
 CREATE TABLE suppliers (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    name VARCHAR(200) NOT NULL,
+    -- Keep supplier identity case-insensitive even if the database default collation changes.
+    name VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     contact_name VARCHAR(120) NULL,
     phone VARCHAR(30) NULL,
     email VARCHAR(160) NULL,
