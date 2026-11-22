@@ -15,6 +15,14 @@ Status: configuration review in progress. This document is a deployment gate, no
 - `AdminDataInitializer` supports a one-time initial administrator via `ADMIN_BOOTSTRAP_USERNAME` and `ADMIN_BOOTSTRAP_PASSWORD`. It creates the account only if that username does not already exist. Remove both variables from the deployment environment immediately after verifying the first administrator can sign in and create/manage staff.
 - Demo website-image seeding is now controlled by `website-images.bootstrap.enabled`. It defaults to enabled for existing development/test behavior and is explicitly disabled in `application-prod.properties`; production will not silently populate demo placeholder image URLs.
 
+## Production API rate limiting
+
+- `application-prod.properties` enables the shared database-backed rate limiter by default through `app.rate-limit.enabled=${APP_RATE_LIMIT_ENABLED:true}`. This closes the previous gap where the base default (`false`) silently disabled request protection even when the production profile was active.
+- Apply and verify `nmk-backend/src/main/resources/db/manual/018-create-api-rate-limit-buckets.sql` on the approved, staging-rehearsed production schema before enabling the production service. Do not run it against a client database without approval and a verified backup.
+- If the rate-limit table is missing or the database store fails, protected routes fail closed with HTTP 503. Do not disable the limiter just to bypass a missing migration; fix the schema/connection.
+- `APP_RATE_LIMIT_ENABLED` is an optional explicit override. It should normally be omitted so production remains enabled by default; setting it to `false` requires a documented, approved exception.
+- The limiter uses the socket peer address, not arbitrary forwarded headers. Configure the trusted hosting proxy to overwrite client IP headers and review edge-level rate limits separately.
+
 ## Required deployment environment
 
 Backend:
