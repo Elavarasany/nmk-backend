@@ -13,7 +13,7 @@ The POS now has an additive supplier-accounting ledger:
 - Supplier bill posting, payment recording and credit-note recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
 - Cash supplier payments require an open POS shift, verify that the shift belongs to the bill's purchase-order location, ensure the drawer has sufficient expected cash, and create one linked OUT movement in the cash ledger.
 - Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed. Credit notes may optionally link to a supplier return and must match the bill's supplier and purchase order.
-- Bill, payment, credit-note history and supplier payables-aging endpoints are administrator-only. Aging groups outstanding bills into not-due, 1–30, 31–60, 61–90 and over-90-day buckets using the bill due date.
+- Bill, payment, credit-note history and supplier payables-aging endpoints are administrator-only.
 
 Manual schema migration: 022-create-supplier-ap-and-landed-cost-ledger.sql. It is additive and has not been applied to any client database.
 
