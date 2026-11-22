@@ -151,6 +151,8 @@ class PosCheckoutTransactionIntegrationTest {
         location.setName("POS Rollback Test Location");
         location.setActive(true);
         location = locationRepository.saveAndFlush(location);
+        cashier.setAssignedLocations(java.util.Set.of(location));
+        adminRepository.saveAndFlush(cashier);
 
         PosRegisterResponse register = shiftService.createRegister(
                 new PosRegisterCreateRequest(location.getId(), "MAIN", "Main Register")
