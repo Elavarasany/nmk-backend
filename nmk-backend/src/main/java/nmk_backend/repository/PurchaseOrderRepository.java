@@ -2,6 +2,7 @@ package nmk_backend.repository;
 
 import nmk_backend.entity.PurchaseOrder;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -11,7 +12,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
+    @EntityGraph(attributePaths = {"items", "items.variant", "items.variant.product", "supplier", "location"})
     List<PurchaseOrder> findAllByOrderByCreatedAtDesc();
+
     Optional<PurchaseOrder> findByIdempotencyKey(String idempotencyKey);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
