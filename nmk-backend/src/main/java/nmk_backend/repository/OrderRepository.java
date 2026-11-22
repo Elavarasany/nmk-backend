@@ -23,6 +23,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("""
         SELECT o
         FROM Order o
+        WHERE o.razorpayPaymentId = :razorpayPaymentId
+    """)
+    Optional<Order> findByRazorpayPaymentIdForUpdate(
+            @Param("razorpayPaymentId") String razorpayPaymentId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT o
+        FROM Order o
         WHERE o.razorpayOrderId = :razorpayOrderId
     """)
     Optional<Order> findByRazorpayOrderIdForUpdate(
