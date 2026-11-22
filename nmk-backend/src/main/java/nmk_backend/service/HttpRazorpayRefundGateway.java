@@ -31,7 +31,7 @@ public class HttpRazorpayRefundGateway implements RazorpayRefundGateway {
         requestFactory.setReadTimeout(Duration.ofSeconds(20));
 
         this.client = RestClient.builder()
-                .baseUrl("https://api.razorpay.com/v1")
+                .baseUrl("https://api.razorpay.com")
                 .requestFactory(requestFactory)
                 .defaultHeaders(headers -> {
                     if (!this.keyId.isBlank() && !this.keySecret.isBlank()) {
@@ -68,7 +68,7 @@ public class HttpRazorpayRefundGateway implements RazorpayRefundGateway {
 
         try {
             Map<String, Object> response = client.post()
-                    .uri("/payments/{paymentId}/refund", paymentId)
+                    .uri("/v1/payments/{paymentId}/refund", paymentId)
                     .header("X-Refund-Idempotency", idempotencyKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
