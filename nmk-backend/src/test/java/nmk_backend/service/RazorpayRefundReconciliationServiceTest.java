@@ -89,7 +89,13 @@ class RazorpayRefundReconciliationServiceTest {
     @Test
     void refundTotalCannotExceedCapturedOrderAmount() {
         Order order = paidOrder();
-        stubNewRefund(order, 13000L, 13000L);
+        when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
+                .thenReturn(Optional.of(order));
+        when(refundRepository.findByRazorpayRefundIdForUpdate("rfnd_123"))
+                .thenReturn(Optional.empty());
+        when(refundRepository.saveAndFlush(any(OrderRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(refundRepository.sumActiveAmountPaiseByOrderId(17L)).thenReturn(13000L);
 
         assertThrows(IllegalArgumentException.class, () ->
                 service().reconcile("evt_4", "refund.processed", "rfnd_123",
@@ -101,9 +107,6 @@ class RazorpayRefundReconciliationServiceTest {
     @Test
     void mismatchedProviderCurrencyIsRejected() {
         Order order = paidOrder();
-        when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
-                .thenReturn(Optional.of(order));
-
         assertThrows(IllegalArgumentException.class, () ->
                 service().reconcile("evt_5", "refund.processed", "rfnd_123",
                         "pay_123", 5000L, "USD", "processed"));
