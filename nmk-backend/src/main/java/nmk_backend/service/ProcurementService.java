@@ -189,10 +189,6 @@ public class ProcurementService {
     private boolean isSupplierNameUniqueViolation(DataIntegrityViolationException exception) {
         Throwable cause = exception;
         while (cause != null) {
-            if (cause instanceof java.sql.SQLException sqlException
-                    && sqlException.getErrorCode() == 1062) {
-                return true;
-            }
             String message = cause.getMessage();
             if (message != null && message.toLowerCase(Locale.ROOT).contains("uk_suppliers_name")) {
                 return true;
