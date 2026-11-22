@@ -33,8 +33,11 @@ public class StalePaymentCreationReviewService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime cutoff = now.minusMinutes(olderThanMinutes);
         return orderRepository
-                .findByPaymentCreationStatusAndPaymentStatusAndStockReservedTrueAndOrderDateBeforeOrderByOrderDateAsc(
-                        "IN_PROGRESS", "PENDING", cutoff,
+                .findExpiredStalePaymentCreations(
+                        java.util.List.of("IN_PROGRESS", "CREATED"),
+                        "PENDING",
+                        cutoff,
+                        now,
                         PageRequest.of(page, size, Sort.by(Sort.Order.asc("orderDate"), Sort.Order.asc("id")))
                 )
                 .map(order -> StalePaymentCreationResponse.from(order, now));
