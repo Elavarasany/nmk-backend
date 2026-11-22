@@ -87,6 +87,38 @@ class SupplierAccountServiceTest {
     }
 
     @Test
+    void cashSupplierPaymentIsLinkedToTheCorrectPurchaseOrderLocationShift() {
+        SupplierBill bill = bill(14L, new BigDecimal("100.00"));
+        PurchaseOrder order = new PurchaseOrder();
+        InventoryLocation location = new InventoryLocation();
+        location.setId(4L);
+        order.setLocation(location);
+        bill.setPurchaseOrder(order);
+        when(paymentRepository.findByIdempotencyKey("PAY-CASH-14")).thenReturn(Optional.empty(), Optional.empty());
+        when(billRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(bill));
+        when(paymentRepository.sumConfirmedAmountByBillId(14L)).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.saveAndFlush(any(SupplierPayment.class))).thenAnswer(invocation -> {
+            SupplierPayment payment = invocation.getArgument(0);
+            ReflectionTestUtils.setField(payment, "id", 89L);
+            return payment;
+        });
+
+        var result = service.recordPayment(
+                14L,
+                new SupplierPaymentRequest(new BigDecimal("25.00"), "CASH", null, 55L, "PAY-CASH-14"),
+                "admin.one",
+                "ADMIN"
+        );
+
+        assertEquals("CASH", result.paymentMethod());
+        assertEquals(55L, result.shiftId());
+        verify(posShiftService).recordSupplierPayment(
+                55L, new BigDecimal("25.00"), "PAY-CASH-14",
+                "admin.one", "ADMIN", 89L, 4L
+        );
+    }
+
+    @Test
     void supplierPaymentCannotExceedOutstandingBillBalance() {
         SupplierBill bill = bill(13L, new BigDecimal("100.00"));
         when(paymentRepository.findByIdempotencyKey("PAY-13")).thenReturn(Optional.empty(), Optional.empty());
