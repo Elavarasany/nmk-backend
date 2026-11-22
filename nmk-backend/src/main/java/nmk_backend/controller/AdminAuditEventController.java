@@ -15,6 +15,11 @@ public class AdminAuditEventController {
         this.service = service;
     }
 
+    @GetMapping("/integrity")
+    public ResponseEntity<?> verifyIntegrity() {
+        return ResponseEntity.ok(service.verifyIntegrity());
+    }
+
     @GetMapping
     public ResponseEntity<?> getEvents(
             @RequestParam(defaultValue = "0") int page,
