@@ -30,6 +30,24 @@ public class PosReportController {
         }
     }
 
+    @GetMapping("/inventory/entries")
+    public ResponseEntity<?> getInventoryReportEntries(
+            @RequestParam Long locationId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            Authentication authentication
+    ) {
+        try {
+            return ResponseEntity.ok(reportService.getInventoryReportEntries(
+                    locationId, page, size, authentication.getName(), role(authentication)
+            ));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", exception.getMessage() == null ? "Invalid inventory report request" : exception.getMessage()
+            ));
+        }
+    }
+
     @GetMapping("/sales")
     public ResponseEntity<?> getSalesReport(
             @RequestParam Long locationId,
