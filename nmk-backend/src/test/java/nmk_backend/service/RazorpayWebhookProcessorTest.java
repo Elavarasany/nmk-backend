@@ -143,7 +143,7 @@ class RazorpayWebhookProcessorTest {
     }
 
     @Test
-    void refundWebhookIsAuditedButDoesNotClaimToProcessAProviderRefund()
+    void refundWebhookIsRoutedToManualReviewUntilProviderReconciliationExists()
             throws Exception {
 
         RazorpayWebhookEvent event = event("""
@@ -168,9 +168,10 @@ class RazorpayWebhookProcessorTest {
 
         processor.processOne(1L);
 
-        assertEquals("PROCESSED", event.getStatus(),
-                "The signed event is recorded as handled by the current generic webhook path");
-        assertNotNull(event.getProcessedAt());
+        assertEquals("MANUAL_REVIEW", event.getStatus());
+        assertTrue(event.getProcessingError().contains("manual reconciliation"));
+        assertNull(event.getProcessedAt(),
+                "A provider refund event must not be marked fully processed without updating the refund ledger");
         assertNull(event.getClaimToken());
         assertNull(event.getProcessingStartedAt());
 
