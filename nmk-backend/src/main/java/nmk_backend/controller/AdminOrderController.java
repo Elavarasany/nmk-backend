@@ -91,21 +91,50 @@ public class AdminOrderController {
                 page, size,
                 Sort.by(Sort.Order.desc("orderDate"), Sort.Order.desc("id"))
         ));
-        if (idPage.isEmpty()) {
-            return ResponseEntity.ok(new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements()));
-        }
+        return ResponseEntity.ok(toOrderResponsePage(idPage));
+    }
 
+    @GetMapping("/customers/history")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getCustomerOrderHistory(
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String phone,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
+        String normalizedEmail = email == null || email.isBlank()
+                ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalizedPhone = phone == null || phone.isBlank() ? null : phone.trim();
+        if (normalizedEmail == null && normalizedPhone == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "A customer email or phone is required"));
+        }
+        if (normalizedEmail != null) normalizedPhone = null;
+
+        Page<Long> idPage = orderRepository.findCustomerOrderIds(
+                normalizedEmail, normalizedPhone,
+                PageRequest.of(page, size, Sort.by(Sort.Order.desc("orderDate"), Sort.Order.desc("id")))
+        );
+        return ResponseEntity.ok(toOrderResponsePage(idPage));
+    }
+
+    private Page<AdminOrderResponse> toOrderResponsePage(Page<Long> idPage) {
+        if (idPage.isEmpty()) {
+            return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
+        }
         Map<Long, Order> ordersById = orderRepository.findWithItemsByIdIn(idPage.getContent())
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(Order::getId, order -> order));
-
         List<AdminOrderResponse> content = idPage.getContent().stream()
                 .map(ordersById::get)
                 .filter(java.util.Objects::nonNull)
                 .map(this::convertToResponse)
                 .toList();
-
-        return ResponseEntity.ok(new PageImpl<>(content, idPage.getPageable(), idPage.getTotalElements()));
+        return new PageImpl<>(content, idPage.getPageable(), idPage.getTotalElements());
     }
 
     // Get customer summaries without loading every order and item into memory.
