@@ -295,7 +295,11 @@ class AdminActionAuthorizationServiceTest {
     @Test
     void consumeAuthorizationMarksValidTokenAsConsumed() {
         AdminActionAuthorization authorization = validAuthorization();
+        admin.setRole("ADMIN");
+        admin.setEnabled(true);
 
+        when(adminRepository.findByUsername("admin"))
+                .thenReturn(Optional.of(admin));
         when(authorizationRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(authorization));
 
