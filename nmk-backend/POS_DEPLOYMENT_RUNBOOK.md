@@ -154,3 +154,19 @@ Do not merge the draft POS pull requests or point staff at production until:
 - the owner signs off on the cutover and rollback plan.
 
 The feature branches and draft PRs intentionally remain separate from `main`/`master` until those gates are satisfied.
+
+
+## Private customer prescription storage
+
+New customer prescription uploads are sent to `POST /api/prescriptions/upload`. The backend enforces a 5 MB limit, checks the file signature (JPEG/PNG/WEBP/PDF), and uploads it to Cloudinary as an `authenticated` asset under the `nmk-prescriptions` public-ID prefix. The browser never receives the Cloudinary API secret or a public delivery URL.
+
+Required server environment variables:
+- `CLOUDINARY_CLOUD_NAME` (defaults to the existing cloud name `ydkweahp`)
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+If credentials are missing, upload is disabled and returns HTTP 503. Do not re-enable the old unsigned preset as a fallback. Once the new flow is deployed and verified, disable/delete the old unsigned `nmk_opticals` preset in Cloudinary.
+
+Checkout verifies Cloudinary's upload-response signature and stores the opaque asset ID and verification metadata. Admin access is scoped to the owning order and item and returns a five-minute private download URL. Existing orders with legacy public `imageUrl` values remain readable for compatibility; they are not retroactively made private. A separate migration/re-upload plan is required to replace those legacy files.
+
+The upload endpoint has a dedicated rate limit and a 6 MB multipart transport ceiling (5 MB file plus multipart overhead). The general JSON request-body limit remains unchanged. Configure the reverse proxy to allow at least 6 MB for this endpoint and keep request timeouts bounded.
