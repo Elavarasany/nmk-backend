@@ -139,13 +139,11 @@ public class AppointmentController {
         }
 
         Page<AppointmentResponse> result = appointmentRepository
-                .findAllByOrderByAppointmentDateAscAppointmentTimeAscIdAsc(
-                        PageRequest.of(page, size, Sort.by(
-                                Sort.Order.asc("appointmentDate"),
-                                Sort.Order.asc("appointmentTime"),
-                                Sort.Order.asc("id")
-                        ))
-                )
+                .findAll(PageRequest.of(page, size, Sort.by(
+                        Sort.Order.asc("appointmentDate"),
+                        Sort.Order.asc("appointmentTime"),
+                        Sort.Order.asc("id")
+                )))
                 .map(AppointmentResponse::from);
         return ResponseEntity.ok(result);
     }
