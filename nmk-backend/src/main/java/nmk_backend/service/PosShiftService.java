@@ -482,6 +482,10 @@ public class PosShiftService {
         return key.trim();
     }
 
+    public void assertLocationAccessForStaff(String username, String role, Long locationId) {
+        assertLocationAccess(username, role, locationId);
+    }
+
     private void assertLocationAccess(String username, String role, Long locationId) {
         if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
     }
