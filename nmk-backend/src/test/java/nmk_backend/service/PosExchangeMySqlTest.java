@@ -103,6 +103,27 @@ class PosExchangeMySqlTest {
  }
 
  @Test
+ void nonCashExchangeRefundReferenceLongerThanColumnIsRejectedBeforePersistenceOnMySql() {
+  Fixture f=fixture();
+  inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-REF-LIMIT-OPEN-"+UUID.randomUUID(),null,"Exchange refund reference limit stock");
+  PosSaleResponse original=checkout(f,"MYSQL-EX-REF-LIMIT-SALE-"+UUID.randomUUID());
+  Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  PosSaleItemRequest replacement=new PosSaleItemRequest();
+  replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+  PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Exchange refund reference limit",
+   "MYSQL-EX-REF-LIMIT-KEY-"+UUID.randomUUID(),
+   List.of(new PosReturnItemRequest(originalLine,1,"RESTOCK",null)),List.of(replacement),
+   new BigDecimal("0.00"),List.of(),
+   List.of(new PosRefundPaymentRequest("UPI",new BigDecimal("0.00"),"R".repeat(151))));
+
+  IllegalArgumentException error=assertThrows(IllegalArgumentException.class,
+   ()->exchangeService.exchange(original.id(),request,f.username(),"CASHIER"));
+  assertTrue(error.getMessage().contains("150 characters"));
+  assertTrue(returns.findBySaleIdOrderByCreatedAtDesc(original.id()).isEmpty());
+  assertTrue(exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(original.id()).isEmpty());
+ }
+
+ @Test
  void nonCashExchangeCollectionRequiresTransactionReferenceOnMySql() {
   Fixture f=fixture();
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-UPI-OPEN-"+UUID.randomUUID(),null,"UPI exchange opening stock");
