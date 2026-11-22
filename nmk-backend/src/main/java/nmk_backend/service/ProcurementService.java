@@ -71,20 +71,11 @@ public class ProcurementService {
     public ProcurementCostReportResponse getProcurementCostReport(
             Long locationId, java.time.LocalDate from, java.time.LocalDate to
     ) {
-        if (locationId == null || locationId <= 0 || from == null || to == null) {
-            throw new IllegalArgumentException("Location, start date and end date are required");
-        }
-        if (to.isBefore(from)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
-        }
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 366) {
-            throw new IllegalArgumentException("Report date range cannot exceed 367 calendar days");
-        }
+        validateCostReportRequest(locationId, from, to);
         InventoryLocation location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         LocalDateTime fromDateTime = from.atStartOfDay();
         LocalDateTime toExclusive = to.plusDays(1).atStartOfDay();
-        List<ProcurementCostReportResponse.Entry> entries = new ArrayList<>();
         BigDecimal receivedCost = ZERO;
         BigDecimal returnedCost = ZERO;
         long receivedQuantity = 0;
@@ -101,20 +92,13 @@ public class ProcurementService {
             if (!receiptIds.isEmpty()) {
                 List<GoodsReceipt> receipts = goodsReceiptRepository.findAllByIdIn(receiptIds.getContent());
                 for (GoodsReceipt receipt : receipts) {
-                    PurchaseOrder order = receipt.getPurchaseOrder();
                     for (GoodsReceiptItem item : receipt.getItems()) {
                         BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
                                 .setScale(2, RoundingMode.HALF_UP);
                         receivedCost = receivedCost.add(total);
                         receivedQuantity += item.getQuantity();
-                        entries.add(new ProcurementCostReportResponse.Entry(
-                                "RECEIVED", receipt.getReceiptNumber(), order.getId(), order.getOrderNumber(),
-                                order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
-                                item.getQuantity(), item.getUnitCost(), total, receipt.getReceivedByUsername(),
-                                receipt.getCreatedAt()));
                     }
                 }
-                // The entry DTOs are detached values; clear entity graphs before loading the next page.
                 entityManager.clear();
             }
         } while (receiptIds.hasNext());
@@ -129,30 +113,61 @@ public class ProcurementService {
             if (!returnIds.isEmpty()) {
                 List<SupplierReturn> returns = supplierReturnRepository.findAllByIdIn(returnIds.getContent());
                 for (SupplierReturn record : returns) {
-                    PurchaseOrder order = record.getPurchaseOrder();
                     for (SupplierReturnItem item : record.getItems()) {
                         BigDecimal total = item.getUnitCost().multiply(BigDecimal.valueOf(item.getQuantity()))
                                 .setScale(2, RoundingMode.HALF_UP);
                         returnedCost = returnedCost.add(total);
                         returnedQuantity += item.getQuantity();
-                        entries.add(new ProcurementCostReportResponse.Entry(
-                                "SUPPLIER_RETURN", record.getReturnNumber(), order.getId(), order.getOrderNumber(),
-                                order.getSupplier().getName(), item.getPurchaseOrderItem().getVariant().getSku(),
-                                item.getQuantity(), item.getUnitCost(), total, record.getProcessedByUsername(),
-                                record.getCreatedAt()));
                     }
                 }
                 entityManager.clear();
             }
         } while (returnIds.hasNext());
 
-        entries.sort(Comparator.comparing(ProcurementCostReportResponse.Entry::createdAt)
-                .thenComparing(ProcurementCostReportResponse.Entry::reference));
+        Page<ProcurementCostReportResponse.Entry> firstEntries =
+                getProcurementCostReportEntries(locationId, from, to, 0, 50);
         receivedCost = receivedCost.setScale(2, RoundingMode.HALF_UP);
         returnedCost = returnedCost.setScale(2, RoundingMode.HALF_UP);
         return new ProcurementCostReportResponse(location.getId(), location.getName(), from, to,
                 receivedQuantity, returnedQuantity, receivedCost, returnedCost,
-                receivedCost.subtract(returnedCost).setScale(2, RoundingMode.HALF_UP), List.copyOf(entries));
+                receivedCost.subtract(returnedCost).setScale(2, RoundingMode.HALF_UP),
+                firstEntries.getContent(), firstEntries.getTotalElements(),
+                firstEntries.getNumber(), firstEntries.getSize(), firstEntries.hasNext());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ProcurementCostReportResponse.Entry> getProcurementCostReportEntries(
+            Long locationId, java.time.LocalDate from, java.time.LocalDate to, int page, int size
+    ) {
+        validateCostReportRequest(locationId, from, to);
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
+        if (!locationRepository.existsById(locationId)) {
+            throw new InventoryNotFoundException("Inventory location was not found");
+        }
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toExclusive = to.plusDays(1).atStartOfDay();
+        return goodsReceiptRepository.findCostReportEntries(
+                locationId, fromDateTime, toExclusive, PageRequest.of(page, size)
+        ).map(row -> new ProcurementCostReportResponse.Entry(
+                row.getType(), row.getReference(), row.getPurchaseOrderId(),
+                row.getPurchaseOrderNumber(), row.getSupplierName(), row.getSku(),
+                row.getQuantity(), row.getUnitCost(), row.getTotalCost(),
+                row.getRecordedBy(), row.getCreatedAt()
+        ));
+    }
+
+    private void validateCostReportRequest(Long locationId, java.time.LocalDate from, java.time.LocalDate to) {
+        if (locationId == null || locationId <= 0 || from == null || to == null) {
+            throw new IllegalArgumentException("Location, start date and end date are required");
+        }
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 366) {
+            throw new IllegalArgumentException("Report date range cannot exceed 367 calendar days");
+        }
     }
 
     @Transactional(readOnly = true)
