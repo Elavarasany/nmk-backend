@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -29,6 +31,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RestController
 @RequestMapping("/api/admin/orders")
 public class AdminOrderController {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminOrderController.class);
 
     private final AdminActionAuthorizationService authorizationService;
     private final SmsService smsService;
@@ -321,8 +325,8 @@ public class AdminOrderController {
                                     publicUrl + "/track/" + order.getTrackingToken()
                             );
                         } catch (Exception e) {
-                            System.err.println("SMS notification failed for order "
-                                    + order.getId() + ": " + e.getMessage());
+                            log.warn("SMS notification failed; orderId={}, exceptionType={}",
+                                    order.getId(), e.getClass().getSimpleName());
                         }
                     }
 
@@ -403,7 +407,8 @@ public class AdminOrderController {
                     new TypeReference<Map<String, Object>>() {}
             );
         } catch (JsonProcessingException e) {
-            System.err.println("Unable to parse prescription JSON: " + e.getMessage());
+            log.warn("Unable to parse stored prescription JSON; exceptionType={}",
+                    e.getClass().getSimpleName());
             return null;
         }
     }
