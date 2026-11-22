@@ -495,6 +495,7 @@ class ProcurementServiceTest {
     @Test
     void procurementCostReportReadsAllReceiptsAcrossBoundedPages() {
         java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
         List<Long> allIds = new java.util.ArrayList<>();
         List<GoodsReceipt> allReceipts = new java.util.ArrayList<>();
         for (long id = 1; id <= 201; id++) {
