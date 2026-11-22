@@ -147,6 +147,77 @@ class InventoryMySqlConcurrencyTest {
     }
 
     @Test
+    void concurrentOnlineReservationAndPosSaleCannotConsumeTheSameLastUnit() throws Exception {
+        InventoryIds ids = createInventory(1);
+
+        String reservationKey = "ONLINE-VS-POS-RESERVE-" + UUID.randomUUID();
+        String saleKey = "ONLINE-VS-POS-SALE-" + UUID.randomUUID();
+
+        List<Boolean> outcomes = runConcurrently(
+                () -> attemptOnlineReservation(ids, reservationKey),
+                () -> attemptPosSale(ids, saleKey)
+        );
+
+        assertEquals(1, outcomes.stream().filter(Boolean::booleanValue).count(),
+                "Exactly one channel may claim the only available unit");
+        assertEquals(1, outcomes.stream().filter(result -> !result).count(),
+                "The competing channel must be rejected for insufficient stock");
+
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.execute(status -> {
+            InventoryBalance balance = balanceRepository
+                    .findByLocationIdAndVariantId(ids.locationId(), ids.variantId())
+                    .orElseThrow();
+
+            assertEquals(1, balance.getOnHandQuantity()
+                    + balance.getReservedQuantity() - balance.getReservedQuantity(),
+                    "The physical on-hand quantity remains one if reservation wins, otherwise zero after POS sale");
+            assertTrue(
+                    (balance.getOnHandQuantity() == 1 && balance.getReservedQuantity() == 1)
+                            || (balance.getOnHandQuantity() == 0 && balance.getReservedQuantity() == 0),
+                    "Final inventory must reflect exactly one successful channel operation"
+            );
+
+            List<StockMovement> movements = movementRepository
+                    .findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+                            ids.locationId(), ids.variantId()
+                    );
+            assertEquals(1, movements.size(),
+                    "Only the winning channel may create a stock movement");
+            assertTrue(
+                    "RESERVATION".equals(movements.get(0).getMovementType())
+                            || "SALE".equals(movements.get(0).getMovementType()),
+                    "Movement must belong to the winning online reservation or POS sale"
+            );
+            return null;
+        });
+    }
+
+    private boolean attemptOnlineReservation(InventoryIds ids, String key) {
+        try {
+            inventoryService.reserveStock(
+                    ids.locationId(), ids.variantId(), 1, key, null,
+                    "Concurrent online checkout reservation"
+            );
+            return true;
+        } catch (InsufficientStockException exception) {
+            return false;
+        }
+    }
+
+    private boolean attemptPosSale(InventoryIds ids, String key) {
+        try {
+            inventoryService.sellStock(
+                    ids.locationId(), ids.variantId(), 1, key, null,
+                    "Concurrent in-store POS sale", "POS_SALE", 123L
+            );
+            return true;
+        } catch (InsufficientStockException exception) {
+            return false;
+        }
+    }
+
+    @Test
     void reservationCanBeReleasedAfterProductIsDeactivated() {
         InventoryIds ids = createInventory(5);
 
