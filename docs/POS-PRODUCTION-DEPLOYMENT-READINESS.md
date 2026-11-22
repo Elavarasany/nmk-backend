@@ -61,6 +61,12 @@ SMS remains disabled in the current base configuration. Do not enable it until c
 - The frontend build-time API URL must be supplied by the deployment pipeline; repository defaults are development-oriented.
 - Payment provider settlement, refund processing, bank reconciliation, GST/tax approval, and manual POS browser acceptance remain separate release gates.
 
+## Payment webhook exception visibility
+
+- Added a read-only paginated `GET /api/admin/pos/payments/webhook-review` endpoint for managers/admins. It returns safe event metadata and extracted provider refund/payment identifiers but never the raw webhook payload.
+- Added unit tests for refund metadata extraction, malformed payload visibility, and pagination validation.
+- This endpoint is not a refund processor or reconciliation workflow. No provider refund is created or marked successful, and there is no resolution action or frontend screen yet.
+
 ## Additional changes made in this review
 
 - JWT signing-key strength is now validated at application startup; weak keys fail fast. Added unit tests for accepted and rejected key lengths.
