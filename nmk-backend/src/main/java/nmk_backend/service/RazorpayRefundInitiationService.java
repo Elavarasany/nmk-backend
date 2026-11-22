@@ -3,6 +3,7 @@ package nmk_backend.service;
 import nmk_backend.dto.CreateRazorpayRefundRequest;
 import nmk_backend.dto.RazorpayRefundInitiationResponse;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -35,13 +36,8 @@ public class RazorpayRefundInitiationService {
     ) {
         razorpayService.requirePaymentCredentials();
 
-        RazorpayRefundRequestService.PreparedRefund prepared = requestService.prepare(
-                orderId,
-                request.amountPaise(),
-                request.reason(),
-                request.idempotencyKey(),
-                username
-        );
+        RazorpayRefundRequestService.PreparedRefund prepared =
+                prepareWithLockRetry(orderId, request, username);
 
         if (prepared.providerRefundId() != null && !prepared.providerRefundId().isBlank()) {
             return response(prepared, false,
@@ -112,6 +108,34 @@ public class RazorpayRefundInitiationService {
         RazorpayRefundRequestService.PreparedRefund updated =
                 requestService.getByIdempotencyKey(prepared.idempotencyKey());
         return response(updated, false, "Razorpay refund request submitted and recorded.");
+    }
+
+    private RazorpayRefundRequestService.PreparedRefund prepareWithLockRetry(
+            Long orderId, CreateRazorpayRefundRequest request, String username
+    ) {
+        PessimisticLockingFailureException lastFailure = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return requestService.prepare(
+                        orderId, request.amountPaise(), request.reason(),
+                        request.idempotencyKey(), username);
+            } catch (PessimisticLockingFailureException exception) {
+                lastFailure = exception;
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(40L * (attempt + 1));
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(
+                                "Refund reservation was interrupted. Retry with the same idempotency key.",
+                                interrupted);
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException(
+                "Another refund operation is locking this order. Retry with the same idempotency key.",
+                lastFailure);
     }
 
     private boolean isValidProviderResponse(
