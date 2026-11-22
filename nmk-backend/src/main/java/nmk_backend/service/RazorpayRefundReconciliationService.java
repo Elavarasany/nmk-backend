@@ -78,6 +78,7 @@ public class RazorpayRefundReconciliationService {
         }
 
         long orderAmountPaise = toPaise(order);
+        boolean mergedReceiptDuplicate = false;
         Optional<OrderRefund> existing = refundRepository.findByRazorpayRefundIdForUpdate(refundId);
         if (existing.isPresent() && receipt != null && !receipt.isBlank()) {
             OrderRefund providerRow = existing.get();
@@ -108,6 +109,7 @@ public class RazorpayRefundReconciliationService {
                 localRequest.setStatus(providerStatus);
                 localRequest.setLastProviderEventId(providerEventId);
                 existing = Optional.of(localRequest);
+                mergedReceiptDuplicate = true;
             }
         }
         if (existing.isEmpty() && receipt != null && !receipt.isBlank()) {
@@ -131,19 +133,26 @@ public class RazorpayRefundReconciliationService {
             }
 
             String currentStatus = refund.getStatus();
+            boolean terminalStatus = "PROCESSED".equals(currentStatus) || "FAILED".equals(currentStatus);
             if ("PROCESSED".equals(currentStatus)) {
-                if ("PROCESSED".equals(targetStatus) || "PENDING".equals(targetStatus)) return;
-                throw new IllegalArgumentException("A processed refund cannot be changed to failed");
+                if (!"PROCESSED".equals(targetStatus) && !"PENDING".equals(targetStatus)) {
+                    throw new IllegalArgumentException("A processed refund cannot be changed to failed");
+                }
+                if (!mergedReceiptDuplicate) return;
             }
             if ("FAILED".equals(currentStatus)) {
-                if ("FAILED".equals(targetStatus) || "PENDING".equals(targetStatus)) return;
-                throw new IllegalArgumentException("A failed refund cannot later be marked processed");
+                if (!"FAILED".equals(targetStatus) && !"PENDING".equals(targetStatus)) {
+                    throw new IllegalArgumentException("A failed refund cannot later be marked processed");
+                }
+                if (!mergedReceiptDuplicate) return;
             }
 
             refund.setRazorpayRefundId(refundId);
             if (receipt != null && !receipt.isBlank()) refund.setReceipt(receipt);
-            refund.setStatus(targetStatus);
-            refund.setLastProviderEventId(providerEventId);
+            if (!terminalStatus) {
+                refund.setStatus(targetStatus);
+                refund.setLastProviderEventId(providerEventId);
+            }
         } else {
             refund = new OrderRefund();
             refund.setOrder(order);
