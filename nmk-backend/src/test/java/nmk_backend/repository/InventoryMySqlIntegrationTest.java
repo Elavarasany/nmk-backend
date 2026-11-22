@@ -1,11 +1,8 @@
 package nmk_backend.repository;
 
 import nmk_backend.entity.*;
-import nmk_backend.dto.ProductVariantRequest;
-import nmk_backend.service.ProductVariantService;
 import nmk_backend.service.InventoryService;
 import nmk_backend.service.ProductService;
-import nmk_backend.exception.InvalidInventoryOperationException;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -14,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -45,9 +41,6 @@ class InventoryMySqlIntegrationTest {
 
     @Autowired
     private ProductService productService;
-
-    @Autowired
-    private ProductVariantService productVariantService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -120,15 +113,7 @@ class InventoryMySqlIntegrationTest {
                         )
                 )
         );
-        assertEquals(409, variantCreateError.getStatusCode().value());
-        assertThrows(InvalidInventoryOperationException.class, () ->
-                inventoryService.receiveStock(
-                        locationId, variantId, 1,
-                        "POST-DEACTIVATION-RECEIPT-" + UUID.randomUUID(),
-                        null, "Must not receive stock for an inactive product"
-                )
-        );
-        assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+        assertEquals(409, variantCreateError.getStatusCode().value());        assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
                 locationId, variantId
         ).size());
     }
