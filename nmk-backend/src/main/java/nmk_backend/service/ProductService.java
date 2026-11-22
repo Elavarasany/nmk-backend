@@ -92,8 +92,22 @@ public class ProductService {
         }
     }
 
+    @Transactional
     public void deleteProduct(Long id) {
-        Product product = getProductById(id);
-        productRepository.delete(product);
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid product ID is required");
+        }
+
+        Product product = productRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Product not found"
+                ));
+
+        // Products are referenced by variants, inventory balances, stock movements,
+        // and historical sales. Preserve those records and deactivate the catalogue item.
+        if (product.isActive()) {
+            product.setActive(false);
+            productRepository.saveAndFlush(product);
+        }
     }
 }
