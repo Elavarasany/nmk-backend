@@ -3,6 +3,7 @@ package nmk_backend.security;
 import nmk_backend.entity.Admin;
 import nmk_backend.entity.InventoryLocation;
 import nmk_backend.repository.AdminRepository;
+import nmk_backend.repository.AdminAuditEventRepository;
 import nmk_backend.repository.InventoryLocationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,9 @@ class PosAuthorizationIntegrationTest {
 
     @Autowired
     private AdminRepository adminRepository;
+
+    @Autowired
+    private AdminAuditEventRepository auditEventRepository;
 
     @Autowired
     private JwtService jwtService;
@@ -68,6 +72,28 @@ class PosAuthorizationIntegrationTest {
     @Test
     void anonymousRequestCannotAccessPosEndpoint() throws Exception {
         mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void securityFilterRejectionIsWrittenToAuditLog() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        long before = auditEventRepository.count();
+
+        mockMvc.perform(post("/api/admin/staff/999/locations")
+                        .header("Authorization", "Bearer " + cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"locationIds\":[1]}"))
+                .andExpect(status().isForbidden());
+
+        var events = auditEventRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 20,
+                        org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Direction.DESC, "id"))
+        );
+        assertEquals(before + 1, auditEventRepository.count());
+        assertTrue(events.getContent().stream().anyMatch(event ->
+                "/api/admin/staff/999/locations".equals(event.getRequestPath())
+                        && "SECURITY_ACCESS_DENIED".equals(event.getErrorType())));
     }
 
     @Test
