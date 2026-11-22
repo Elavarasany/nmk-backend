@@ -128,7 +128,7 @@ class RazorpayRefundReconciliationServiceTest {
 
         assertEquals("rfnd_123", pending.getRazorpayRefundId());
         assertEquals("PROCESSED", pending.getStatus());
-        assertEquals("REFUNDED", order.getRefundStatus());
+        assertEquals("PARTIALLY_REFUNDED", order.getRefundStatus());
         verify(refundRepository, never()).findByReceiptForUpdate("different_receipt");
     }
 
