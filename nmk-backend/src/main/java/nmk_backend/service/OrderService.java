@@ -17,6 +17,7 @@ import nmk_backend.repository.ProductRepository;
 import nmk_backend.repository.ProductVariantRepository;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,22 +57,38 @@ public class OrderService {
     private final InventoryLocationRepository locationRepository;
     private final InventoryService inventoryService;
     private final String checkoutLocationCode;
+    private final PrescriptionCloudinaryService prescriptionStorage;
 
+    @Autowired
     public OrderService(
             OrderRepository orderRepository,
             ProductRepository productRepository,
             ProductVariantRepository variantRepository,
             InventoryLocationRepository locationRepository,
             InventoryService inventoryService,
-            @Value("${inventory.checkout.location-code:}")
-            String checkoutLocationCode
+            PrescriptionCloudinaryService prescriptionStorage,
+            @Value("${inventory.checkout.location-code:}") String checkoutLocationCode
     ) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.locationRepository = locationRepository;
         this.inventoryService = inventoryService;
+        this.prescriptionStorage = prescriptionStorage;
         this.checkoutLocationCode = checkoutLocationCode;
+    }
+
+    // Retained for focused legacy unit tests that do not exercise uploaded assets.
+    public OrderService(
+            OrderRepository orderRepository,
+            ProductRepository productRepository,
+            ProductVariantRepository variantRepository,
+            InventoryLocationRepository locationRepository,
+            InventoryService inventoryService,
+            String checkoutLocationCode
+    ) {
+        this(orderRepository, productRepository, variantRepository, locationRepository,
+                inventoryService, null, checkoutLocationCode);
     }
 
     @Transactional
@@ -727,21 +744,28 @@ public class OrderService {
         Map<String, Object> out = new LinkedHashMap<>();
 
         if ("image".equalsIgnoreCase(text(rx.get("mode")))) {
-
-            String url = urlText(rx.get("imageUrl"));
-
-            if (!isAllowedPrescriptionImageUrl(url)) {
-                throw new IllegalArgumentException(
-                        "The prescription image link is not valid."
-                );
+            String publicId = urlText(rx.get("publicId"));
+            if (!publicId.isBlank()) {
+                if (prescriptionStorage == null || !prescriptionStorage.verifyUploadedAsset(rx)) {
+                    throw new IllegalArgumentException("The uploaded prescription could not be verified.");
+                }
+                out.put("mode", "image");
+                out.put("publicId", publicId);
+                out.put("resourceType", text(rx.get("resourceType")));
+                out.put("format", text(rx.get("format")).toLowerCase(java.util.Locale.ROOT));
+                out.put("version", rx.get("version"));
+                out.put("signature", text(rx.get("signature")));
+                out.put("imageName", fileName == null ? "" : fileName.trim());
+            } else {
+                // Preserve access to older orders while new uploads move to private assets.
+                String url = urlText(rx.get("imageUrl"));
+                if (!isAllowedPrescriptionImageUrl(url)) {
+                    throw new IllegalArgumentException("The prescription image link is not valid.");
+                }
+                out.put("mode", "image");
+                out.put("imageUrl", url);
+                out.put("imageName", fileName == null ? "" : fileName.trim());
             }
-
-            out.put("mode", "image");
-            out.put("imageUrl", url);
-            out.put(
-                    "imageName",
-                    fileName == null ? "" : fileName.trim()
-            );
 
         } else if ("contact".equalsIgnoreCase(lensKind)) {
 
