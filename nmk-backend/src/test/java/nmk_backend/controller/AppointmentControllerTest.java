@@ -57,7 +57,7 @@ class AppointmentControllerTest {
     void returnsAppointmentsInDeterministicPages() {
         Appointment appointment = validAppointment();
         appointment.setId(12L);
-        when(repository.findAllByOrderByAppointmentDateAscAppointmentTimeAscIdAsc(any(Pageable.class)))
+        when(repository.findAll(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(appointment)));
 
         var response = controller.getAllAppointments(0, 25);
