@@ -119,6 +119,33 @@ class SupplierAccountServiceTest {
     }
 
     @Test
+    void landedUnitCostIncludesAllPostedLandedCostAllocationsForAReceiptLine() {
+        SupplierBill bill = bill(15L, new BigDecimal("30.00"));
+        bill.setBillType("LANDED_COST");
+        GoodsReceiptItem item = receiptItem(101L, 2, "100.00");
+        PurchaseOrderItem orderItem = new PurchaseOrderItem();
+        ReflectionTestUtils.setField(orderItem, "id", 201L);
+        ProductVariant variant = new ProductVariant();
+        variant.setId(301L);
+        variant.setSku("NMK-SKU-301");
+        orderItem.setVariant(variant);
+        item.setPurchaseOrderItem(orderItem);
+
+        SupplierBillLandedCostAllocation row = allocation(51L, item, new BigDecimal("30.00"));
+        row.setBill(bill);
+        when(billRepository.findById(15L)).thenReturn(Optional.of(bill));
+        when(allocationRepository.findByBillIdOrderByIdAsc(15L)).thenReturn(List.of(row));
+        when(allocationRepository.sumAllocatedAmountByGoodsReceiptItemId(101L))
+                .thenReturn(new BigDecimal("50.00"));
+
+        var result = service.getLandedCostAllocations(15L, "admin.one");
+
+        assertEquals(1, result.size());
+        assertEquals(new BigDecimal("125.00"), result.getFirst().landedUnitCost());
+        verify(allocationRepository).sumAllocatedAmountByGoodsReceiptItemId(101L);
+    }
+
+    @Test
     void supplierPaymentCannotExceedOutstandingBillBalance() {
         SupplierBill bill = bill(13L, new BigDecimal("100.00"));
         when(paymentRepository.findByIdempotencyKey("PAY-13")).thenReturn(Optional.empty(), Optional.empty());
