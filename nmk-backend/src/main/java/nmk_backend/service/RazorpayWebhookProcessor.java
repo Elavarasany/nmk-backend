@@ -172,6 +172,15 @@ public class RazorpayWebhookProcessor {
 
         String eventType = root.path("event").asText("");
 
+        // Refund events must remain visible for manual reconciliation.
+        // Marking them PROCESSED would falsely imply that the POS refund
+        // ledger and provider refund state had been reconciled.
+        if (eventType.startsWith("refund.")) {
+            throw new ManualReviewException(
+                    "Razorpay refund event requires manual reconciliation; automated refund status updates are not implemented"
+            );
+        }
+
         // Other signed webhook events are recorded but do not
         // change order payment status.
         if (!"payment.captured".equals(eventType)) {
