@@ -18,6 +18,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -272,6 +274,61 @@ public class SupplierAccountService {
         }
         return creditNoteRepository.findByBillIdOrderByIssueDateDescIdDesc(billId)
                 .stream().map(this::toCreditNoteResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public SupplierPayablesAgingResponse getPayablesAging(Long supplierId, LocalDate asOfDate, String username) {
+        requireActor(username);
+        if (supplierId == null || supplierId <= 0 || !supplierRepository.existsById(supplierId)) {
+            throw new InventoryNotFoundException("Supplier was not found");
+        }
+        LocalDate effectiveDate = asOfDate == null ? LocalDate.now(ZoneId.of("Asia/Kolkata")) : asOfDate;
+        BigDecimal notDue = ZERO;
+        BigDecimal overdue1To30 = ZERO;
+        BigDecimal overdue31To60 = ZERO;
+        BigDecimal overdue61To90 = ZERO;
+        BigDecimal overdueOver90 = ZERO;
+        int openBills = 0;
+        int overdueBills = 0;
+
+        Page<SupplierBill> page = billRepository.findBySupplierIdOrderByInvoiceDateDescCreatedAtDesc(
+                supplierId, PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "id"))
+        );
+        while (true) {
+            for (SupplierBill bill : page.getContent()) {
+                if (!"POSTED".equals(bill.getStatus())) continue;
+                BigDecimal paid = paymentRepository.sumConfirmedAmountByBillId(bill.getId());
+                if (paid == null) paid = ZERO;
+                BigDecimal credited = bill.getCreditedAmount() == null ? ZERO : bill.getCreditedAmount();
+                BigDecimal outstanding = bill.getAmount().subtract(paid).subtract(credited).setScale(2);
+                if (outstanding.compareTo(BigDecimal.ZERO) <= 0) continue;
+                openBills++;
+
+                LocalDate dueDate = bill.getDueDate();
+                if (dueDate == null || !dueDate.isBefore(effectiveDate)) {
+                    notDue = notDue.add(outstanding);
+                    continue;
+                }
+                overdueBills++;
+                long daysOverdue = ChronoUnit.DAYS.between(dueDate, effectiveDate);
+                if (daysOverdue <= 30) overdue1To30 = overdue1To30.add(outstanding);
+                else if (daysOverdue <= 60) overdue31To60 = overdue31To60.add(outstanding);
+                else if (daysOverdue <= 90) overdue61To90 = overdue61To90.add(outstanding);
+                else overdueOver90 = overdueOver90.add(outstanding);
+            }
+            if (!page.hasNext()) break;
+            page = billRepository.findBySupplierIdOrderByInvoiceDateDescCreatedAtDesc(
+                    supplierId, page.nextPageable()
+            );
+        }
+
+        BigDecimal total = notDue.add(overdue1To30).add(overdue31To60)
+                .add(overdue61To90).add(overdueOver90).setScale(2);
+        return new SupplierPayablesAgingResponse(
+                supplierId, effectiveDate, openBills, overdueBills,
+                notDue.setScale(2), overdue1To30.setScale(2), overdue31To60.setScale(2),
+                overdue61To90.setScale(2), overdueOver90.setScale(2), total
+        );
     }
 
     @Transactional(readOnly = true)
