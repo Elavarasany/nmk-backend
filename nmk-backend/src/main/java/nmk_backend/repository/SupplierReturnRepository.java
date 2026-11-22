@@ -22,6 +22,14 @@ public interface SupplierReturnRepository extends JpaRepository<SupplierReturn, 
     List<SupplierReturn> findByPurchaseOrderIdOrderByCreatedAtDesc(Long purchaseOrderId);
 
     @Query("""
+            select supplierReturn.id from SupplierReturn supplierReturn
+            where supplierReturn.purchaseOrder.id = :purchaseOrderId
+            order by supplierReturn.createdAt desc, supplierReturn.id desc
+            """)
+    Page<Long> findHistoryIds(@Param("purchaseOrderId") Long purchaseOrderId, Pageable pageable);
+
+
+    @Query("""
             select supplierReturn.id
             from SupplierReturn supplierReturn
             where supplierReturn.purchaseOrder.location.id = :locationId
