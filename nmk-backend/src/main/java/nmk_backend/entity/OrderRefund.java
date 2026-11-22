@@ -6,10 +6,11 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "order_refunds",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_order_refunds_razorpay_refund_id",
-                columnNames = "razorpay_refund_id"
-        ),
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_order_refunds_razorpay_refund_id", columnNames = "razorpay_refund_id"),
+                @UniqueConstraint(name = "uk_order_refunds_request_key", columnNames = "request_idempotency_key"),
+                @UniqueConstraint(name = "uk_order_refunds_receipt", columnNames = "receipt")
+        },
         indexes = {
                 @Index(name = "idx_order_refunds_order_status", columnList = "order_id, status"),
                 @Index(name = "idx_order_refunds_payment_id", columnList = "razorpay_payment_id")
@@ -24,8 +25,20 @@ public class OrderRefund {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    @Column(name = "razorpay_refund_id", nullable = false, length = 64)
+    @Column(name = "razorpay_refund_id", length = 64)
     private String razorpayRefundId;
+
+    @Column(name = "request_idempotency_key", length = 80)
+    private String requestIdempotencyKey;
+
+    @Column(name = "receipt", length = 64)
+    private String receipt;
+
+    @Column(name = "reason", length = 255)
+    private String reason;
+
+    @Column(name = "initiated_by", length = 100)
+    private String initiatedBy;
 
     @Column(name = "razorpay_payment_id", nullable = false, length = 64)
     private String razorpayPaymentId;
@@ -65,6 +78,14 @@ public class OrderRefund {
     public void setOrder(Order value) { order = value; }
     public String getRazorpayRefundId() { return razorpayRefundId; }
     public void setRazorpayRefundId(String value) { razorpayRefundId = value; }
+    public String getRequestIdempotencyKey() { return requestIdempotencyKey; }
+    public void setRequestIdempotencyKey(String value) { requestIdempotencyKey = value; }
+    public String getReceipt() { return receipt; }
+    public void setReceipt(String value) { receipt = value; }
+    public String getReason() { return reason; }
+    public void setReason(String value) { reason = value; }
+    public String getInitiatedBy() { return initiatedBy; }
+    public void setInitiatedBy(String value) { initiatedBy = value; }
     public String getRazorpayPaymentId() { return razorpayPaymentId; }
     public void setRazorpayPaymentId(String value) { razorpayPaymentId = value; }
     public long getAmountPaise() { return amountPaise; }
