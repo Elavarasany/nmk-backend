@@ -57,6 +57,9 @@ public class AdminActionAuthorizationService {
         if (action == null || !ALLOWED_ACTIONS.contains(action)) {
             throw new IllegalArgumentException("Invalid destructive action");
         }
+        if (password == null || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Incorrect admin password");
+        }
 
         Admin admin = adminRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid staff account"));
