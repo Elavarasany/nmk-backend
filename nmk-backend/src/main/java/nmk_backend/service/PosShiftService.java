@@ -111,11 +111,13 @@ public class PosShiftService {
         if (registerId == null || registerId <= 0) {
             throw new IllegalArgumentException("A valid registerId is required");
         }
+        PosRegister register = registerRepository.findById(registerId)
+                .orElseThrow(() -> new InventoryNotFoundException("POS register was not found"));
+        assertLocationAccess(username, role, register.getLocation().getId());
         PosShift shift = shiftRepository
                 .findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(registerId, "OPEN")
                 .orElse(null);
         if (shift == null) return null;
-        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         if (!canManageOtherShifts(role) && !shift.getOpenedByUsername().equalsIgnoreCase(username)) {
             return null;
         }
