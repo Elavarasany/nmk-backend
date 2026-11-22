@@ -22,6 +22,8 @@ class SupplierAccountServiceTest {
     private SupplierRepository supplierRepository;
     private SupplierBillRepository billRepository;
     private SupplierPaymentRepository paymentRepository;
+    private SupplierBillCreditNoteRepository creditNoteRepository;
+    private SupplierReturnRepository supplierReturnRepository;
     private SupplierBillLandedCostAllocationRepository allocationRepository;
     private PurchaseOrderRepository purchaseOrderRepository;
     private GoodsReceiptRepository goodsReceiptRepository;
@@ -36,14 +38,16 @@ class SupplierAccountServiceTest {
         supplierRepository = mock(SupplierRepository.class);
         billRepository = mock(SupplierBillRepository.class);
         paymentRepository = mock(SupplierPaymentRepository.class);
+        creditNoteRepository = mock(SupplierBillCreditNoteRepository.class);
+        supplierReturnRepository = mock(SupplierReturnRepository.class);
         allocationRepository = mock(SupplierBillLandedCostAllocationRepository.class);
         purchaseOrderRepository = mock(PurchaseOrderRepository.class);
         goodsReceiptRepository = mock(GoodsReceiptRepository.class);
         adminRepository = mock(AdminRepository.class);
         posShiftService = mock(PosShiftService.class);
         service = new SupplierAccountService(
-                supplierRepository, billRepository, paymentRepository, allocationRepository,
-                purchaseOrderRepository, goodsReceiptRepository, adminRepository, posShiftService,
+                supplierRepository, billRepository, paymentRepository, creditNoteRepository, supplierReturnRepository,
+                allocationRepository, purchaseOrderRepository, goodsReceiptRepository, adminRepository, posShiftService,
                 new ObjectMapper().findAndRegisterModules()
         );
 
@@ -146,6 +150,52 @@ class SupplierAccountServiceTest {
     }
 
     @Test
+    void supplierCreditNoteReducesOutstandingPayableAndIsIdempotentlyRecorded() {
+        SupplierBill bill = bill(16L, new BigDecimal("100.00"));
+        bill.setPaidAmount(new BigDecimal("20.00"));
+        when(creditNoteRepository.findByIdempotencyKey("CN-16")).thenReturn(Optional.empty(), Optional.empty());
+        when(billRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(bill));
+        when(creditNoteRepository.existsBySupplierIdAndCreditNoteNumberIgnoreCase(7L, "CN-2026-16"))
+                .thenReturn(false);
+        when(creditNoteRepository.saveAndFlush(any(SupplierBillCreditNote.class))).thenAnswer(invocation -> {
+            SupplierBillCreditNote note = invocation.getArgument(0);
+            ReflectionTestUtils.setField(note, "id", 116L);
+            return note;
+        });
+
+        var result = service.recordCreditNote(
+                16L,
+                new SupplierCreditNoteRequest("CN-2026-16", LocalDate.of(2026, 11, 22),
+                        new BigDecimal("15.00"), "Supplier issued a price adjustment", null, "CN-16"),
+                "admin.one"
+        );
+
+        assertEquals(116L, result.id());
+        assertEquals(new BigDecimal("15.00"), result.amount());
+        assertEquals(new BigDecimal("15.00"), bill.getCreditedAmount());
+        verify(billRepository).saveAndFlush(bill);
+    }
+
+    @Test
+    void supplierCreditNoteCannotExceedUnpaidBillBalance() {
+        SupplierBill bill = bill(17L, new BigDecimal("100.00"));
+        bill.setPaidAmount(new BigDecimal("80.00"));
+        when(creditNoteRepository.findByIdempotencyKey("CN-17")).thenReturn(Optional.empty(), Optional.empty());
+        when(billRepository.findByIdForUpdate(17L)).thenReturn(Optional.of(bill));
+        when(creditNoteRepository.existsBySupplierIdAndCreditNoteNumberIgnoreCase(7L, "CN-2026-17"))
+                .thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () -> service.recordCreditNote(
+                17L,
+                new SupplierCreditNoteRequest("CN-2026-17", LocalDate.of(2026, 11, 22),
+                        new BigDecimal("25.00"), "Return credit", null, "CN-17"),
+                "admin.one"
+        ));
+        verify(creditNoteRepository, never()).saveAndFlush(any(SupplierBillCreditNote.class));
+        verify(billRepository, never()).saveAndFlush(any(SupplierBill.class));
+    }
+
+    @Test
     void supplierPaymentCannotExceedOutstandingBillBalance() {
         SupplierBill bill = bill(13L, new BigDecimal("100.00"));
         when(paymentRepository.findByIdempotencyKey("PAY-13")).thenReturn(Optional.empty(), Optional.empty());
@@ -223,6 +273,7 @@ class SupplierAccountServiceTest {
         bill.setSupplier(supplier);
         bill.setAmount(amount);
         bill.setPaidAmount(BigDecimal.ZERO);
+        bill.setCreditedAmount(BigDecimal.ZERO);
         bill.setStatus("POSTED");
         bill.setBillType("GOODS");
         return bill;
