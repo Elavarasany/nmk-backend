@@ -52,7 +52,11 @@ public class PrescriptionCloudinaryService {
         }
         try {
             byte[] bytes = file.getBytes();
-            String format = detectFormat(bytes);
+            if (bytes.length == 0 || bytes.length > MAX_FILE_BYTES) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Choose a prescription file smaller than 5 MB.");
+            }
+            String detectedFormat = detectFormat(bytes);
             String publicId = "nmk-prescriptions/" + UUID.randomUUID().toString().replace("-", "");
             Map result = cloudinary.uploader().upload(bytes, ObjectUtils.asMap(
                     "resource_type", "auto",
@@ -68,9 +72,17 @@ public class PrescriptionCloudinaryService {
             String returnedFormat = String.valueOf(result.get("format")).toLowerCase(Locale.ROOT);
             String version = String.valueOf(result.get("version"));
             String signature = String.valueOf(result.get("signature"));
+            boolean resourceTypeMatches = "pdf".equals(detectedFormat)
+                    ? ("image".equals(resourceType) || "raw".equals(resourceType))
+                    : "image".equals(resourceType);
+            boolean responseFormatMatches = ALLOWED_FORMATS.contains(returnedFormat)
+                    && canonicalFormat(detectedFormat).equals(canonicalFormat(returnedFormat));
+            boolean responseMetadataValid = version.matches("[0-9]{1,20}")
+                    && signature.matches("[a-fA-F0-9]{40}|[a-fA-F0-9]{64}");
             if (!publicId.equals(returnedId)
-                    || !("image".equals(resourceType) || "raw".equals(resourceType))
-                    || !ALLOWED_FORMATS.contains(returnedFormat)
+                    || !resourceTypeMatches
+                    || !responseFormatMatches
+                    || !responseMetadataValid
                     || !cloudinary.verifyApiResponseSignature(returnedId, version, signature)) {
                 try {
                     cloudinary.uploader().destroy(returnedId, ObjectUtils.asMap(
@@ -132,7 +144,7 @@ public class PrescriptionCloudinaryService {
                             "resource_type", String.valueOf(asset.get("resourceType")),
                             "type", "authenticated",
                             "expires_at", expiresAt,
-                            "attachment", false
+                            "attachment", "pdf".equalsIgnoreCase(String.valueOf(asset.get("format")))
                     )
             );
         } catch (Exception exception) {
@@ -173,6 +185,10 @@ public class PrescriptionCloudinaryService {
         }
     }
 
+    private String canonicalFormat(String format) {
+        return "jpeg".equalsIgnoreCase(format) ? "jpg" : format.toLowerCase(Locale.ROOT);
+    }
+
     private String detectFormat(byte[] bytes) {
         if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8 && (bytes[2] & 0xff) == 0xff) return "jpg";
         if (bytes.length >= 8 && (bytes[0] & 0xff) == 0x89
@@ -184,9 +200,10 @@ public class PrescriptionCloudinaryService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The selected file is not a supported JPG, PNG, WEBP or PDF.");
     }
 
-    private String safeFileName(String value) {
+    public String safeFileName(String value) {
         if (value == null) return "prescription";
         String clean = value.replaceAll("[\\\\/\\r\\n\\p{Cntrl}]", "_").trim();
+        if (clean.isBlank()) return "prescription";
         return clean.length() > 255 ? clean.substring(0, 255) : clean;
     }
 }
