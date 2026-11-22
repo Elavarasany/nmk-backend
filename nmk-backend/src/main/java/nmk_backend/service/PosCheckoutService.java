@@ -87,13 +87,17 @@ public class PosCheckoutService {
 
     @Transactional(readOnly = true)
     public Page<PosSaleResponse> getSales(Long locationId, Pageable pageable, String username, String role) {
-        if (locationAccessService != null && locationId == null && !"ADMIN".equalsIgnoreCase(role)) {
-            throw new IllegalArgumentException("A location filter is required for non-administrator sales history");
+        Page<PosSale> sales;
+        if (locationId != null) {
+            if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
+            sales = saleRepository.findByLocationId(locationId, pageable);
+        } else if (locationAccessService != null && !"ADMIN".equalsIgnoreCase(role)) {
+            var allowedLocations = locationAccessService.getAccessibleLocationIds(username, role);
+            sales = allowedLocations.isEmpty() ? Page.empty(pageable)
+                    : saleRepository.findByLocationIdIn(allowedLocations, pageable);
+        } else {
+            sales = saleRepository.findAll(pageable);
         }
-        if (locationId != null && locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
-        Page<PosSale> sales = locationId == null
-                ? saleRepository.findAll(pageable)
-                : saleRepository.findByLocationId(locationId, pageable);
         return sales.map(PosSaleResponse::from);
     }
 
