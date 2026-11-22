@@ -399,6 +399,7 @@ class PosShiftServiceTest {
 
     @Test
     void cashierCannotReadAnotherCashiersCurrentShift() {
+        when(registerRepository.findById(3L)).thenReturn(Optional.of(shift.getRegister()));
         when(shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN"))
                 .thenReturn(Optional.of(shift));
 
@@ -407,6 +408,7 @@ class PosShiftServiceTest {
 
     @Test
     void managerCanReadCurrentShiftOpenedByCashier() {
+        when(registerRepository.findById(3L)).thenReturn(Optional.of(shift.getRegister()));
         when(shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN"))
                 .thenReturn(Optional.of(shift));
         when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of());
