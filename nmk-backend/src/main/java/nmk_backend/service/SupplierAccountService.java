@@ -160,8 +160,9 @@ public class SupplierAccountService {
             }
         }
 
-        BigDecimal paid = paymentRepository.sumConfirmedAmountByBillId(bill.getId());
-        if (paid == null) paid = ZERO;
+        // Use the locked bill row as the current-read payable balance. A SUM query here
+        // would use an older REPEATABLE READ snapshot when concurrent payments waited on this bill.
+        BigDecimal paid = bill.getPaidAmount() == null ? ZERO : bill.getPaidAmount();
         BigDecimal outstanding = bill.getAmount().subtract(paid).setScale(2);
         if (amount.compareTo(outstanding) > 0) {
             throw new IllegalArgumentException("Supplier payment exceeds the outstanding bill balance of " + outstanding);
@@ -179,6 +180,8 @@ public class SupplierAccountService {
         payment.setIdempotencyKey(key);
         payment.setRequestFingerprint(fingerprint);
         paymentRepository.saveAndFlush(payment);
+        bill.setPaidAmount(paid.add(amount).setScale(2));
+        billRepository.saveAndFlush(bill);
 
         if ("CASH".equals(method)) {
             posShiftService.recordSupplierPayment(
