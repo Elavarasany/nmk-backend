@@ -50,6 +50,42 @@ class RazorpayRefundReconciliationMySqlTest {
     }
 
     @Test
+    void webhookLinksExistingPendingRefundRequestByReceiptOnMySql() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String paymentId = "pay_" + suffix;
+        String refundId = "rfnd_" + suffix;
+        String receipt = "nmk_" + suffix;
+        String idempotencyKey = "refund_" + suffix;
+
+        Order order = new Order();
+        order.setCustomerName("Idempotent refund link test");
+        order.setTotalAmount(new BigDecimal("125.00"));
+        order.setPaymentStatus("PAID");
+        order.setRazorpayPaymentId(paymentId);
+        order = orderRepository.saveAndFlush(order);
+
+        nmk_backend.entity.OrderRefund pending = new nmk_backend.entity.OrderRefund();
+        pending.setOrder(order);
+        pending.setRazorpayPaymentId(paymentId);
+        pending.setAmountPaise(5000L);
+        pending.setCurrency("INR");
+        pending.setStatus("PENDING");
+        pending.setReceipt(receipt);
+        pending.setRequestIdempotencyKey(idempotencyKey);
+        refundRepository.saveAndFlush(pending);
+        long refundsBefore = refundRepository.count();
+
+        service.reconcile("evt_" + suffix, "refund.processed",
+                refundId, paymentId, 5000L, "INR", "processed", receipt);
+
+        nmk_backend.entity.OrderRefund linked = refundRepository
+                .findByRequestIdempotencyKey(idempotencyKey).orElseThrow();
+        assertEquals(refundId, linked.getRazorpayRefundId());
+        assertEquals("PROCESSED", linked.getStatus());
+        assertEquals(refundsBefore, refundRepository.count());
+    }
+
+    @Test
     void overRefundTransactionRollsBackOnMySql() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String paymentId = "pay_" + suffix;
