@@ -94,6 +94,21 @@ class PosAuthorizationIntegrationTest {
 
 
     @Test
+    void cashierCannotReadCatalogForAnUnassignedLocation() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        InventoryLocation otherLocation = new InventoryLocation();
+        otherLocation.setCode("POS-OTHER-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+        otherLocation.setName("Unassigned test location");
+        otherLocation.setActive(true);
+        otherLocation = locationRepository.saveAndFlush(otherLocation);
+
+        mockMvc.perform(get("/api/admin/pos/catalog")
+                        .param("locationId", otherLocation.getId().toString())
+                        .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cashierCannotApplySaleDiscountThroughPosCheckoutApi() throws Exception {
         String cashierToken = tokenForRole("CASHIER");
         String body = """
