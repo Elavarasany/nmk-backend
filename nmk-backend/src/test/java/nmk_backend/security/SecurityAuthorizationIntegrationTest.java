@@ -180,6 +180,16 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
     }
 
     @Test
+    void prescriptionUploadIsPublicButFailsClosedWithoutCloudinaryCredentials() throws Exception {
+        org.springframework.mock.web.MockMultipartFile file =
+                new org.springframework.mock.web.MockMultipartFile(
+                        "file", "prescription.pdf", "application/pdf", "%PDF-1.7".getBytes()
+                );
+        mockMvc.perform(multipart("/api/prescriptions/upload").file(file))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
     void adminOrdersAreBlockedWithoutToken() throws Exception {
         mockMvc.perform(get("/api/admin/orders"))
                 .andExpect(status().isForbidden());
