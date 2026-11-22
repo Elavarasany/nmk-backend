@@ -15,8 +15,8 @@ public class PosExchangeController {
  private final AdminActionAuthorizationService authorizationService;
  public PosExchangeController(PosExchangeService service,AdminActionAuthorizationService authorizationService) { this.service=service; this.authorizationService=authorizationService; }
  @GetMapping
- public ResponseEntity<?> getExchanges(@PathVariable Long saleId) {
-  try { return ResponseEntity.ok(service.getExchanges(saleId)); }
+ public ResponseEntity<?> getExchanges(@PathVariable Long saleId,Authentication auth) {
+  try { return ResponseEntity.ok(service.getExchanges(saleId,auth.getName(),auth.getAuthorities().stream().map(a->a.getAuthority()).filter(a->a.startsWith("ROLE_")).map(a->a.substring(5)).findFirst().orElse("CASHIER"))); }
   catch(IllegalArgumentException ex) { return ResponseEntity.badRequest().body(Map.of("message",ex.getMessage())); }
  }
  @PostMapping
