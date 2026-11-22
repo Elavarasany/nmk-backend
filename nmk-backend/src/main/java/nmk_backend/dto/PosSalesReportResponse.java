@@ -14,5 +14,5 @@ public record PosSalesReportResponse(
 ) {
  public record CashierTotals(String cashierUsername,int transactionCount,BigDecimal subtotal,BigDecimal discounts,BigDecimal netSales) {}
  public record DailyTotals(LocalDate date,int transactionCount,BigDecimal netSales,int returnCount,BigDecimal refunds,BigDecimal netAfterRefunds) {}
- public record ProductTotals(Long productId,String productName,String sku,long quantitySold,BigDecimal grossLineTotal) {}
+ public record ProductTotals(Long productId,String productName,long quantitySold,BigDecimal grossLineTotal) {}
 }
