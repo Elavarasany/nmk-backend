@@ -45,7 +45,7 @@ public class StalePaymentCreationReviewController {
             return ResponseEntity.status(502).body(Map.of("message", exception.getMessage()));
         } catch (IllegalStateException exception) {
             recordProviderLookup(request, 409, exception);
-            return ResponseEntity.conflict().body(Map.of("message", exception.getMessage()));
+            return ResponseEntity.status(409).body(Map.of("message", exception.getMessage()));
         } catch (RuntimeException exception) {
             recordProviderLookup(request, 500, exception);
             throw exception;
