@@ -250,6 +250,9 @@ public class PosReturnService {
             if (!"CASH".equals(method) && (reference == null || reference.isBlank())) {
                 throw new IllegalArgumentException("A transaction reference is required for UPI and card refunds");
             }
+            if (reference != null && reference.length() > 150) {
+                throw new IllegalArgumentException("Refund transaction reference cannot exceed 150 characters");
+            }
 
             PosRefundPayment refundPayment = new PosRefundPayment();
             refundPayment.setReturnRecord(returnRecord);
