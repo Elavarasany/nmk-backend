@@ -2,11 +2,13 @@
 package nmk_backend.controller;
 
 import nmk_backend.entity.Product;
+import nmk_backend.dto.AdminProductResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import nmk_backend.service.ProductService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -20,10 +22,20 @@ public class AdminProductController {
         this.productService = productService;
     }
 
-    // View all products
+    // View products in bounded, newest-first pages.
     @GetMapping
-    public List<Product> getAllProducts() {
-        return productService.getAllProducts();
+    public ResponseEntity<?> getAllProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
+        return ResponseEntity.ok(productService.getAllProducts(PageRequest.of(
+                page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
+        )));
     }
 
     // Add product
