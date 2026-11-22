@@ -7,7 +7,7 @@ Status: configuration review in progress. This document is a deployment gate, no
 - Activate the production profile with `SPRING_PROFILES_ACTIVE=prod`.
 - Backend listens on the hosting platform's `PORT` environment variable when supplied, and defaults to `8080` for local use.
 - The base datasource requires `AIVEN_HOST`, `AIVEN_PORT`, `AIVEN_DATABASE`, `AIVEN_USER`, and `AIVEN_PASSWORD`. JDBC uses `sslMode=REQUIRED`; confirm the selected database provider's TLS requirements and certificate-validation policy before launch.
-- `JWT_SECRET` is required. The application builds an HMAC signing key with JJWT; provision a cryptographically random key of at least 32 bytes (prefer 32+ random bytes encoded as Base64) and keep it outside source control. Rotating it invalidates existing sessions.
+- `JWT_SECRET` is required. The application builds an HMAC signing key with JJWT; provision at least 32 random bytes and keep the value outside source control. The current implementation uses the configured string's UTF-8 bytes directly; do not Base64-decode the value. Startup now validates the HMAC key immediately, so a weak key fails application startup rather than the first login. Rotating it invalidates existing sessions.
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` are required by the base configuration. Use live credentials only in the production secret store, never in frontend `VITE_*` variables.
 - `APP_CORS_ALLOWED_ORIGINS` is required by the production profile. Supply only the exact storefront/admin HTTPS origin(s), comma-separated; do not include paths, wildcard origins, localhost, or preview domains. The security configuration rejects wildcard origins and rejects non-HTTPS origins when the production profile is active.
 - Production disables SQL display, enables Hibernate schema validation (not schema mutation), disables Flyway auto-run, disables open-in-view, and suppresses detailed error messages/stack traces.
@@ -21,7 +21,7 @@ Backend:
 - `SPRING_PROFILES_ACTIVE=prod`
 - `PORT` (only when required by the selected hosting platform; otherwise the backend defaults to `8080`)
 - `AIVEN_HOST`, `AIVEN_PORT`, `AIVEN_DATABASE`, `AIVEN_USER`, `AIVEN_PASSWORD`
-- `JWT_SECRET` (random, high entropy, at least 32 bytes)
+- `JWT_SECRET` (at least 32 random bytes; supplied string bytes are used directly, not Base64-decoded)
 - `APP_CORS_ALLOWED_ORIGINS` (exact HTTPS origins)
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
 - Temporary only: `ADMIN_BOOTSTRAP_USERNAME`, `ADMIN_BOOTSTRAP_PASSWORD`
@@ -30,6 +30,13 @@ Frontend build:
 - `VITE_API_BASE_URL=https://<backend-host>/api` (replace with the actual backend URL; this is a public API address, not a secret)
 
 SMS remains disabled in the current base configuration. Do not enable it until client MSG91 credentials, sender/template approval, and delivery tests are available.
+
+## CI and deployment workflow review
+
+- The backend GitHub Actions workflow runs Java 27 tests and a separate MySQL 8.4 integration/concurrency suite. It requests read-only repository contents permission and cancels superseded runs.
+- The frontend workflow runs `npm ci`, build, and lint. It does not deploy the frontend and does not currently provide a production API URL during CI; the real deployment pipeline must inject `VITE_API_BASE_URL` at build time.
+- No repository-managed deployment workflow, Dockerfile, Render/Railway/Netlify/Vercel deployment manifest, or production hosting configuration was found in the inspected branch. Hosting setup therefore remains external and unverified.
+- Repository `.gitignore` files exclude `.env*` files except `.env.example`, local secrets/key files, build output, and database dumps. This is a useful guardrail, not a substitute for scanning Git history and hosting secrets. A targeted code search of the accessible default-branch index returned no matches for common Razorpay live-key, JWT-secret, or Cloudinary API-secret patterns; that search does not prove that feature-branch history or all prior commits are clean.
 
 ## Deployment checks that remain mandatory
 
@@ -54,7 +61,12 @@ SMS remains disabled in the current base configuration. Do not enable it until c
 - The frontend build-time API URL must be supplied by the deployment pipeline; repository defaults are development-oriented.
 - Payment provider settlement, refund processing, bank reconciliation, GST/tax approval, and manual POS browser acceptance remain separate release gates.
 
-## Change made in this review
+## Additional changes made in this review
+
+- JWT signing-key strength is now validated at application startup; weak keys fail fast. Added unit tests for accepted and rejected key lengths.
+- Backend `.env.example` now shows the production profile, hosting port, correct JWT secret handling, and removes an unused `APP_CORS_REQUIRE_HTTPS` variable (HTTPS enforcement is set by the production profile itself).
+
+## Change made in the previous review
 
 - Production profile sets `website-images.bootstrap.enabled=false`.
 - The initializer skips demo image records when that property is false, while retaining its existing one-time admin bootstrap behavior.
