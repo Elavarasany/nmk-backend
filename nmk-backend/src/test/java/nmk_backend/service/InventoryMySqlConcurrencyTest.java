@@ -169,9 +169,6 @@ class InventoryMySqlConcurrencyTest {
                     .findByLocationIdAndVariantId(ids.locationId(), ids.variantId())
                     .orElseThrow();
 
-            assertEquals(1, balance.getOnHandQuantity()
-                    + balance.getReservedQuantity() - balance.getReservedQuantity(),
-                    "The physical on-hand quantity remains one if reservation wins, otherwise zero after POS sale");
             assertTrue(
                     (balance.getOnHandQuantity() == 1 && balance.getReservedQuantity() == 1)
                             || (balance.getOnHandQuantity() == 0 && balance.getReservedQuantity() == 0),
