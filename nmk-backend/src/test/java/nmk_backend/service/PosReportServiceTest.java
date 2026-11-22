@@ -117,7 +117,8 @@ class PosReportServiceTest {
         assertEquals(new BigDecimal("900.00"), report.netSalesBeforeRefunds());
         assertEquals(1, report.returnCount(), "Full voids must not count as customer returns");
         assertEquals(new BigDecimal("300.00"), report.refunds());
-        assertEquals(new BigDecimal("300.00"), report.salesReversals());
+        assertEquals(new BigDecimal("100.00"), report.salesReversals(),
+                "Sales reversals must include full voids only, not ordinary customer returns");
         assertEquals(new BigDecimal("300.00"), report.recordedRefundPayments());
         assertEquals(new BigDecimal("75.00"), report.exchangeCreditApplied(),
                 "Exchange credit must be reported separately from actual refund tenders");
