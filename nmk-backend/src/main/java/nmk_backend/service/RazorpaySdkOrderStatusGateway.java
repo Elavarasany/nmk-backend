@@ -3,13 +3,13 @@ package nmk_backend.service;
 import com.razorpay.RazorpayClient;
 import nmk_backend.dto.RazorpayOrderSnapshot;
 import nmk_backend.dto.RazorpayPaymentAttemptSnapshot;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.List;
 
 @Component
@@ -32,17 +32,14 @@ public class RazorpaySdkOrderStatusGateway implements RazorpayOrderStatusGateway
 
         RazorpayClient client = new RazorpayClient(keyId, keySecret);
         com.razorpay.Order providerOrder = client.orders.fetch(razorpayOrderId);
-        com.razorpay.Order paymentCollection = client.orders.fetchPayments(razorpayOrderId);
+        List<com.razorpay.Payment> paymentItems = client.orders.fetchPayments(razorpayOrderId);
 
         JSONObject orderJson = providerOrder.toJson();
-        JSONObject paymentsJson = paymentCollection.toJson();
-        JSONArray items = paymentsJson.optJSONArray("items");
         List<RazorpayPaymentAttemptSnapshot> payments = new ArrayList<>();
 
-        if (items != null) {
-            for (int i = 0; i < items.length(); i++) {
-                JSONObject payment = items.optJSONObject(i);
-                if (payment == null) continue;
+        if (paymentItems != null) {
+            for (com.razorpay.Payment paymentEntity : paymentItems) {
+                JSONObject payment = paymentEntity.toJson();
                 payments.add(new RazorpayPaymentAttemptSnapshot(
                         safeString(payment, "id"),
                         safeString(payment, "status"),
