@@ -40,9 +40,13 @@ public class PosShiftController {
     }
 
     @GetMapping("/shifts/history")
-    public ResponseEntity<?> getShiftHistory(@RequestParam Long locationId) {
+    public ResponseEntity<?> getShiftHistory(
+            @RequestParam Long locationId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
         try {
-            return ResponseEntity.ok(shiftService.getShiftHistory(locationId));
+            return ResponseEntity.ok(shiftService.getShiftHistory(locationId, page, size));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
