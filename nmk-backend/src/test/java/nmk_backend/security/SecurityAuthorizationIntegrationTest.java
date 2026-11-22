@@ -180,6 +180,37 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
     }
 
     @Test
+    void onlineRefundInitiationIsBlockedWithoutAdminToken() throws Exception {
+        mockMvc.perform(post("/api/admin/orders/1/refunds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amountPaise\":1000,\"reason\":\"Test\",\"idempotencyKey\":\"refund-test-key-123\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotAuthorizeOnlineRazorpayRefunds() throws Exception {
+        String username = "refund-manager-security-test";
+        adminRepository.findByUsername(username).ifPresent(adminRepository::delete);
+
+        Admin manager = new Admin();
+        manager.setUsername(username);
+        manager.setRole("MANAGER");
+        manager.setPassword(passwordEncoder.encode("ManagerTestPassword123!"));
+        adminRepository.saveAndFlush(manager);
+
+        try {
+            String token = jwtService.generateToken(username);
+            mockMvc.perform(post("/api/admin/auth/authorize-action")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"password\":\"ManagerTestPassword123!\",\"action\":\"RAZORPAY_REFUND\"}"))
+                    .andExpect(status().isBadRequest());
+        } finally {
+            adminRepository.findByUsername(username).ifPresent(adminRepository::delete);
+        }
+    }
+
+    @Test
     void prescriptionUploadIsPublicButFailsClosedWithoutCloudinaryCredentials() throws Exception {
         org.springframework.mock.web.MockMultipartFile file =
                 new org.springframework.mock.web.MockMultipartFile(
