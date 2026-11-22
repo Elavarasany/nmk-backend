@@ -1,7 +1,6 @@
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
@@ -14,8 +13,6 @@ public class WebsiteImage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank
-    @Pattern(regexp = "HERO|LOGO|STORE", message = "Unsupported website image slot")
     @Size(max = 20)
     @Column(nullable = false, unique = true)
     private String imageKey;
