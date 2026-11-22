@@ -88,6 +88,9 @@ public class RazorpaySettlementEntry {
     @Column(name = "local_refund_id")
     private Long localRefundId;
 
+    @Column(name = "local_dispute_id")
+    private Long localDisputeId;
+
     @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
@@ -150,6 +153,8 @@ public class RazorpaySettlementEntry {
     public void setLocalOrderId(Long value) { localOrderId = value; }
     public Long getLocalRefundId() { return localRefundId; }
     public void setLocalRefundId(Long value) { localRefundId = value; }
+    public Long getLocalDisputeId() { return localDisputeId; }
+    public void setLocalDisputeId(Long value) { localDisputeId = value; }
     public String getRawPayload() { return rawPayload; }
     public void setRawPayload(String value) { rawPayload = value; }
     public LocalDateTime getCreatedAt() { return createdAt; }
