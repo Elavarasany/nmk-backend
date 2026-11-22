@@ -179,8 +179,27 @@ public class ProcurementService {
             // constraint remains the final guard against concurrent duplicate inserts.
             return SupplierResponse.from(supplierRepository.saveAndFlush(supplier));
         } catch (DataIntegrityViolationException exception) {
-            throw new IllegalArgumentException("A supplier with this name already exists");
+            if (isSupplierNameUniqueViolation(exception)) {
+                throw new IllegalArgumentException("A supplier with this name already exists");
+            }
+            throw exception;
         }
+    }
+
+    private boolean isSupplierNameUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof java.sql.SQLException sqlException
+                    && sqlException.getErrorCode() == 1062) {
+                return true;
+            }
+            String message = cause.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("uk_suppliers_name")) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Transactional
