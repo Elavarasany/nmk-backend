@@ -4,6 +4,7 @@ package nmk_backend.repository;
 import nmk_backend.entity.RazorpayWebhookEvent;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,8 @@ public interface RazorpayWebhookEventRepository
         extends JpaRepository<RazorpayWebhookEvent, Long> {
 
     boolean existsByEventId(String eventId);
+
+    Page<RazorpayWebhookEvent> findByStatusOrderByReceivedAtAsc(String status, Pageable pageable);
 
     // Existing query: events ready for their first attempt or retry.
     @Query("""
