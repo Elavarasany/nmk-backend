@@ -283,8 +283,10 @@ public class SupplierAccountService {
     private SupplierBillLandedCostAllocationResponse toAllocationResponse(SupplierBillLandedCostAllocation row) {
         GoodsReceiptItem item = row.getGoodsReceiptItem();
         PurchaseOrderItem orderItem = item.getPurchaseOrderItem();
+        BigDecimal cumulativeLandedCost = allocationRepository.sumAllocatedAmountByGoodsReceiptItemId(item.getId());
+        if (cumulativeLandedCost == null) cumulativeLandedCost = ZERO;
         BigDecimal landedPerUnit = item.getUnitCost().add(
-                row.getAllocatedAmount().divide(BigDecimal.valueOf(item.getQuantity()), 2, RoundingMode.HALF_UP)
+                cumulativeLandedCost.divide(BigDecimal.valueOf(item.getQuantity()), 2, RoundingMode.HALF_UP)
         ).setScale(2, RoundingMode.HALF_UP);
         return new SupplierBillLandedCostAllocationResponse(
                 row.getId(), row.getBill().getId(), item.getId(), orderItem.getId(),
