@@ -11,6 +11,7 @@ import nmk_backend.service.RazorpayService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +40,7 @@ public class OrderController {
 
     @PostMapping("/checkout")
     public ResponseEntity<?> createCheckout(
-            @RequestBody CreateOrderRequest request) {
+            @Valid @RequestBody CreateOrderRequest request) {
 
         // PHASE 1:
         // Verify Razorpay credentials before reserving stock.
