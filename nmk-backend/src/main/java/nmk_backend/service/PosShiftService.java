@@ -12,6 +12,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -104,6 +108,86 @@ public class PosShiftService {
                 Sort.Order.desc("openedAt"), Sort.Order.desc("id")));
         return shiftRepository.findByRegisterLocationId(locationId, pageable)
                 .map(this::response);
+    }
+
+    @Transactional(readOnly = true)
+    public PosDailyCashReconciliationResponse getDailyCashReconciliation(
+            Long locationId, LocalDate businessDate, String username, String role
+    ) {
+        if (locationId == null || locationId <= 0 || businessDate == null) {
+            throw new IllegalArgumentException("Location and business date are required");
+        }
+        if (!canManageOtherShifts(role)) {
+            throw new IllegalArgumentException("Only managers and administrators can view daily cash reconciliation");
+        }
+        if (businessDate.isAfter(LocalDate.now(ZoneId.of("Asia/Kolkata")))) {
+            throw new IllegalArgumentException("A future business date cannot be reconciled");
+        }
+        assertLocationAccess(username, role, locationId);
+        locationRepository.findById(locationId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
+
+        LocalDateTime from = businessDate.atStartOfDay();
+        LocalDateTime to = businessDate.plusDays(1).atStartOfDay();
+        List<PosShift> shifts = shiftRepository
+                .findByRegisterLocationIdAndOpenedAtGreaterThanEqualAndOpenedAtLessThanOrderByOpenedAtAscIdAsc(
+                        locationId, from, to);
+
+        BigDecimal expectedTotal = ZERO;
+        BigDecimal countedTotal = ZERO;
+        BigDecimal varianceTotal = ZERO;
+        int openCount = 0;
+        int closedCount = 0;
+        int discrepancyCount = 0;
+        List<PosDailyCashReconciliationResponse.ShiftEntry> entries = new ArrayList<>();
+
+        for (PosShift shift : shifts) {
+            BigDecimal ledgerExpected = calculateExpectedCash(shift.getId());
+            BigDecimal counted = shift.getClosingCashCount();
+            BigDecimal calculatedVariance = counted == null ? null : counted.subtract(ledgerExpected).setScale(2);
+            boolean closed = "CLOSED".equals(shift.getStatus());
+            boolean ledgerConsistent = !closed
+                    || (shift.getExpectedCash() != null
+                    && shift.getExpectedCash().compareTo(ledgerExpected) == 0
+                    && shift.getCashVariance() != null
+                    && calculatedVariance != null
+                    && shift.getCashVariance().compareTo(calculatedVariance) == 0);
+
+            expectedTotal = expectedTotal.add(ledgerExpected);
+            if (closed) {
+                closedCount++;
+                if (counted != null) countedTotal = countedTotal.add(counted);
+                if (calculatedVariance != null) varianceTotal = varianceTotal.add(calculatedVariance);
+                if (!ledgerConsistent || (calculatedVariance != null && calculatedVariance.compareTo(ZERO) != 0)) {
+                    discrepancyCount++;
+                }
+            } else {
+                openCount++;
+            }
+
+            entries.add(new PosDailyCashReconciliationResponse.ShiftEntry(
+                    shift.getId(),
+                    shift.getRegister().getRegisterCode(),
+                    shift.getOpenedByUsername(),
+                    shift.getOpenedAt(),
+                    shift.getClosedAt(),
+                    shift.getStatus(),
+                    shift.getOpeningFloat(),
+                    ledgerExpected,
+                    shift.getExpectedCash(),
+                    counted,
+                    calculatedVariance,
+                    shift.getCashVariance(),
+                    ledgerConsistent,
+                    shift.getClosingReason()
+            ));
+        }
+
+        return new PosDailyCashReconciliationResponse(
+                locationId, businessDate, shifts.size(), openCount, closedCount, discrepancyCount,
+                expectedTotal.setScale(2), countedTotal.setScale(2), varianceTotal.setScale(2),
+                List.copyOf(entries)
+        );
     }
 
     @Transactional(readOnly = true)
