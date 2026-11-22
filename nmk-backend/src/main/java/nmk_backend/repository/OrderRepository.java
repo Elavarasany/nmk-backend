@@ -19,6 +19,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByTrackingToken(String trackingToken);
 
+    Page<Order> findByPaymentCreationStatusAndPaymentStatusAndStockReservedTrueAndOrderDateBeforeOrderByOrderDateAsc(
+            String paymentCreationStatus,
+            String paymentStatus,
+            LocalDateTime orderDate,
+            Pageable pageable
+    );
+
     Optional<Order> findByRazorpayOrderId(String razorpayOrderId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
