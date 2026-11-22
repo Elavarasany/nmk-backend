@@ -49,6 +49,22 @@ class AdminLocationAccessServiceTest {
     }
 
     @Test
+    void assignedButDeactivatedLocationIsDenied() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(9L);
+        location.setActive(false);
+        Admin cashier = new Admin();
+        cashier.setUsername("cashier");
+        cashier.setRole("CASHIER");
+        cashier.setEnabled(true);
+        cashier.setAssignedLocations(Set.of(location));
+        when(adminRepository.findWithLocationsByUsername("cashier")).thenReturn(Optional.of(cashier));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.assertCanAccess("cashier", "CASHIER", 9L));
+    }
+
+    @Test
     void unassignedOrDisabledStaffAreDenied() {
         Admin staff = new Admin();
         staff.setUsername("staff");
