@@ -103,6 +103,9 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/api/appointments".equals(path)) {
             return new Rule("appointment-booking", appointmentLimit);
         }
+        if ("POST".equals(method) && path.matches("/api/admin/orders/[0-9]+/refunds")) {
+            return new Rule("razorpay-refund-initiation", 5);
+        }
         if ("POST".equals(method) && "/api/orders/checkout".equals(path)) {
             return new Rule("order-checkout", checkoutLimit);
         }
