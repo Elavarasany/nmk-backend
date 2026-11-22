@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Component
 public class AdminMutationAuditInterceptor implements HandlerInterceptor {
+    public static final String AUDIT_RECORDED_ATTRIBUTE = AdminMutationAuditInterceptor.class.getName() + ".RECORDED";
     private static final Logger log = LoggerFactory.getLogger(AdminMutationAuditInterceptor.class);
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._:-]{1,100}");
     private final AdminAuditEventService auditService;
@@ -33,6 +34,7 @@ public class AdminMutationAuditInterceptor implements HandlerInterceptor {
         String method = request.getMethod().toUpperCase(Locale.ROOT);
         if (path == null || !path.startsWith("/api/admin/")
                 || !isMutation(method)) return;
+        request.setAttribute(AUDIT_RECORDED_ATTRIBUTE, Boolean.TRUE);
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         AdminAuditEvent event = new AdminAuditEvent();
