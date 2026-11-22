@@ -17,6 +17,19 @@ public class StalePaymentCreationReviewController {
         this.reviewService = reviewService;
     }
 
+    @GetMapping("/{localOrderId}/provider-status")
+    public ResponseEntity<?> getProviderStatus(@PathVariable Long localOrderId) {
+        try {
+            return ResponseEntity.ok(reviewService.getProviderStatus(localOrderId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.conflict().body(Map.of("message", exception.getMessage()));
+        } catch (StalePaymentCreationReviewService.ProviderStatusUnavailableException exception) {
+            return ResponseEntity.status(502).body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     @GetMapping
     public ResponseEntity<?> getStalePaymentCreations(
             @RequestParam(defaultValue = "0") int page,
