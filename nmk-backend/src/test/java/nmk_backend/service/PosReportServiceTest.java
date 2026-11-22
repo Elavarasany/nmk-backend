@@ -223,6 +223,7 @@ class PosReportServiceTest {
         assertEquals(2, report.cashiers().size());
         verify(saleRepository, times(2))
                 .findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class));
+        verify((EntityManager) ReflectionTestUtils.getField(service, "entityManager"), times(3)).clear();
     }
 
     @Test
