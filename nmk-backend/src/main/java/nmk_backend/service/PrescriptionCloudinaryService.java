@@ -94,8 +94,7 @@ public class PrescriptionCloudinaryService {
     }
 
     public boolean verifyUploadedAsset(Map<String, Object> asset) {
-        if (!isValidAssetShape(asset)) return false;
-        requireConfigured();
+        if (!isValidAssetShape(asset) || cloudName.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) return false;
         try {
             return cloudinary.verifyApiResponseSignature(
                     String.valueOf(asset.get("publicId")),
