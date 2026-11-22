@@ -479,6 +479,12 @@ class ProcurementServiceTest {
         when(supplierReturnRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(80L), invocation.getArgument(3), 1));
         when(supplierReturnRepository.findAllByIdIn(List.of(80L))).thenReturn(List.of(supplierReturn));
+        when(locationRepository.existsById(1L)).thenReturn(true);
+        when(goodsReceiptRepository.findCostReportEntries(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
+                        reportRow("RECEIVED", "GR-070", receivedAt),
+                        reportRow("SUPPLIER_RETURN", "SUP-RET-080", returnedAt)
+                ), PageRequest.of(0, 50), 2));
 
         ProcurementCostReportResponse report = service.getProcurementCostReport(1L, day, day);
 
@@ -531,12 +537,17 @@ class ProcurementServiceTest {
                 });
         when(supplierReturnRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+        when(locationRepository.existsById(1L)).thenReturn(true);
+        when(goodsReceiptRepository.findCostReportEntries(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 201));
 
         var report = service.getProcurementCostReport(1L, day, day);
 
         assertEquals(201L, report.receivedQuantity());
         assertEquals(new BigDecimal("201.00"), report.receivedCost());
-        assertEquals(201, report.entries().size());
+        assertEquals(0, report.entries().size());
+        assertEquals(201L, report.totalEntries());
+        assertTrue(report.entriesHasNext());
         verify(goodsReceiptRepository, times(2))
                 .findReportIds(eq(1L), any(), any(), any(Pageable.class));
         verify(goodsReceiptRepository, times(2)).findAllByIdIn(anyList());
