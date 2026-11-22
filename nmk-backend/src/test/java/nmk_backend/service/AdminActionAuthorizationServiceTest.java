@@ -123,6 +123,10 @@ class AdminActionAuthorizationServiceTest {
         }
         assertThrows(IllegalArgumentException.class,
                 () -> service.authorizeAction("admin", "correct-password", "CLEAR_ORDERS"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.authorizeAction("admin", "correct-password", "SUPPLIER_BILL_POST"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.authorizeAction("admin", "correct-password", "SUPPLIER_PAYMENT"));
     }
 
     @Test
