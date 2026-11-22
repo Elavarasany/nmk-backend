@@ -1,6 +1,7 @@
 package nmk_backend.security;
 
 import nmk_backend.config.SecurityConfig;
+import nmk_backend.service.AdminAuditEventService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.cors.CorsConfiguration;
@@ -13,7 +14,7 @@ class CorsConfigurationTest {
 
     @Test
     void configuresOnlyExplicitOriginsAndExpectedMethods() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
         ReflectionTestUtils.setField(config, "allowedOrigins",
                 "https://shop.example.com, https://admin.example.com");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", true);
