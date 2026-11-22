@@ -483,6 +483,38 @@ class RazorpayWebhookProcessorTest {
         );
     }
     @Test
+    void abandonedProcessingEventAtRetryLimitMovesDirectlyToManualReview()
+            throws Exception {
+
+        RazorpayWebhookEvent event = event(capturedPayload(12500));
+        event.setStatus("PROCESSING");
+        event.setAttemptCount(8);
+        event.setProcessingStartedAt(
+                LocalDateTime.now().minusMinutes(10)
+        );
+        event.setClaimToken("abandoned-worker-token");
+
+        when(eventRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(event));
+
+        processor.processOne(1L);
+
+        assertEquals("MANUAL_REVIEW", event.getStatus());
+        assertTrue(event.getProcessingError().contains("Retry limit reached"));
+        assertNull(event.getNextAttemptAt());
+        assertNull(event.getClaimToken());
+        assertNull(event.getProcessingStartedAt());
+        assertEquals(8, event.getAttemptCount());
+
+        verify(eventRepository, times(1)).save(event);
+        verifyNoInteractions(
+                orderRepository,
+                razorpayService,
+                paymentVerificationService
+        );
+    }
+
+    @Test
     void retryLimitMovesEventToManualReview() throws Exception {
 
         RazorpayWebhookEvent event =
