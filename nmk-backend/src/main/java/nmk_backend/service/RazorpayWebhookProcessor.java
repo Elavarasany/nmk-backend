@@ -32,6 +32,7 @@ public class RazorpayWebhookProcessor {
     private final OrderRepository orderRepository;
     private final RazorpayService razorpayService;
     private final PaymentVerificationService paymentVerificationService;
+    private final RazorpayRefundReconciliationService refundReconciliationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -41,6 +42,7 @@ public class RazorpayWebhookProcessor {
             RazorpayService razorpayService,
             PaymentVerificationService paymentVerificationService,
             ObjectMapper objectMapper,
+            RazorpayRefundReconciliationService refundReconciliationService,
             PlatformTransactionManager transactionManager) {
 
         this.eventRepository = eventRepository;
@@ -48,6 +50,7 @@ public class RazorpayWebhookProcessor {
         this.razorpayService = razorpayService;
         this.paymentVerificationService = paymentVerificationService;
         this.objectMapper = objectMapper;
+        this.refundReconciliationService = refundReconciliationService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -66,7 +69,7 @@ public class RazorpayWebhookProcessor {
         ProcessingResult result;
 
         try {
-            processPayload(claim.rawPayload());
+            processPayload(claim.rawPayload(), claim.providerEventId());
 
             result = ProcessingResult.processed();
 
@@ -171,6 +174,7 @@ public class RazorpayWebhookProcessor {
 
             return new Claim(
                     event.getRawPayload(),
+                    event.getEventId(),
                     claimToken,
                     event.getAttemptCount()
             );
@@ -181,19 +185,39 @@ public class RazorpayWebhookProcessor {
      * Runs outside the claim transaction.
      * Only a verified payment.captured event can confirm an order.
      */
-    private void processPayload(String rawPayload) throws Exception {
+    private void processPayload(String rawPayload, String providerEventId) throws Exception {
 
         JsonNode root = objectMapper.readTree(rawPayload);
 
         String eventType = root.path("event").asText("");
 
-        // Refund events must remain visible for manual reconciliation.
-        // Marking them PROCESSED would falsely imply that the POS refund
-        // ledger and provider refund state had been reconciled.
         if (eventType.startsWith("refund.")) {
-            throw new ManualReviewException(
-                    "Razorpay refund event requires manual reconciliation; automated refund status updates are not implemented"
-            );
+            JsonNode refund = root.path("payload").path("refund").path("entity");
+            String refundId = refund.path("id").asText("");
+            String paymentId = refund.path("payment_id").asText("");
+            String currency = refund.path("currency").asText("");
+            String providerStatus = refund.path("status").asText("");
+            JsonNode amountNode = refund.path("amount");
+
+            if (refund.isMissingNode() || refund.isNull()
+                    || !amountNode.canConvertToLong()) {
+                throw new ManualReviewException("Razorpay refund payload is incomplete");
+            }
+
+            try {
+                refundReconciliationService.reconcile(
+                        providerEventId,
+                        eventType,
+                        refundId,
+                        paymentId,
+                        amountNode.longValue(),
+                        currency,
+                        providerStatus
+                );
+            } catch (IllegalArgumentException invalidRefund) {
+                throw new ManualReviewException(safeMessage(invalidRefund));
+            }
+            return;
         }
 
         // Other signed webhook events are recorded but do not
@@ -371,6 +395,7 @@ public class RazorpayWebhookProcessor {
 
     private record Claim(
             String rawPayload,
+            String providerEventId,
             String claimToken,
             int attemptCount
     ) {
