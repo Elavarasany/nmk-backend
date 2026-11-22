@@ -25,14 +25,14 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 
 - Checkout signatures are verified, and payment confirmation fetches the payment from Razorpay to confirm captured status, matching Razorpay order ID and exact amount.
 - Signed webhook events are durably stored and deduplicated by event ID. Only `payment.captured` can confirm an online order; the worker verifies provider state before confirmation and sends conflicts/late captures to manual review.
-- Other signed event types, including refund-related events, are stored/processed for webhook audit but do not update a POS refund or online-order refund state.
+- Other signed non-refund event types are stored/processed for webhook audit. Signed `refund.*` events are now routed to `MANUAL_REVIEW` rather than marked `PROCESSED`, because no provider-refund-to-POS-ledger reconciliation exists yet. They do not automatically update a POS refund or online-order refund state.
 - The online-order Razorpay payment flow is separate from the walk-in POS UPI/card tender records. A POS transaction reference is not automatically linked to a Razorpay order/payment ID.
 
 ## What is not implemented
 
 1. Provider-backed validation of POS UPI/card payments.
 2. Durable mapping from POS tender rows to provider account, provider payment ID, order ID, capture status and settlement batch.
-3. Automated Razorpay refund creation, refund ID storage, provider status polling/webhook reconciliation and idempotent retry.
+3. Automated Razorpay refund creation, refund ID storage, provider status polling/webhook reconciliation and idempotent retry. Refund webhook events currently require manual review; they are not proof that a POS or online-order refund ledger was updated.
 4. Bank payout/settlement import and matching of gross captured amounts, fees, taxes on fees, refunds, chargebacks and net deposits.
 5. Exception queues for unmatched, duplicate, short-paid, late, reversed or disputed transactions.
 6. A daily settlement reconciliation report that proves POS tender totals against provider settlement statements and bank credits.
