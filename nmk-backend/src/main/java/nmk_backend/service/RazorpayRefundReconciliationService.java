@@ -79,6 +79,37 @@ public class RazorpayRefundReconciliationService {
 
         long orderAmountPaise = toPaise(order);
         Optional<OrderRefund> existing = refundRepository.findByRazorpayRefundIdForUpdate(refundId);
+        if (existing.isPresent() && receipt != null && !receipt.isBlank()) {
+            OrderRefund providerRow = existing.get();
+            Optional<OrderRefund> receiptRequest =
+                    refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate(paymentId, receipt);
+            if (receiptRequest.isPresent()
+                    && !receiptRequest.get().getId().equals(providerRow.getId())) {
+                OrderRefund localRequest = receiptRequest.get();
+                if (!order.getId().equals(localRequest.getOrder().getId())
+                        || !paymentId.equals(localRequest.getRazorpayPaymentId())
+                        || localRequest.getAmountPaise() != amountPaise
+                        || !"INR".equalsIgnoreCase(localRequest.getCurrency())
+                        || !"PENDING".equals(localRequest.getStatus())
+                        || localRequest.getRequestIdempotencyKey() == null
+                        || localRequest.getRazorpayRefundId() != null) {
+                    throw new IllegalArgumentException(
+                            "Razorpay refund receipt conflicts with its reserved local request");
+                }
+
+                // A webhook without receipt may have created a second provider row.
+                // When the API response later supplies the receipt, retain the
+                // original idempotency row and merge the provider state into it.
+                String providerStatus = providerRow.getStatus();
+                String providerEventId = providerRow.getLastProviderEventId();
+                refundRepository.delete(providerRow);
+                refundRepository.flush();
+                localRequest.setRazorpayRefundId(refundId);
+                localRequest.setStatus(providerStatus);
+                localRequest.setLastProviderEventId(providerEventId);
+                existing = Optional.of(localRequest);
+            }
+        }
         if (existing.isEmpty() && receipt != null && !receipt.isBlank()) {
             existing = refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate(paymentId, receipt);
         }
