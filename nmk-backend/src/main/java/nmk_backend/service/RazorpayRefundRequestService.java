@@ -63,6 +63,12 @@ public class RazorpayRefundRequestService {
         if (paymentId == null || !PAYMENT_ID.matcher(paymentId).matches()) {
             throw new IllegalArgumentException("This order has no verified Razorpay payment to refund");
         }
+        boolean anotherPendingRefund = refundRepository.findByOrderIdOrderByCreatedAtDesc(orderId)
+                .stream().anyMatch(refund -> "PENDING".equalsIgnoreCase(refund.getStatus()));
+        if (anotherPendingRefund) {
+            throw new IllegalStateException(
+                    "Another refund is pending for this order. Wait for Razorpay confirmation before starting another.");
+        }
 
         long orderAmountPaise;
         try {
