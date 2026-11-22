@@ -31,6 +31,9 @@ public class Order {
 
     private String paymentStatus;
 
+    @Column(name = "refund_status", nullable = false, length = 30)
+    private String refundStatus = "NONE";
+
     @Column(name = "payment_creation_status", length = 30, nullable = false)
     private String paymentCreationStatus = "NOT_STARTED";
 
@@ -166,6 +169,14 @@ public class Order {
 
     public void setPaymentStatus(String paymentStatus) {
         this.paymentStatus = paymentStatus;
+    }
+
+    public String getRefundStatus() {
+        return refundStatus == null ? "NONE" : refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
     }
 
     public String getPaymentCreationStatus() {
