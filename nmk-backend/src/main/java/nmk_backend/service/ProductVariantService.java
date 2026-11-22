@@ -90,7 +90,7 @@ public class ProductVariantService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid product ID is required");
         }
 
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Product not found"
                 ));
