@@ -88,7 +88,7 @@ public class RazorpaySettlementEntry {
     @Column(name = "local_refund_id")
     private Long localRefundId;
 
-    @Column(name = "raw_payload", columnDefinition = "LONGTEXT")
+    @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
     @Column(name = "created_at", nullable = false)
