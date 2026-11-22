@@ -86,6 +86,6 @@ The current POS payment-method report is an operational total of amounts entered
 
 ## Release status
 
-POS cash drawer controls are implemented. Online-order Razorpay normal-speed refunds now have an admin-only, password-authorized, idempotent initiation path with signed webhook reconciliation. Walk-in POS non-cash tender/refund records remain operator-entered operational records. Bank settlement matching, provider validation of POS tenders, chargeback reconciliation and full financial close remain unimplemented.
+POS cash drawer controls are implemented. Online-order Razorpay normal-speed refunds now have an admin-only, password-authorized, idempotent initiation path with signed webhook reconciliation. Read-only Razorpay provider settlement report synchronization and local order/refund matching are implemented on the feature branch; deployment still requires migration 020 and client API credentials. Walk-in POS non-cash tender/refund records remain operator-entered operational records. Bank-statement UTR matching, provider validation of POS tenders, chargeback reconciliation and full financial close remain unimplemented.
 
 No provider credentials, client bank data or live settlement files were accessed during this review. No live database was changed.
