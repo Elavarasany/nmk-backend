@@ -52,19 +52,19 @@ public record PosInventoryReportResponse(
                 sorted.stream().mapToLong(VariantStock::reservedQuantity).sum(),
                 sorted.stream().mapToLong(VariantStock::availableQuantity).sum(),
                 (int) sorted.stream().filter(VariantStock::lowStock).count(),
-                sorted.size(), 0, sorted.size(), false, sorted
+                0, sorted.size(), false, sorted
         );
     }
 
     public static PosInventoryReportResponse fromAggregates(
             Long locationId, String locationCode, String locationName, long totalItems,
             long onHandQuantity, long reservedQuantity, long availableQuantity, int lowStockCount,
-            long totalItemsCount, int page, int size, boolean hasNext, List<VariantStock> rows
+            int page, int size, boolean hasNext, List<VariantStock> rows
     ) {
         return new PosInventoryReportResponse(
                 locationId, locationCode, locationName, Math.toIntExact(totalItems),
                 onHandQuantity, reservedQuantity, availableQuantity, lowStockCount,
-                totalItemsCount, page, size, hasNext, List.copyOf(rows)
+                totalItems, page, size, hasNext, List.copyOf(rows)
         );
     }
 }
