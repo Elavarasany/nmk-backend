@@ -68,4 +68,14 @@ class MarketingContentValidationTest {
 
         assertFalse(validator.validate(image).isEmpty());
     }
+    @Test
+    void acceptsExistingLongCategoryImageKeys() {
+        WebsiteImage image = new WebsiteImage();
+        image.setImageKey("CATEGORY_COMPUTER_GLASSES");
+        image.setTitle("Computer Glasses");
+        image.setImageUrl("");
+
+        assertTrue(validator.validate(image).isEmpty());
+    }
+
 }
