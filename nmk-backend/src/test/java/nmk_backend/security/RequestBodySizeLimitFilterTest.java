@@ -53,6 +53,32 @@ class RequestBodySizeLimitFilterTest {
     }
 
     @Test
+    void allowsBoundedMultipartPrescriptionUploadAboveJsonLimit() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/prescriptions/upload");
+        request.setContent(new byte[2 * 1024 * 1024]);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertEquals(200, response.getStatus());
+        assertTrue(chainCalled.get());
+    }
+
+    @Test
+    void stillRejectsPrescriptionMultipartBodyAboveSixMegabytes() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/prescriptions/upload");
+        request.setContent(new byte[(6 * 1024 * 1024) + 1]);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertEquals(413, response.getStatus());
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
     void replaysAcceptedBodyForControllerDeserialization() throws Exception {
         byte[] payload = "{\"message\":\"hello\"}".getBytes(StandardCharsets.UTF_8);
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/marketing/offers");
