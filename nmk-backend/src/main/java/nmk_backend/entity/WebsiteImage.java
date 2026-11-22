@@ -1,7 +1,9 @@
-
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 
 @Entity
@@ -12,12 +14,20 @@ public class WebsiteImage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank
+    @Pattern(regexp = "HERO|LOGO|STORE", message = "Unsupported website image slot")
+    @Size(max = 20)
     @Column(nullable = false, unique = true)
     private String imageKey;
 
+    @NotBlank
+    @Size(max = 150)
     @Column(nullable = false)
     private String title;
 
+    @Size(max = 1000)
+    @Pattern(regexp = "^(?:$|https?://\\S+)$",
+            message = "Image URL must be empty or an HTTP(S) URL")
     @Column(nullable = false, length = 1000)
     private String imageUrl;
 
@@ -29,39 +39,13 @@ public class WebsiteImage {
         updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getImageKey() {
-        return imageKey;
-    }
-
-    public void setImageKey(String imageKey) {
-        this.imageKey = imageKey;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getImageKey() { return imageKey; }
+    public void setImageKey(String imageKey) { this.imageKey = imageKey; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }
