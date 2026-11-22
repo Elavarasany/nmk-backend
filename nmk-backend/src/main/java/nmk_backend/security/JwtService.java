@@ -4,6 +4,7 @@ package nmk_backend.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,12 @@ public class JwtService {
 
     @Value("${jwt.secret}")
     private String secret;
+
+    @PostConstruct
+    void validateSigningKeyAtStartup() {
+        // Fail during application startup rather than waiting for the first login/request.
+        getSigningKey();
+    }
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(
