@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/prescriptions/upload").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/auth/authorize-action")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
