@@ -1,26 +1,33 @@
 # NMK Opticals POS — Supplier AP, Customer AR and Landed-Cost Rules
 
-**Status:** Provisional implementation policy; accountant/owner review required before production posting  
-**Scope:** Supplier bills/payables, supplier settlements, customer receivables and inventory acquisition cost  
-**Source plan:** POS canonical schema and Phase 5 migration plan
+**Status:** Initial supplier AP and receipt-level landed-cost allocation code implemented; accountant/owner review required before production posting.  
+**Scope:** Supplier bills/payables, supplier payments, customer receivables and inventory acquisition cost.
 
-## 1. Existing implementation boundary
+## 1. Implemented supplier accounting scope
 
-The current codebase supports supplier records, purchase orders, goods receipts, supplier returns and a procurement cost report. Those records do **not** yet constitute accounts payable: there is no supplier invoice/bill ledger, payment allocation ledger, or authoritative outstanding supplier balance. The procurement cost report is purchase/receipt cost less supplier-return cost, not profit or a general ledger.
+The POS now has an additive supplier-accounting ledger:
+- Supplier bills with invoice number/date, optional due date, bill type, supplier, optional purchase order, amount, status, creator and idempotency fingerprint.
+- Confirmed partial supplier payments linked to one bill. A payment cannot exceed the bill's remaining balance. Supplier advances/unallocated payments are not supported.
+- Bill balances are calculated as posted bill amount less confirmed payments; the records are source-linked and idempotent.
+- Supplier bill posting and payment recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
+- Cash supplier payments require an open POS shift, verify that the shift belongs to the bill's purchase-order location, ensure the drawer has sufficient expected cash, and create one linked OUT movement in the cash ledger.
+- Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed.
+- Bill and payment history endpoints are administrator-only.
 
-## 2. Provisional accounting model
+Manual schema migration: 022-create-supplier-ap-and-landed-cost-ledger.sql. It is additive and has not been applied to any client database.
 
-Use append-only, source-linked records. Do not derive a supplier's balance from purchase-order totals alone.
+## 2. Implemented landed-cost allocation
 
-- A supplier bill records the supplier's invoice/reference, invoice date, due date, currency, gross amount, linked PO/receipt where known, and an immutable line/charge snapshot.
-- Posting a bill creates a payable credit.
-- A confirmed supplier payment creates a payable debit and is allocated to one or more bills.
-- A supplier credit note/approved return credit reduces payable; it is not treated as cash received.
-- Partial payments are allowed.
-- Unallocated payment amounts remain supplier credit/on-account and must be visible; never silently discard or allocate them.
-- Payment attempts are not successful payments. A bill balance changes only when payment is confirmed.
-- Cash payments must reference an open POS shift and create exactly one cash-out movement. Bank/UPI payments require a reference/evidence field and do not alter drawer cash.
-- Supplier balances are calculated from posted bills, confirmed payments, approved credits and allocations. Do not edit a posted amount; correct it with a reversal/credit/debit record.
+A supplier bill with type LANDED_COST must link to a purchase order with accepted goods receipts. The service allocates the bill amount across received receipt lines in proportion to each line's goods value (accepted quantity × purchase-order unit cost). Allocation rounding is deterministic: non-final lines are rounded down to paise and the remaining amount is assigned to the final receipt line in stable receipt-item ID order.
+
+The allocation ledger records:
+- Source supplier bill.
+- Goods receipt item.
+- Base goods value.
+- Allocated landed-cost amount.
+- Derived receipt-line landed unit cost exposed by the allocation API.
+
+This is receipt-level landed-cost evidence, **not yet a complete inventory valuation or COGS engine**. It does not update a weighted-average inventory-cost balance, adjust the cost of stock already sold, or make profit reports authoritative. Existing procurement cost reporting must continue to be described as acquisition-cost reporting, not profit.
 
 ## 3. Customer accounts receivable
 
@@ -31,30 +38,29 @@ The approved POS scope says POS sales are fully paid and split tender is allowed
 - Do not treat an online order awaiting payment as a receivable; it remains a pending order/payment attempt.
 - Any future store-credit, layaway, instalment or pay-later feature requires a separately approved credit policy, limits, collections/aging process, refund treatment and accounting review.
 
-## 4. Provisional landed-cost allocation
+## 4. Supplier credits and accounting gaps
 
-For implementation planning, use a transparent and reproducible provisional method:
+The first AP implementation does not yet support supplier credit notes/debit notes, supplier advances, supplier statement reconciliation, payment reversal/chargeback, multi-bill payment allocations, AP aging summaries, or automated bank reconciliation. Supplier returns reduce stock through the existing supplier-return flow but do **not** automatically reduce a supplier bill balance; only a supplier credit-note workflow should do that. Until it exists, do not treat AP balances as final where a supplier return/credit is outstanding.
 
-1. Only direct, attributable acquisition costs are eligible (e.g. inbound freight and handling). General overhead, selling expenses, finance charges and unrelated operating costs are excluded.
-2. Allocate a receipt-level landed-cost charge to accepted, sellable receipt lines in proportion to each line's pre-allocation goods value (accepted quantity × supplier unit cost).
-3. Round line allocations to two decimal places; assign any rounding remainder deterministically to the largest eligible line, with variant ID as a stable tie-breaker.
-4. Quarantined/rejected goods do not receive sellable inventory cost until accepted. Do not allocate a charge to units that were not accepted into inventory.
-5. Supplier returns reverse the recorded landed cost associated with the returned units, not a newly recalculated current average.
-6. Track original goods cost, allocated landed cost and resulting landed unit cost separately for auditability.
-7. Maintain weighted-average cost by variant/location as the provisional valuation method. Cost updates and stock receipt must be atomic and idempotent.
+Landed-cost allocations are persisted but not yet rolled into weighted-average inventory valuation or COGS. Do not use them as a profit calculation.
 
-This is a provisional costing method, not an assertion that it is the legally/accounting-required method for NMK. Do not present gross margin/profit reports as authoritative until the accountant approves the valuation policy and opening-cost reconciliation.
+## 5. Provisional accounting model and rules
 
-## 5. GST and tax treatment
-
-The existing project decision says NMK is not GST-registered. Do not charge output GST, claim input tax credit, or treat a supplier GSTIN/invoice as proof that NMK can claim ITC. Preserve supplier invoice tax details as source evidence only if required, but exclude tax from recoverable inventory cost/ITC treatment until an accountant confirms the applicable legal treatment. If registration changes, implement a separately reviewed tax-policy migration from the effective date.
+- A supplier bill is recorded only when an actual supplier invoice is available. GOODS and LANDED_COST bills require accepted goods receipts against the linked purchase order; OTHER bills may be unlinked.
+- A bill is posted as a payable credit. A confirmed payment reduces its outstanding balance.
+- Partial payments are allowed. Payments are allocated to exactly one bill; a single payment cannot silently pay multiple bills.
+- Cash payments must reference an open POS shift and create exactly one cash-out movement. Bank/UPI payments require a reference and administrator confirmation.
+- Do not edit a posted amount; correct it with a reversal/credit/debit record once those workflows are implemented.
+- Only direct, attributable acquisition costs (e.g. inbound freight and handling) should be entered as LANDED_COST. General overhead, selling expenses, finance charges and unrelated operating costs are excluded.
+- Quarantined/rejected goods must not receive sellable inventory cost. The current goods receipt model records accepted quantities only.
+- Supplier returns reverse physical stock under the existing return workflow; the related supplier credit must be separately recorded once credit-note support exists.
+- Do not infer GST input tax credit from a supplier GSTIN or supplier tax invoice. NMK's existing design decision says it is not GST-registered.
 
 ## 6. Required accountant / owner confirmations
 
-Before enabling production AP postings or valuation reports, obtain written confirmation of:
-
+Before production AP postings or valuation reports are treated as accounting records, obtain written confirmation of:
 - Whether bills should be recorded at supplier invoice date, goods-receipt date, or both with a controlled accrual workflow.
-- Whether supplier payments may be made from the POS cash drawer, and approval limits/roles.
+- Supplier payment approval limits/roles and whether supplier cash payments may be made from the POS drawer.
 - Treatment of supplier advances, debit notes, credit notes, discounts, rebates, freight, insurance, customs/duties and payment fees.
 - Whether tax shown on supplier invoices is included in cost, separately recorded, or otherwise treated while NMK is not registered.
 - Weighted-average valuation acceptance and the treatment of negative/zero inventory, stock write-offs and returns.
@@ -64,4 +70,4 @@ Before enabling production AP postings or valuation reports, obtain written conf
 
 ## 7. Release gate
 
-Code may enforce the provisional rules and expose clearly labelled operational balances, but production accounting reports and tax treatment remain gated on accountant/owner review. No live database migration or financial opening-balance posting is authorized by this document.
+Code-side AP balances and receipt-level landed-cost allocations are operational records only until accountant/owner review, supplier credit-note handling, inventory valuation/COGS integration, and bank evidence controls are complete. No live database migration or financial opening-balance posting is authorized by this document.
