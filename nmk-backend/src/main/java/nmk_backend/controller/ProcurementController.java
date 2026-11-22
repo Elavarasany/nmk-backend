@@ -80,18 +80,26 @@ public class ProcurementController {
     }
 
     @GetMapping("/purchase-orders/{purchaseOrderId}/receipts")
-    public ResponseEntity<?> getGoodsReceipts(@PathVariable Long purchaseOrderId) {
+    public ResponseEntity<?> getGoodsReceipts(
+            @PathVariable Long purchaseOrderId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
         try {
-            return ResponseEntity.ok(procurementService.getGoodsReceipts(purchaseOrderId));
+            return ResponseEntity.ok(procurementService.getGoodsReceipts(purchaseOrderId, page, size));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
     }
 
     @GetMapping("/purchase-orders/{purchaseOrderId}/supplier-returns")
-    public ResponseEntity<?> getSupplierReturns(@PathVariable Long purchaseOrderId) {
+    public ResponseEntity<?> getSupplierReturns(
+            @PathVariable Long purchaseOrderId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
         try {
-            return ResponseEntity.ok(procurementService.getSupplierReturns(purchaseOrderId));
+            return ResponseEntity.ok(procurementService.getSupplierReturns(purchaseOrderId, page, size));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
