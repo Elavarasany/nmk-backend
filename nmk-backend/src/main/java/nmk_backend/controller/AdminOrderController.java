@@ -223,6 +223,14 @@ public class AdminOrderController {
                                 ));
                     }
 
+                    // Do not ship while a provider refund is awaiting its final webhook state.
+                    if (Set.of("SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED").contains(newStatus)
+                            && "PENDING".equalsIgnoreCase(order.getRefundStatus())) {
+                        return ResponseEntity.status(409).body(Map.of(
+                                "message", "A provider refund is pending. Wait for Razorpay refund reconciliation before shipping."
+                        ));
+                    }
+
                     // Delivery cannot proceed without captured payment
                     if (Set.of(
                             "SHIPPED",
@@ -377,6 +385,12 @@ public class AdminOrderController {
                                         "message",
                                         "Delivery details cannot be added before payment confirmation"
                                 ));
+                    }
+
+                    if ("PENDING".equalsIgnoreCase(order.getRefundStatus())) {
+                        return ResponseEntity.status(409).body(Map.of(
+                                "message", "Delivery details cannot be changed while a provider refund is pending."
+                        ));
                     }
 
                     if ("CANCELLED".equalsIgnoreCase(order.getOrderStatus())
