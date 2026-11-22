@@ -2,6 +2,7 @@ package nmk_backend.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
@@ -19,10 +20,12 @@ public class OfferBar {
     @Column(nullable = false, length = 500)
     private String message;
 
+    @NotNull
     @Pattern(regexp = "#[0-9A-Fa-f]{6}", message = "Background color must be a six-digit hex color")
     @Size(max = 7)
     private String backgroundColor = "#172554";
 
+    @NotNull
     @Pattern(regexp = "#[0-9A-Fa-f]{6}", message = "Text color must be a six-digit hex color")
     @Size(max = 7)
     private String textColor = "#FFFFFF";
