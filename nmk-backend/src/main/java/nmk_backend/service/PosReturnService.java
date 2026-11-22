@@ -7,6 +7,7 @@ import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
 
@@ -31,6 +32,7 @@ public class PosReturnService {
     private final InventoryService inventoryService;
     private final PosShiftService shiftService;
     private final ObjectMapper objectMapper;
+    private final AdminLocationAccessService locationAccessService;
 
     public PosReturnService(
             InventoryLocationRepository locationRepository,
@@ -42,6 +44,22 @@ public class PosReturnService {
             PosShiftService shiftService,
             ObjectMapper objectMapper
     ) {
+        this(locationRepository, saleRepository, returnRepository, returnItemRepository,
+                adminRepository, inventoryService, shiftService, objectMapper, null);
+    }
+
+    @Autowired
+    public PosReturnService(
+            InventoryLocationRepository locationRepository,
+            PosSaleRepository saleRepository,
+            PosReturnRepository returnRepository,
+            PosReturnItemRepository returnItemRepository,
+            AdminRepository adminRepository,
+            InventoryService inventoryService,
+            PosShiftService shiftService,
+            ObjectMapper objectMapper,
+            AdminLocationAccessService locationAccessService
+    ) {
         this.locationRepository = locationRepository;
         this.saleRepository = saleRepository;
         this.returnRepository = returnRepository;
@@ -50,6 +68,7 @@ public class PosReturnService {
         this.inventoryService = inventoryService;
         this.shiftService = shiftService;
         this.objectMapper = objectMapper;
+        this.locationAccessService = locationAccessService;
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -127,6 +146,7 @@ public class PosReturnService {
         // checkout/return deadlock when both operations touch the same store and drawer.
         PosSale saleSnapshot = saleRepository.findById(saleId)
                 .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, saleSnapshot.getLocationId());
         locationRepository.findByIdForUpdate(saleSnapshot.getLocationId())
                 .orElseThrow(() -> new InventoryNotFoundException("Original sale inventory location was not found"));
 
@@ -311,12 +331,17 @@ public class PosReturnService {
 
     @Transactional(readOnly = true)
     public List<PosReturnResponse> getReturns(Long saleId) {
+        return getReturns(saleId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PosReturnResponse> getReturns(Long saleId, String username, String role) {
         if (saleId == null || saleId <= 0) {
             throw new IllegalArgumentException("A valid sale id is required");
         }
-        if (!saleRepository.existsById(saleId)) {
-            throw new InventoryNotFoundException("Original POS sale was not found");
-        }
+        PosSale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, sale.getLocationId());
         return returnRepository.findBySaleIdOrderByCreatedAtDesc(saleId)
                 .stream().map(PosReturnResponse::from).toList();
     }
