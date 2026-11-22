@@ -754,8 +754,8 @@ public class OrderService {
                 out.put("resourceType", text(rx.get("resourceType")));
                 out.put("format", text(rx.get("format")).toLowerCase(java.util.Locale.ROOT));
                 out.put("version", rx.get("version"));
-                out.put("signature", text(rx.get("signature")));
-                out.put("assetProof", text(rx.get("assetProof")));
+                out.put("signature", tokenText(rx.get("signature")));
+                out.put("assetProof", tokenText(rx.get("assetProof")));
                 out.put("imageName", fileName == null ? "" : fileName.trim());
             } else {
                 // Preserve access to older orders while new uploads move to private assets.
@@ -926,6 +926,12 @@ public class OrderService {
         } catch (URISyntaxException invalidUri) {
             return false;
         }
+    }
+
+    private String tokenText(Object value) {
+        if (value == null) return "";
+        String result = String.valueOf(value).trim();
+        return result.length() > 64 ? "" : result;
     }
 
     private String urlText(Object value) {
