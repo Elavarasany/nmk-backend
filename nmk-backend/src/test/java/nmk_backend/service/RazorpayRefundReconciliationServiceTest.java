@@ -133,6 +133,48 @@ class RazorpayRefundReconciliationServiceTest {
     }
 
     @Test
+    void apiReceiptMergesAWebhookRowCreatedWithoutReceipt() {
+        Order order = paidOrder();
+        OrderRefund providerRow = new OrderRefund();
+        providerRow.setOrder(order);
+        providerRow.setRazorpayRefundId("rfnd_123");
+        providerRow.setRazorpayPaymentId("pay_123");
+        providerRow.setAmountPaise(5000L);
+        providerRow.setCurrency("INR");
+        providerRow.setStatus("PROCESSED");
+        providerRow.setLastProviderEventId("evt_without_receipt");
+
+        OrderRefund localRequest = new OrderRefund();
+        localRequest.setOrder(order);
+        localRequest.setRazorpayPaymentId("pay_123");
+        localRequest.setAmountPaise(5000L);
+        localRequest.setCurrency("INR");
+        localRequest.setStatus("PENDING");
+        localRequest.setReceipt("nmk_receipt_123");
+        localRequest.setRequestIdempotencyKey("refund-key-123456");
+
+        when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
+                .thenReturn(Optional.of(order));
+        when(refundRepository.findByRazorpayRefundIdForUpdate("rfnd_123"))
+                .thenReturn(Optional.of(providerRow));
+        when(refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate("pay_123", "nmk_receipt_123"))
+                .thenReturn(Optional.of(localRequest));
+        when(refundRepository.saveAndFlush(any(OrderRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(refundRepository.sumActiveAmountPaiseByOrderId(17L)).thenReturn(5000L);
+        when(refundRepository.sumProcessedAmountPaiseByOrderId(17L)).thenReturn(5000L);
+
+        service().reconcile("api_refund-key-123456", "refund.processed",
+                "rfnd_123", "pay_123", 5000L, "INR", "processed", "nmk_receipt_123");
+
+        assertEquals("rfnd_123", localRequest.getRazorpayRefundId());
+        assertEquals("PROCESSED", localRequest.getStatus());
+        verify(refundRepository).delete(providerRow);
+        verify(refundRepository).flush();
+        verify(refundRepository).saveAndFlush(localRequest);
+    }
+
+    @Test
     void refundTotalCannotExceedCapturedOrderAmount() {
         Order order = paidOrder();
         when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
