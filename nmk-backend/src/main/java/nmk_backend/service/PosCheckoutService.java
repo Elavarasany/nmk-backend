@@ -16,6 +16,7 @@ import nmk_backend.repository.ProductVariantRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -40,6 +41,7 @@ public class PosCheckoutService {
     private final InventoryService inventoryService;
     private final PosShiftService shiftService;
     private final ObjectMapper objectMapper;
+    private final AdminLocationAccessService locationAccessService;
 
     public PosCheckoutService(
             PosSaleRepository saleRepository,
@@ -51,6 +53,22 @@ public class PosCheckoutService {
             PosShiftService shiftService,
             ObjectMapper objectMapper
     ) {
+        this(saleRepository, productRepository, variantRepository, locationRepository,
+                adminRepository, inventoryService, shiftService, objectMapper, null);
+    }
+
+    @Autowired
+    public PosCheckoutService(
+            PosSaleRepository saleRepository,
+            ProductRepository productRepository,
+            ProductVariantRepository variantRepository,
+            InventoryLocationRepository locationRepository,
+            AdminRepository adminRepository,
+            InventoryService inventoryService,
+            PosShiftService shiftService,
+            ObjectMapper objectMapper,
+            AdminLocationAccessService locationAccessService
+    ) {
         this.saleRepository = saleRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
@@ -59,6 +77,7 @@ public class PosCheckoutService {
         this.inventoryService = inventoryService;
         this.shiftService = shiftService;
         this.objectMapper = objectMapper;
+        this.locationAccessService = locationAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -132,6 +151,10 @@ public class PosCheckoutService {
         }
         if (discount.compareTo(ZERO) > 0 && "CASHIER".equals(role)) {
             throw new IllegalArgumentException("Only ADMIN or MANAGER staff may apply a sale discount");
+        }
+
+        if (locationAccessService != null) {
+            locationAccessService.assertCanAccess(authenticatedUsername, role, request.getLocationId());
         }
 
         String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
