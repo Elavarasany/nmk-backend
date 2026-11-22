@@ -14,6 +14,18 @@ public interface OrderRefundRepository extends JpaRepository<OrderRefund, Long> 
     @Query("SELECT refund FROM OrderRefund refund WHERE refund.razorpayRefundId = :refundId")
     Optional<OrderRefund> findByRazorpayRefundIdForUpdate(@Param("refundId") String refundId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT refund FROM OrderRefund refund WHERE refund.requestIdempotencyKey = :key")
+    Optional<OrderRefund> findByRequestIdempotencyKeyForUpdate(@Param("key") String key);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT refund FROM OrderRefund refund WHERE refund.receipt = :receipt")
+    Optional<OrderRefund> findByReceiptForUpdate(@Param("receipt") String receipt);
+
+    Optional<OrderRefund> findByRequestIdempotencyKey(String key);
+
+    java.util.List<OrderRefund> findByOrderIdOrderByCreatedAtDesc(Long orderId);
+
     @Query("""
             SELECT COALESCE(SUM(refund.amountPaise), 0)
             FROM OrderRefund refund
