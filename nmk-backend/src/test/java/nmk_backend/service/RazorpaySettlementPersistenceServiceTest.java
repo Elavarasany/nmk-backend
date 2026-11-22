@@ -110,6 +110,40 @@ class RazorpaySettlementPersistenceServiceTest {
     }
 
     @Test
+    void matchesLostDisputeDebitToLocalDisputeLedger() {
+        nmk_backend.entity.RazorpayDispute dispute = new nmk_backend.entity.RazorpayDispute();
+        ReflectionTestUtils.setField(dispute, "id", 88L);
+        dispute.setProviderDisputeId("disp_123");
+        dispute.setProviderPaymentId("pay_123");
+        dispute.setLocalOrderId(12L);
+        dispute.setAmountPaise(10000L);
+        dispute.setAmountDeductedPaise(1000L);
+        dispute.setCurrency("INR");
+        dispute.setStatus("LOST");
+        when(disputeRepository.findByProviderDisputeId("disp_123"))
+                .thenReturn(Optional.of(dispute));
+        stubPersistence();
+
+        LocalDateTime now = LocalDateTime.now();
+        RazorpaySettlementProviderSummary summary = new RazorpaySettlementProviderSummary(
+                "setl_123", -1000L, "processed", 0L, 0L,
+                "INR", "utr_123", now, "{}");
+        RazorpaySettlementReconEntry disputeDebit = new RazorpaySettlementReconEntry(
+                "disp_123", "dispute", 1000L, 0L, 1000L, "INR",
+                0L, 0L, false, true, now, now, "setl_123",
+                "utr_123", "pay_123", "", "", "", "{}");
+
+        service().persist(java.util.List.of(summary), java.util.List.of(disputeDebit), 1, 0);
+
+        ArgumentCaptor<RazorpaySettlementEntry> entryCaptor =
+                ArgumentCaptor.forClass(RazorpaySettlementEntry.class);
+        verify(entryRepository).save(entryCaptor.capture());
+        assertEquals("MATCHED", entryCaptor.getValue().getMatchStatus());
+        assertEquals(88L, entryCaptor.getValue().getLocalDisputeId());
+        assertEquals(12L, entryCaptor.getValue().getLocalOrderId());
+    }
+
+    @Test
     void marksTransfersForManualReviewEvenWhenProviderTotalsBalance() {
         stubPersistence();
         LocalDateTime now = LocalDateTime.now();
