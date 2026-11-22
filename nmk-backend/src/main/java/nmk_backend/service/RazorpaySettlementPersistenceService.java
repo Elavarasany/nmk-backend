@@ -168,7 +168,7 @@ public class RazorpaySettlementPersistenceService {
                 settlement.setReconciliationStatus("FAILED");
             } else if (!"processed".equals(status) || pending > 0) {
                 settlement.setReconciliationStatus("PENDING");
-            } else if (!totalsBalanced || unmatched > 0 || manualReview > 0) {
+            } else if (settlementRows.isEmpty() || !totalsBalanced || unmatched > 0 || manualReview > 0) {
                 settlement.setReconciliationStatus("REVIEW_REQUIRED");
             } else {
                 settlement.setReconciliationStatus("PROVIDER_RECONCILED");
