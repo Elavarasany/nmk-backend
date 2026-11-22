@@ -83,6 +83,30 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void adminCustomerListReturnsDatabaseAggregatedPages() throws Exception {
+        java.util.List<Order> newOrders = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            Order order = new Order();
+            order.setCustomerName("Customer pagination " + i);
+            order.setEmail("pagination" + i + "@example.test");
+            order.setPhone("987650" + String.format("%04d", i));
+            order.setTotalAmount(new java.math.BigDecimal("100.00"));
+            order.setPaymentStatus("PAID");
+            newOrders.add(order);
+        }
+        orderRepository.saveAllAndFlush(newOrders);
+
+        mockMvc.perform(get("/api/admin/orders/customers?page=0&size=10")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(10))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(30)))
+                .andExpect(jsonPath("$.content[0].totalOrders").value(1));
+    }
+
+    @Test
     void adminOrderListReturnsBoundedPageMetadata() throws Exception {
         long before = orderRepository.count();
         java.util.List<Order> newOrders = new java.util.ArrayList<>();
