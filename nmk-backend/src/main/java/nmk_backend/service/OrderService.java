@@ -906,7 +906,7 @@ public class OrderService {
         return eye;
     }
 
-    static boolean isAllowedPrescriptionImageUrl(String value) {
+    public static boolean isAllowedPrescriptionImageUrl(String value) {
         if (value == null || value.isBlank() || value.length() > 2048) {
             return false;
         }
