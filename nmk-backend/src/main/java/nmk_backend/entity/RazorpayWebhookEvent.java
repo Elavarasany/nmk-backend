@@ -12,6 +12,9 @@ import java.time.LocalDateTime;
                         name = "uk_razorpay_webhook_event_id",
                         columnNames = "event_id"
                 )
+        },
+        indexes = {
+                @Index(name = "idx_razorpay_webhook_status_received", columnList = "status, received_at")
         }
 )
 public class RazorpayWebhookEvent {
