@@ -7,11 +7,11 @@
 
 The POS now has an additive supplier-accounting ledger:
 - Supplier bills with invoice number/date, optional due date, bill type, supplier, optional purchase order, amount, status, creator and idempotency fingerprint.
-- Confirmed partial supplier payments linked to one bill. A payment cannot exceed the bill's remaining balance. Supplier advances/unallocated payments are not supported.
-- Bill balances are calculated as posted bill amount less confirmed payments; the records are source-linked and idempotent.
-- Supplier bill posting and payment recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
+- Confirmed partial supplier payments and supplier credit notes linked to one bill. Payments and credit notes both reduce the outstanding balance and cannot exceed the remaining amount. Supplier advances and unallocated credit balances are not supported.
+- Bill balances are calculated as posted bill amount less confirmed payments and confirmed credit notes; the records are source-linked and idempotent.
+- Supplier bill posting, payment recording and credit-note recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
 - Cash supplier payments require an open POS shift, verify that the shift belongs to the bill's purchase-order location, ensure the drawer has sufficient expected cash, and create one linked OUT movement in the cash ledger.
-- Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed.
+- Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed. Credit notes may optionally link to a supplier return and must match the bill's supplier and purchase order.
 - Bill and payment history endpoints are administrator-only.
 
 Manual schema migration: 022-create-supplier-ap-and-landed-cost-ledger.sql. It is additive and has not been applied to any client database.
@@ -40,7 +40,7 @@ The approved POS scope says POS sales are fully paid and split tender is allowed
 
 ## 4. Supplier credits and accounting gaps
 
-The first AP implementation does not yet support supplier credit notes/debit notes, supplier advances, supplier statement reconciliation, payment reversal/chargeback, multi-bill payment allocations, AP aging summaries, or automated bank reconciliation. Supplier returns reduce stock through the existing supplier-return flow but do **not** automatically reduce a supplier bill balance; only a supplier credit-note workflow should do that. Until it exists, do not treat AP balances as final where a supplier return/credit is outstanding.
+The AP implementation supports supplier credit notes applied to an unpaid bill, but does not support debit notes, supplier advances, unallocated credits on already-paid bills, supplier statement reconciliation, payment reversal/chargeback, multi-bill payment allocations, AP aging summaries, or automated bank reconciliation. Supplier returns reduce stock through the existing supplier-return flow but do **not** automatically reduce a supplier bill balance; the supplier must issue a credit note and an administrator must record it against the linked bill. If the bill has already been fully paid, the resulting supplier credit/refund balance is not yet supported.
 
 Landed-cost allocations are persisted but not yet rolled into weighted-average inventory valuation or COGS. Do not use them as a profit calculation.
 
@@ -53,7 +53,7 @@ Landed-cost allocations are persisted but not yet rolled into weighted-average i
 - Do not edit a posted amount; correct it with a reversal/credit/debit record once those workflows are implemented.
 - Only direct, attributable acquisition costs (e.g. inbound freight and handling) should be entered as LANDED_COST. General overhead, selling expenses, finance charges and unrelated operating costs are excluded.
 - Quarantined/rejected goods must not receive sellable inventory cost. The current goods receipt model records accepted quantities only.
-- Supplier returns reverse physical stock under the existing return workflow; the related supplier credit must be separately recorded once credit-note support exists.
+- Supplier returns reverse physical stock under the existing return workflow; a supplier-issued credit note must be separately recorded against the matching bill. The supplier return ID is optional but, when supplied, must belong to the same supplier and purchase order.
 - Do not infer GST input tax credit from a supplier GSTIN or supplier tax invoice. NMK's existing design decision says it is not GST-registered.
 
 ## 6. Required accountant / owner confirmations
@@ -70,4 +70,4 @@ Before production AP postings or valuation reports are treated as accounting rec
 
 ## 7. Release gate
 
-Code-side AP balances and receipt-level landed-cost allocations are operational records only until accountant/owner review, supplier credit-note handling, inventory valuation/COGS integration, and bank evidence controls are complete. No live database migration or financial opening-balance posting is authorized by this document.
+Code-side AP balances, bill-linked credit notes and receipt-level landed-cost allocations are operational records only until accountant/owner review, unallocated supplier credit handling, inventory valuation/COGS integration, and bank evidence controls are complete. No live database migration or financial opening-balance posting is authorized by this document.
