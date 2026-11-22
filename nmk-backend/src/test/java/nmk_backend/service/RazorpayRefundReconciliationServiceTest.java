@@ -116,7 +116,7 @@ class RazorpayRefundReconciliationServiceTest {
                 .thenReturn(Optional.of(order));
         when(refundRepository.findByRazorpayRefundIdForUpdate("rfnd_123"))
                 .thenReturn(Optional.empty());
-        when(refundRepository.findByReceiptForUpdate("nmk_receipt_123"))
+        when(refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate("pay_123", "nmk_receipt_123"))
                 .thenReturn(Optional.of(pending));
         when(refundRepository.saveAndFlush(any(OrderRefund.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -129,7 +129,7 @@ class RazorpayRefundReconciliationServiceTest {
         assertEquals("rfnd_123", pending.getRazorpayRefundId());
         assertEquals("PROCESSED", pending.getStatus());
         assertEquals("PARTIALLY_REFUNDED", order.getRefundStatus());
-        verify(refundRepository, never()).findByReceiptForUpdate("different_receipt");
+        verify(refundRepository, never()).findByRazorpayPaymentIdAndReceiptForUpdate("pay_123", "different_receipt");
     }
 
     @Test
