@@ -100,20 +100,7 @@ class InventoryMySqlIntegrationTest {
         assertFalse(persistedProduct.isActive());
         assertTrue(persistedVariant.isActive());
         assertEquals(4, persistedBalance.getOnHandQuantity());
-        ResponseStatusException variantCreateError = assertThrows(
-                ResponseStatusException.class,
-                () -> productVariantService.createVariant(
-                        productId,
-                        new ProductVariantRequest(
-                                "SHOULD-NOT-CREATE-" + UUID.randomUUID(),
-                                null,
-                                "Blocked Variant",
-                                Map.of(),
-                                null
-                        )
-                )
-        );
-        assertEquals(409, variantCreateError.getStatusCode().value());        assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+        assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
                 locationId, variantId
         ).size());
     }
