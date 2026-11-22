@@ -122,6 +122,23 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void createSupplierDoesNotMisreportAnotherUniqueIndexViolationAsDuplicateName() {
+        when(supplierRepository.existsByNameIgnoreCase("New Supplier")).thenReturn(false);
+        org.springframework.dao.DataIntegrityViolationException databaseFailure =
+                new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key", new java.sql.SQLIntegrityConstraintViolationException(
+                        "Duplicate entry for key 'uk_suppliers_email'", "23000", 1062));
+        when(supplierRepository.saveAndFlush(any(Supplier.class))).thenThrow(databaseFailure);
+
+        org.springframework.dao.DataIntegrityViolationException thrown = assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> service.createSupplier(new SupplierCreateRequest(
+                        "New Supplier", null, null, null, null)));
+
+        assertSame(databaseFailure, thrown);
+    }
+
+    @Test
     void createSupplierDoesNotMisreportOtherDatabaseConstraintFailuresAsDuplicateNames() {
         when(supplierRepository.existsByNameIgnoreCase("New Supplier")).thenReturn(false);
         org.springframework.dao.DataIntegrityViolationException databaseFailure =
