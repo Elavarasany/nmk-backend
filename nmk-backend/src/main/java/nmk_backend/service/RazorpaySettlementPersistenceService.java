@@ -9,10 +9,12 @@ import nmk_backend.entity.Order;
 import nmk_backend.entity.OrderRefund;
 import nmk_backend.entity.RazorpaySettlement;
 import nmk_backend.entity.RazorpaySettlementEntry;
+import nmk_backend.entity.RazorpayDispute;
 import nmk_backend.repository.OrderRefundRepository;
 import nmk_backend.repository.OrderRepository;
 import nmk_backend.repository.RazorpaySettlementEntryRepository;
 import nmk_backend.repository.RazorpaySettlementRepository;
+import nmk_backend.repository.RazorpayDisputeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,17 +38,20 @@ public class RazorpaySettlementPersistenceService {
     private final RazorpaySettlementEntryRepository entryRepository;
     private final OrderRepository orderRepository;
     private final OrderRefundRepository refundRepository;
+    private final RazorpayDisputeRepository disputeRepository;
 
     public RazorpaySettlementPersistenceService(
             RazorpaySettlementRepository settlementRepository,
             RazorpaySettlementEntryRepository entryRepository,
             OrderRepository orderRepository,
-            OrderRefundRepository refundRepository
+            OrderRefundRepository refundRepository,
+            RazorpayDisputeRepository disputeRepository
     ) {
         this.settlementRepository = settlementRepository;
         this.entryRepository = entryRepository;
         this.orderRepository = orderRepository;
         this.refundRepository = refundRepository;
+        this.disputeRepository = disputeRepository;
     }
 
     @Transactional
@@ -118,6 +123,7 @@ public class RazorpaySettlementPersistenceService {
                 entry.setMatchMessage(match.message());
                 entry.setLocalOrderId(match.localOrderId());
                 entry.setLocalRefundId(match.localRefundId());
+                entry.setLocalDisputeId(match.localDisputeId());
                 entryRepository.save(entry);
                 persistedEntries++;
 
@@ -233,12 +239,12 @@ public class RazorpaySettlementPersistenceService {
     private MatchResult match(RazorpaySettlementReconEntry row, String settlementStatus) {
         if (!"processed".equals(normalizeStatus(settlementStatus))
                 || !row.settled() || row.onHold()) {
-            return new MatchResult("PENDING", null, null,
+            return new MatchResult("PENDING", null, null, null,
                     row.onHold() ? "Provider has placed this transaction on hold."
                             : "Provider has not marked this transaction as settled.");
         }
         if (!"INR".equals(normalizeCurrency(row.currency()))) {
-            return new MatchResult("MISMATCH", null, null,
+            return new MatchResult("MISMATCH", null, null, null,
                     "Settlement currency is not INR.");
         }
 
@@ -251,23 +257,23 @@ public class RazorpaySettlementPersistenceService {
                 order = orderRepository.findByRazorpayPaymentId(row.entityId()).orElse(null);
             }
             if (order == null) {
-                return new MatchResult("UNMATCHED", null, null,
+                return new MatchResult("UNMATCHED", null, null, null,
                         "No local order matches this Razorpay payment/order ID.");
             }
             if (!row.entityId().equals(order.getRazorpayPaymentId())) {
-                return new MatchResult("MISMATCH", order.getId(), null,
+                return new MatchResult("MISMATCH", order.getId(), null, null,
                         "Provider payment ID does not match the local order.");
             }
             if (!"PAID".equalsIgnoreCase(order.getPaymentStatus())
                     && !"REFUNDED".equalsIgnoreCase(order.getPaymentStatus())) {
-                return new MatchResult("MISMATCH", order.getId(), null,
+                return new MatchResult("MISMATCH", order.getId(), null, null,
                         "Local order is not recorded as paid.");
             }
             if (toPaise(order.getTotalAmount()) != row.amountPaise()) {
-                return new MatchResult("MISMATCH", order.getId(), null,
+                return new MatchResult("MISMATCH", order.getId(), null, null,
                         "Provider gross payment amount differs from the local order total.");
             }
-            return new MatchResult("MATCHED", order.getId(), null,
+            return new MatchResult("MATCHED", order.getId(), null, null,
                     "Payment ID and gross order amount match.");
         }
 
@@ -278,7 +284,7 @@ public class RazorpaySettlementPersistenceService {
                     ? null : refundRepository.findByRazorpayRefundId(row.entityId()).orElse(null);
             if (order == null || refund == null) {
                 return new MatchResult("UNMATCHED",
-                        order == null ? null : order.getId(), null,
+                        order == null ? null : order.getId(), null, null,
                         "No local paid order and processed refund ledger row match this provider refund.");
             }
             if (!refund.getOrder().getId().equals(order.getId())
@@ -286,14 +292,32 @@ public class RazorpaySettlementPersistenceService {
                     || refund.getAmountPaise() != row.amountPaise()
                     || !"INR".equalsIgnoreCase(refund.getCurrency())
                     || !"PROCESSED".equalsIgnoreCase(refund.getStatus())) {
-                return new MatchResult("MISMATCH", order.getId(), refund.getId(),
+                return new MatchResult("MISMATCH", order.getId(), refund.getId(), null,
                         "Provider refund does not match the local refund amount, order or processed status.");
             }
-            return new MatchResult("MATCHED", order.getId(), refund.getId(),
+            return new MatchResult("MATCHED", order.getId(), refund.getId(), null,
                     "Provider refund ID and amount match the local refund ledger.");
         }
 
-        return new MatchResult("MANUAL_REVIEW", null, null,
+        if ("dispute".equals(row.type())) {
+            RazorpayDispute dispute = row.entityId() == null || row.entityId().isBlank()
+                    ? null : disputeRepository.findByProviderDisputeId(row.entityId()).orElse(null);
+            if (dispute == null) {
+                return new MatchResult("UNMATCHED", null, null, null,
+                        "No local dispute ledger row matches this provider dispute.");
+            }
+            if (!row.paymentId().equals(dispute.getProviderPaymentId())
+                    || !"INR".equalsIgnoreCase(dispute.getCurrency())
+                    || !"LOST".equalsIgnoreCase(dispute.getStatus())
+                    || dispute.getAmountDeductedPaise() != row.amountPaise()) {
+                return new MatchResult("MISMATCH", dispute.getLocalOrderId(), null, dispute.getId(),
+                        "Provider dispute debit does not match the local lost-dispute amount and payment.");
+            }
+            return new MatchResult("MATCHED", dispute.getLocalOrderId(), null, dispute.getId(),
+                    "Provider dispute debit matches the local lost-dispute ledger.");
+        }
+
+        return new MatchResult("MANUAL_REVIEW", null, null, null,
                 "This provider entry type is not mapped to an NMK local ledger.");
     }
 
@@ -366,9 +390,10 @@ public class RazorpaySettlementPersistenceService {
                 entry.getMatchStatus(),
                 entry.getMatchMessage(),
                 entry.getLocalOrderId(),
-                entry.getLocalRefundId()
+                entry.getLocalRefundId(),
+                entry.getLocalDisputeId()
         );
     }
 
-    private record MatchResult(String status, Long localOrderId, Long localRefundId, String message) {}
+    private record MatchResult(String status, Long localOrderId, Long localRefundId, Long localDisputeId, String message) {}
 }
