@@ -106,6 +106,76 @@ class InventoryMySqlIntegrationTest {
     }
 
     @Test
+    void stockMovementSnapshotsReconcileAcrossReceiptReservationSaleReturnsAndCountVariance() {
+        Product product = new Product();
+        product.setName("Stock Ledger Reconciliation Product");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setStockQuantity(0);
+        product.setActive(true);
+        product = productRepository.saveAndFlush(product);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setProduct(product);
+        variant.setSku("LEDGER-" + UUID.randomUUID());
+        variant.setVariantName("Ledger Test Variant");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setActive(true);
+        variant = variantRepository.saveAndFlush(variant);
+
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("LD-" + UUID.randomUUID());
+        location.setName("Stock Ledger Test Location");
+        location.setActive(true);
+        entityManager.persist(location);
+        entityManager.flush();
+
+        Long locationId = location.getId();
+        Long variantId = variant.getId();
+
+        inventoryService.receiveStock(locationId, variantId, 10,
+                "LEDGER-RECEIPT-" + UUID.randomUUID(), null, "Opening count receipt");
+        inventoryService.reserveStock(locationId, variantId, 3,
+                "LEDGER-RESERVE-" + UUID.randomUUID(), null, "Online order reservation");
+        inventoryService.consumeReservation(locationId, variantId, 1,
+                "LEDGER-CONSUME-" + UUID.randomUUID(), null, "Captured online order");
+        inventoryService.sellStock(locationId, variantId, 2,
+                "LEDGER-SALE-" + UUID.randomUUID(), null, "Walk-in POS sale", "POS_SALE", 7001L);
+        inventoryService.restockCustomerReturn(locationId, variantId, 1,
+                "LEDGER-RETURN-" + UUID.randomUUID(), null, "Inspected resaleable return", 7002L);
+        inventoryService.returnStockToSupplier(locationId, variantId, 1,
+                "LEDGER-SUPPLIER-RETURN-" + UUID.randomUUID(), null, "Supplier quality return", 7003L);
+        inventoryService.applyStockCountVariance(locationId, variantId, -1,
+                "LEDGER-COUNT-" + UUID.randomUUID(), null, "Physical count variance", 7004L);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        InventoryBalance balance = balanceRepository.findByLocationIdAndVariantId(locationId, variantId)
+                .orElseThrow();
+        assertEquals(6, balance.getOnHandQuantity());
+        assertEquals(2, balance.getReservedQuantity());
+
+        var movements = movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(locationId, variantId)
+                .stream()
+                .sorted(java.util.Comparator.comparing(StockMovement::getId))
+                .toList();
+
+        assertEquals(7, movements.size());
+        int expectedOnHand = 0;
+        int expectedReserved = 0;
+        for (StockMovement movement : movements) {
+            expectedOnHand += movement.getQuantityDelta();
+            expectedReserved += movement.getReservedDelta();
+            assertEquals(expectedOnHand, movement.getOnHandAfter(),
+                    "Each movement snapshot must equal the cumulative on-hand ledger");
+            assertEquals(expectedReserved, movement.getReservedAfter(),
+                    "Each movement snapshot must equal the cumulative reservation ledger");
+        }
+        assertEquals(balance.getOnHandQuantity(), expectedOnHand);
+        assertEquals(balance.getReservedQuantity(), expectedReserved);
+    }
+
+    @Test
     void mysqlPersistsVariantJsonAttributesAndSellingPriceOverride() {
         Product product = new Product();
         product.setName("MySQL Integration Test Product");
