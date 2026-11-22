@@ -351,4 +351,61 @@ class PosShiftServiceTest {
         movement.setActorUsername("cashier.one");
         return movement;
     }
+
+    @Test
+    void cannotOpenSecondShiftOnRegisterWhileFirstShiftIsStillOpen() {
+        when(shiftRepository.findByIdempotencyKey("SHIFT-OPEN-SECOND")).thenReturn(Optional.empty());
+        when(registerRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(shift.getRegister()));
+        when(shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN"))
+                .thenReturn(Optional.of(shift));
+
+        assertThrows(IllegalArgumentException.class, () -> service.openShift(
+                new nmk_backend.dto.PosShiftOpenRequest(
+                        3L, new BigDecimal("50.00"), "SHIFT-OPEN-SECOND"
+                ),
+                "cashier.two"
+        ));
+
+        verify(registerRepository).findByIdForUpdate(3L);
+        verify(shiftRepository).findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN");
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
+        verify(movementRepository, never()).saveAndFlush(any(PosCashMovement.class));
+    }
+
+    @Test
+    void inactiveRegisterCannotOpenANewShift() {
+        shift.getRegister().setActive(false);
+        when(shiftRepository.findByIdempotencyKey("SHIFT-OPEN-INACTIVE")).thenReturn(Optional.empty());
+        when(registerRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(shift.getRegister()));
+
+        assertThrows(IllegalArgumentException.class, () -> service.openShift(
+                new nmk_backend.dto.PosShiftOpenRequest(
+                        3L, new BigDecimal("50.00"), "SHIFT-OPEN-INACTIVE"
+                ),
+                "cashier.one"
+        ));
+
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
+        verify(movementRepository, never()).saveAndFlush(any(PosCashMovement.class));
+    }
+
+    @Test
+    void cashierCannotReadAnotherCashiersCurrentShift() {
+        when(shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN"))
+                .thenReturn(Optional.of(shift));
+
+        assertNull(service.getCurrentShift(3L, "cashier.two", "CASHIER"));
+    }
+
+    @Test
+    void managerCanReadCurrentShiftOpenedByCashier() {
+        when(shiftRepository.findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(3L, "OPEN"))
+                .thenReturn(Optional.of(shift));
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of());
+
+        var response = service.getCurrentShift(3L, "manager.one", "MANAGER");
+
+        assertNotNull(response);
+        assertEquals("cashier.one", response.openedByUsername());
+    }
 }
