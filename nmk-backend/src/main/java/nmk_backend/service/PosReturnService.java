@@ -133,6 +133,9 @@ public class PosReturnService {
             String role
     ) {
         validateRequest(saleId, request, username);
+        PosSale saleSnapshot = saleRepository.findById(saleId)
+                .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, saleSnapshot.getLocationId());
         String key = normalizeKey(request.idempotencyKey());
         String fingerprint = fingerprint(saleId, request, returnType, username);
 
@@ -144,9 +147,6 @@ public class PosReturnService {
         // Global lock order for POS mutations is location -> shift -> sale -> inventory rows.
         // Checkout already uses location -> shift. Matching that order here prevents a
         // checkout/return deadlock when both operations touch the same store and drawer.
-        PosSale saleSnapshot = saleRepository.findById(saleId)
-                .orElseThrow(() -> new InventoryNotFoundException("Original POS sale was not found"));
-        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, saleSnapshot.getLocationId());
         locationRepository.findByIdForUpdate(saleSnapshot.getLocationId())
                 .orElseThrow(() -> new InventoryNotFoundException("Original sale inventory location was not found"));
 
