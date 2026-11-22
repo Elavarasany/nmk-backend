@@ -50,6 +50,9 @@ class RazorpayWebhookProcessorTest {
     private RazorpayRefundReconciliationService refundReconciliationService;
 
     @Mock
+    private RazorpayDisputeReconciliationService disputeReconciliationService;
+
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     @Mock
@@ -73,6 +76,7 @@ class RazorpayWebhookProcessorTest {
                 paymentVerificationService,
                 objectMapper,
                 refundReconciliationService,
+                disputeReconciliationService,
                 transactionManager
         );
     }
@@ -113,6 +117,43 @@ class RazorpayWebhookProcessorTest {
         Order order = new Order();
         order.setTotalAmount(new BigDecimal("125.00"));
         return order;
+    }
+
+    @Test
+    void disputeWebhookUpdatesDisputeLedgerWithoutChangingPaymentOrInventory() throws Exception {
+        RazorpayWebhookEvent event = event("""
+                {
+                  "event":"payment.dispute.created",
+                  "created_at":1700000100,
+                  "payload":{
+                    "payment":{"entity":{"id":"pay_123"}},
+                    "dispute":{"entity":{
+                      "id":"disp_123",
+                      "payment_id":"pay_123",
+                      "amount":10000,
+                      "amount_deducted":0,
+                      "currency":"INR",
+                      "reason_code":"goods_or_services_not_received",
+                      "reason_description":"Customer claims non-delivery",
+                      "respond_by":1701000000,
+                      "status":"open",
+                      "phase":"chargeback",
+                      "created_at":1700000000
+                    }}
+                  }
+                }
+                """);
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+
+        processor.processOne(1L);
+
+        assertEquals("PROCESSED", event.getStatus());
+        verify(disputeReconciliationService).reconcile(
+                "evt_test_1", "payment.dispute.created", "disp_123", "pay_123",
+                10000L, "INR", 0L, "goods_or_services_not_received",
+                "Customer claims non-delivery", 1701000000L, "open",
+                "chargeback", 1700000000L, 1700000100L);
+        verifyNoInteractions(paymentVerificationService, razorpayService, refundReconciliationService);
     }
 
     @Test
