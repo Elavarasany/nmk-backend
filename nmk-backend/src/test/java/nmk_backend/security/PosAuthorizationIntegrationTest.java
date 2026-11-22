@@ -496,4 +496,34 @@ class PosAuthorizationIntegrationTest {
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void anonymousCannotReadWebhookManualReviewQueue() throws Exception {
+        mockMvc.perform(get("/api/admin/pos/payments/webhook-review"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cashierCannotReadWebhookManualReviewQueue() throws Exception {
+        String cashierToken = tokenForRole("CASHIER");
+        mockMvc.perform(get("/api/admin/pos/payments/webhook-review")
+                .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReadWebhookManualReviewQueue() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        mockMvc.perform(get("/api/admin/pos/payments/webhook-review")
+                .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminCanReadWebhookManualReviewQueue() throws Exception {
+        mockMvc.perform(get("/api/admin/pos/payments/webhook-review")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+    }
+
 }
