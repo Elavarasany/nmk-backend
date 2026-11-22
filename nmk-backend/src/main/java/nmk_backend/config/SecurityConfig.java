@@ -1,9 +1,11 @@
 package nmk_backend.config;
 
 import nmk_backend.security.JwtAuthenticationFilter;
+import nmk_backend.security.AdminSecurityRejectionAuditFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,6 +29,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AdminSecurityRejectionAuditFilter adminSecurityRejectionAuditFilter;
 
     @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:5174}")
     private String allowedOrigins;
@@ -34,8 +37,10 @@ public class SecurityConfig {
     @Value("${app.cors.require-https:false}")
     private boolean requireHttpsOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          AdminSecurityRejectionAuditFilter adminSecurityRejectionAuditFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.adminSecurityRejectionAuditFilter = adminSecurityRejectionAuditFilter;
     }
 
     @Bean
@@ -125,6 +130,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/appointments/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                .addFilterAfter(adminSecurityRejectionAuditFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -148,6 +154,15 @@ public class SecurityConfig {
         } catch (URISyntaxException invalidOrigin) {
             return false;
         }
+    }
+
+    @Bean
+    public FilterRegistrationBean<AdminSecurityRejectionAuditFilter> adminSecurityRejectionAuditFilterRegistration(
+            AdminSecurityRejectionAuditFilter filter
+    ) {
+        FilterRegistrationBean<AdminSecurityRejectionAuditFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
