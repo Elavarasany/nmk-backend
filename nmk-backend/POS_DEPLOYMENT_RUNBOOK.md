@@ -181,3 +181,13 @@ The upload endpoint has a dedicated rate limit and a 6 MB multipart transport ce
 - Signed refund webhooks match the pending local request by receipt, including when the webhook arrives before the API response is stored.
 - Apply manual schema migration `019-add-idempotent-refund-requests.sql` after migrations 017 and 018 and before deploying this code. Stage, inspect exact existing columns/indexes/constraints, rehearse on a disposable MySQL 8.4 restore, and take a verified backup. Do not apply to the client database without explicit approval.
 - Refund completion does not automatically cancel an order or restore stock. Use the approved audited stock adjustment/return process after provider confirmation. Bank settlement reconciliation remains a separate task.
+
+
+## Razorpay provider settlement reconciliation
+
+- Admin → Payment Settlements fetches the read-only Razorpay combined settlement reconciliation report with pagination and stores provider batches/entries idempotently.
+- Each batch is checked against provider net amount, fees, tax and UTR. Payment rows match local captured orders; refund rows match processed local refund ledger records. Transfers, adjustments and unknown provider entry types are flagged for manual review.
+- `PROVIDER_RECONCILED` means the provider report balances and its supported rows match local NMK records. It does not mean the UTR credit has been verified against the bank statement.
+- Apply manual migration `020-create-razorpay-settlement-reconciliation.sql` after migrations 017, 018 and 019 and before deploying this code. Inspect exact existing schema/indexes/constraints, rehearse on a disposable MySQL 8.4 restore, and take a verified backup. Do not apply to the client database without explicit approval.
+- Configure Razorpay API key ID/secret on the backend only. The sync endpoint is Admin-only, read-only against Razorpay and rate-limited. If credentials are absent it fails closed with HTTP 503.
+- Bank statement import/matching, bank-account confirmation, chargeback/dispute accounting and POS terminal/UPI tender verification remain separate work.
