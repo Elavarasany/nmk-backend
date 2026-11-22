@@ -15,7 +15,11 @@ public record ProcurementCostReportResponse(
         BigDecimal receivedCost,
         BigDecimal returnedCost,
         BigDecimal netRecordedProcurementCost,
-        List<Entry> entries
+        List<Entry> entries,
+        long totalEntries,
+        int entriesPage,
+        int entriesSize,
+        boolean entriesHasNext
 ) {
     public record Entry(
             String type,
