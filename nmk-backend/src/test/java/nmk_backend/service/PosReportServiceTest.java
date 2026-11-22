@@ -1,6 +1,8 @@
 package nmk_backend.service;
 
 import nmk_backend.entity.*;
+import jakarta.persistence.EntityManager;
+import nmk_backend.dto.PosInventoryReportResponse;
 import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ class PosReportServiceTest {
         exchangeCreditRepository = mock(PosExchangeCreditSettlementRepository.class);
         inventoryBalanceRepository = mock(InventoryBalanceRepository.class);
         service = new PosReportService(saleRepository, returnRepository, locationRepository, exchangeCreditRepository, inventoryBalanceRepository);
+        ReflectionTestUtils.setField(service, "entityManager", mock(EntityManager.class));
         when(exchangeCreditRepository.sumExchangeCreditApplied(eq(1L), any(), any())).thenReturn(new BigDecimal("0.00"));
 
         InventoryLocation location = new InventoryLocation();
@@ -231,7 +234,8 @@ class PosReportServiceTest {
         variant.setSku("FRAME-20"); variant.setVariantName("Black"); variant.setAttributes(java.util.Map.of("color","Black"));
         InventoryBalance balance = new InventoryBalance(); balance.setLocation(location); balance.setVariant(variant);
         balance.setOnHandQuantity(8); balance.setReservedQuantity(2); balance.setReorderLevel(7);
-        when(inventoryBalanceRepository.findByLocationId(1L)).thenReturn(List.of(balance));
+        when(inventoryBalanceRepository.findByLocationId(eq(1L), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(balance), invocation.getArgument(1), 1));
 
         var report = service.getInventoryReport(1L);
         assertEquals(1, report.variantCount());
@@ -241,6 +245,67 @@ class PosReportServiceTest {
         assertEquals(1, report.lowStockCount());
         assertTrue(report.items().get(0).lowStock());
         assertEquals(6, report.items().get(0).availableQuantity());
+    }
+
+    @Test
+    void inventoryReportProcessesEveryBalanceAcrossPagesAndPreservesTotals() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setCode("MAIN");
+        location.setName("Main Store");
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
+
+        List<InventoryBalance> firstBatch = new java.util.ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            Product product = new Product();
+            product.setId((long) i + 1);
+            product.setName("Frame " + i);
+            ProductVariant variant = new ProductVariant();
+            variant.setId((long) i + 1);
+            variant.setProduct(product);
+            variant.setSku(String.format("SKU-%03d", i));
+            variant.setAttributes(java.util.Map.of("color", "Black"));
+            InventoryBalance balance = new InventoryBalance();
+            balance.setLocation(location);
+            balance.setVariant(variant);
+            balance.setOnHandQuantity(10);
+            balance.setReservedQuantity(2);
+            balance.setReorderLevel(9);
+            firstBatch.add(balance);
+        }
+        Product lastProduct = new Product();
+        lastProduct.setId(999L);
+        lastProduct.setName("Last Frame");
+        ProductVariant lastVariant = new ProductVariant();
+        lastVariant.setId(999L);
+        lastVariant.setProduct(lastProduct);
+        lastVariant.setSku("SKU-LAST");
+        lastVariant.setAttributes(java.util.Map.of());
+        InventoryBalance lastBalance = new InventoryBalance();
+        lastBalance.setLocation(location);
+        lastBalance.setVariant(lastVariant);
+        lastBalance.setOnHandQuantity(5);
+        lastBalance.setReservedQuantity(1);
+        lastBalance.setReorderLevel(5);
+
+        when(inventoryBalanceRepository.findByLocationId(eq(1L), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(1);
+                    return pageable.getPageNumber() == 0
+                            ? new PageImpl<>(firstBatch, pageable, 201)
+                            : new PageImpl<>(List.of(lastBalance), pageable, 201);
+                });
+
+        var report = service.getInventoryReport(1L);
+
+        assertEquals(201, report.variantCount());
+        assertEquals(2005L, report.onHandQuantity());
+        assertEquals(401L, report.reservedQuantity());
+        assertEquals(1604L, report.availableQuantity());
+        assertEquals(1, report.lowStockCount());
+        assertEquals("Last Frame", report.items().get(0).productName());
+        verify(inventoryBalanceRepository, times(2))
+                .findByLocationId(eq(1L), any(Pageable.class));
     }
 
     @Test
