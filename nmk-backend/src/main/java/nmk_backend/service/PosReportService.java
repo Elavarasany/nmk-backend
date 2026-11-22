@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,6 +33,7 @@ public class PosReportService {
     private final InventoryLocationRepository locationRepository;
     private final nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository;
     private final InventoryBalanceRepository inventoryBalanceRepository;
+    private final AdminLocationAccessService locationAccessService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -43,18 +45,37 @@ public class PosReportService {
             nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository,
             InventoryBalanceRepository inventoryBalanceRepository
     ) {
+        this(saleRepository, returnRepository, locationRepository, exchangeCreditRepository, inventoryBalanceRepository, null);
+    }
+
+    @Autowired
+    public PosReportService(
+            PosSaleRepository saleRepository,
+            PosReturnRepository returnRepository,
+            InventoryLocationRepository locationRepository,
+            nmk_backend.repository.PosExchangeCreditSettlementRepository exchangeCreditRepository,
+            InventoryBalanceRepository inventoryBalanceRepository,
+            AdminLocationAccessService locationAccessService
+    ) {
         this.saleRepository = saleRepository;
         this.returnRepository = returnRepository;
         this.locationRepository = locationRepository;
         this.exchangeCreditRepository = exchangeCreditRepository;
         this.inventoryBalanceRepository = inventoryBalanceRepository;
+        this.locationAccessService = locationAccessService;
     }
 
     @Transactional(readOnly = true)
     public PosInventoryReportResponse getInventoryReport(Long locationId) {
+        return getInventoryReport(locationId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PosInventoryReportResponse getInventoryReport(Long locationId, String username, String role) {
         if (locationId == null || locationId <= 0) {
             throw new IllegalArgumentException("A valid inventory location is required");
         }
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
         InventoryLocation location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         Long reportLocationId = location.getId();
@@ -81,6 +102,11 @@ public class PosReportService {
 
     @Transactional(readOnly = true)
     public PosSalesReportResponse getSalesReport(Long locationId, LocalDate from, LocalDate to) {
+        return getSalesReport(locationId, from, to, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PosSalesReportResponse getSalesReport(Long locationId, LocalDate from, LocalDate to, String username, String role) {
         if (locationId == null || locationId <= 0 || from == null || to == null) {
             throw new IllegalArgumentException("Location, start date and end date are required");
         }
@@ -90,6 +116,7 @@ public class PosReportService {
         if (ChronoUnit.DAYS.between(from, to) > 366) {
             throw new IllegalArgumentException("Report date range cannot exceed 367 calendar days");
         }
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
         locationRepository.findById(locationId)
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
 
