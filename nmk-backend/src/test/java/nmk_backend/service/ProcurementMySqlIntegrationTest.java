@@ -25,6 +25,20 @@ class ProcurementMySqlIntegrationTest {
     @Autowired private ProductRepository products;
     @Autowired private ProductVariantRepository variants;
     @Autowired private InventoryBalanceRepository balances;
+    @Autowired private SupplierRepository suppliers;
+
+    @Test
+    void supplierNameUniqueConstraintIsCaseInsensitiveOnMySql() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        Supplier first = new Supplier();
+        first.setName("Optical Supplier " + suffix);
+        suppliers.saveAndFlush(first);
+
+        Supplier caseVariant = new Supplier();
+        caseVariant.setName("OPTICAL SUPPLIER " + suffix);
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> suppliers.saveAndFlush(caseVariant));
+    }
 
     @Test
     void purchaseOrderReceiptSupplierReturnAndRetriesStayConsistentOnMySql() {
