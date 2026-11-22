@@ -44,7 +44,7 @@ class SupplierAccountServiceTest {
         service = new SupplierAccountService(
                 supplierRepository, billRepository, paymentRepository, allocationRepository,
                 purchaseOrderRepository, goodsReceiptRepository, adminRepository, posShiftService,
-                new ObjectMapper()
+                new ObjectMapper().findAndRegisterModules()
         );
 
         supplier = new Supplier();
