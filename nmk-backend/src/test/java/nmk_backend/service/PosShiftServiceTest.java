@@ -7,6 +7,9 @@ import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -292,30 +295,34 @@ class PosShiftServiceTest {
     }
 
     @Test
-    void managerShiftHistoryIncludesClosedCashReconciliationDetails() {
+    void managerShiftHistoryReturnsPaginatedClosedCashReconciliationDetails() {
         shift.setStatus("CLOSED");
         shift.setExpectedCash(new BigDecimal("100.00"));
         shift.setClosingCashCount(new BigDecimal("95.00"));
         shift.setCashVariance(new BigDecimal("-5.00"));
         shift.setClosingReason("Drawer recounted");
-        when(shiftRepository.findTop100ByRegisterLocationIdOrderByOpenedAtDesc(1L))
-                .thenReturn(List.of(shift));
+        when(shiftRepository.findByRegisterLocationId(eq(1L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(shift), PageRequest.of(0, 25), 31));
 
-        var history = service.getShiftHistory(1L);
+        var history = service.getShiftHistory(1L, 0, 25);
 
-        assertEquals(1, history.size());
-        assertEquals(9L, history.get(0).id());
-        assertEquals("CLOSED", history.get(0).status());
-        assertEquals(new BigDecimal("100.00"), history.get(0).expectedCash());
-        assertEquals(new BigDecimal("95.00"), history.get(0).closingCashCount());
-        assertEquals(new BigDecimal("-5.00"), history.get(0).cashVariance());
-        assertEquals("Drawer recounted", history.get(0).closingReason());
-        verify(shiftRepository).findTop100ByRegisterLocationIdOrderByOpenedAtDesc(1L);
+        assertEquals(31, history.getTotalElements());
+        assertEquals(2, history.getTotalPages());
+        assertEquals(1, history.getContent().size());
+        assertEquals(9L, history.getContent().get(0).id());
+        assertEquals("CLOSED", history.getContent().get(0).status());
+        assertEquals(new BigDecimal("100.00"), history.getContent().get(0).expectedCash());
+        assertEquals(new BigDecimal("95.00"), history.getContent().get(0).closingCashCount());
+        assertEquals(new BigDecimal("-5.00"), history.getContent().get(0).cashVariance());
+        assertEquals("Drawer recounted", history.getContent().get(0).closingReason());
+        verify(shiftRepository).findByRegisterLocationId(eq(1L), any(Pageable.class));
     }
 
     @Test
-    void shiftHistoryRejectsInvalidLocationIds() {
-        assertThrows(IllegalArgumentException.class, () -> service.getShiftHistory(0L));
+    void shiftHistoryRejectsInvalidLocationAndPageParameters() {
+        assertThrows(IllegalArgumentException.class, () -> service.getShiftHistory(0L, 0, 25));
+        assertThrows(IllegalArgumentException.class, () -> service.getShiftHistory(1L, -1, 25));
+        assertThrows(IllegalArgumentException.class, () -> service.getShiftHistory(1L, 0, 101));
         verifyNoInteractions(shiftRepository);
     }
 
