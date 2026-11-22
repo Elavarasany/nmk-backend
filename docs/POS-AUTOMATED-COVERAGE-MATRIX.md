@@ -1,6 +1,6 @@
 # POS Automated Coverage Matrix
 
-This document separates automated repository evidence from the 41 real-browser acceptance checks in [POS-RELEASE-ACCEPTANCE-CHECKLIST.md](./POS-RELEASE-ACCEPTANCE-CHECKLIST.md).
+This document separates automated repository evidence from the 41 real-browser acceptance checks in [POS-RELEASE-ACCEPTANCE-CHECKLIST.md](https://github.com/Elavarasany/nmk-frontend/blob/feature/pos-operations-v1/docs/POS-RELEASE-ACCEPTANCE-CHECKLIST.md).
 
 A passing test proves only the behavior it exercises. It does not complete a manual browser check, validate a payment-provider settlement, or authorize production use.
 
