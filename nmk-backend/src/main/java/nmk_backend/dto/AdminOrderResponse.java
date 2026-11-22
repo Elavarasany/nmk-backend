@@ -16,6 +16,7 @@ public record AdminOrderResponse(
         String pincode,
         BigDecimal totalAmount,
         String paymentStatus,
+        String refundStatus,
         String paymentCreationStatus,
         String orderStatus,
         boolean stockReserved,
