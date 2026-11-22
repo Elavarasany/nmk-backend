@@ -62,6 +62,7 @@ public class PosReturn {
     @OneToMany(mappedBy = "returnRecord", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PosReturnItem> items = new ArrayList<>();
 
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "returnRecord", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PosRefundPayment> refundPayments = new ArrayList<>();
 
@@ -90,7 +91,7 @@ public class PosReturn {
     public String getReturnType() { return returnType; }
     public void setReturnType(String value) { returnType = value; }
     public String getStatus() { return status; }
-    public void setStatus(String value) { this.status = value; }
+    public void setStatus(String value) { status = value; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String value) { this.idempotencyKey = value; }
     public String getRequestFingerprint() { return requestFingerprint; }
