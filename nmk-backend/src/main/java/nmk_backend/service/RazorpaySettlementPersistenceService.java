@@ -306,7 +306,7 @@ public class RazorpaySettlementPersistenceService {
                 return new MatchResult("UNMATCHED", null, null, null,
                         "No local dispute ledger row matches this provider dispute.");
             }
-            if (!row.paymentId().equals(dispute.getProviderPaymentId())
+            if (!dispute.getProviderPaymentId().equals(row.paymentId())
                     || !"INR".equalsIgnoreCase(dispute.getCurrency())
                     || !"LOST".equalsIgnoreCase(dispute.getStatus())
                     || dispute.getAmountDeductedPaise() != row.amountPaise()) {
