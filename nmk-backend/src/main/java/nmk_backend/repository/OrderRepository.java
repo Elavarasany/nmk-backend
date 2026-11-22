@@ -39,6 +39,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByRazorpayOrderId(String razorpayOrderId);
 
+    Optional<Order> findByRazorpayPaymentId(String razorpayPaymentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT o
