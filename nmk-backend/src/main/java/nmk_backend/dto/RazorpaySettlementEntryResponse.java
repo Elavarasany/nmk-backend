@@ -24,5 +24,6 @@ public record RazorpaySettlementEntryResponse(
         String matchStatus,
         String matchMessage,
         Long localOrderId,
-        Long localRefundId
+        Long localRefundId,
+        Long localDisputeId
 ) {}
