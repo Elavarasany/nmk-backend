@@ -3,6 +3,7 @@ package nmk_backend.repository;
 import nmk_backend.entity.*;
 import nmk_backend.service.InventoryService;
 import nmk_backend.service.ProductService;
+import nmk_backend.exception.InvalidInventoryOperationException;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -100,6 +101,13 @@ class InventoryMySqlIntegrationTest {
         assertFalse(persistedProduct.isActive());
         assertTrue(persistedVariant.isActive());
         assertEquals(4, persistedBalance.getOnHandQuantity());
+        assertThrows(InvalidInventoryOperationException.class, () ->
+                inventoryService.receiveStock(
+                        locationId, variantId, 1,
+                        "POST-DEACTIVATION-RECEIPT-" + UUID.randomUUID(),
+                        null, "Must not receive stock for an inactive product"
+                )
+        );
         assertEquals(1, movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
                 locationId, variantId
         ).size());
