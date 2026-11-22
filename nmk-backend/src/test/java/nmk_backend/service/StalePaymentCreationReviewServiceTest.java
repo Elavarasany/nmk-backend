@@ -72,7 +72,7 @@ class StalePaymentCreationReviewServiceTest {
     }
 
     @Test
-    void fetchesProviderOrderAndPaymentsWithoutChangingLocalOrder() {
+    void fetchesProviderOrderAndPaymentsWithoutChangingLocalOrder() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         Order order = new Order();
         ReflectionTestUtils.setField(order, "id", 42L);
