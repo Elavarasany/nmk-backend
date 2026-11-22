@@ -53,6 +53,9 @@ class PosCheckoutTransactionIntegrationTest {
     private PosCheckoutService checkoutService;
 
     @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private AdminRepository adminRepository;
 
     @Autowired
@@ -331,6 +334,83 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(0, unchanged.getOnHandQuantity());
         assertEquals(0, unchanged.getReservedQuantity());
     }
+    @Test
+    void onlineReservationAndPosCheckoutCannotConsumeTheSameLastUnit() throws Exception {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(1);
+        balance.setReservedQuantity(0);
+        balanceRepository.saveAndFlush(balance);
+
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        try {
+            var onlineReservation = executor.submit(() -> {
+                ready.countDown();
+                try {
+                    if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        return new CheckoutOutcome(false,
+                                new IllegalStateException("Timed out waiting to start online reservation"));
+                    }
+                    inventoryService.reserveStock(
+                            location.getId(),
+                            variant.getId(),
+                            1,
+                            "ONLINE-RESERVATION-CONCURRENT-" + System.nanoTime(),
+                            null,
+                            "Online checkout stock reservation"
+                    );
+                    return new CheckoutOutcome(true, null);
+                } catch (Throwable failure) {
+                    return new CheckoutOutcome(false, failure);
+                }
+            });
+            var posCheckout = executor.submit(() ->
+                    performConcurrentCheckout(
+                            "POS-VS-ONLINE-CONCURRENT-" + System.nanoTime(), ready, start));
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "Online reservation and POS checkout workers should be ready");
+            start.countDown();
+
+            CheckoutOutcome reservationOutcome =
+                    onlineReservation.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            CheckoutOutcome posOutcome =
+                    posCheckout.get(20, java.util.concurrent.TimeUnit.SECONDS);
+
+            assertNotEquals(reservationOutcome.successful(), posOutcome.successful(),
+                    "Exactly one channel must acquire the final available unit");
+            assertEquals(1, movementRepository.count(),
+                    "Only the winning reservation or sale may create a stock movement");
+
+            InventoryBalance finalBalance = balanceRepository
+                    .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                    .orElseThrow();
+
+            if (reservationOutcome.successful()) {
+                assertEquals(0, saleRepository.count(),
+                        "POS must not sell stock already reserved by online checkout");
+                assertEquals(1, finalBalance.getOnHandQuantity());
+                assertEquals(1, finalBalance.getReservedQuantity());
+                assertEquals(0, finalBalance.getAvailableQuantity());
+            } else {
+                assertTrue(posOutcome.successful(),
+                        "If online reservation loses, POS checkout should be the winner");
+                assertEquals(1, saleRepository.count(),
+                        "POS sale should persist exactly once when it wins the stock lock");
+                assertEquals(0, finalBalance.getOnHandQuantity());
+                assertEquals(0, finalBalance.getReservedQuantity());
+                assertEquals(0, finalBalance.getAvailableQuantity());
+            }
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     @Test
     void concurrentCheckoutsCannotSellTheSameLastUnitTwice() throws Exception {
         InventoryBalance balance = balanceRepository
