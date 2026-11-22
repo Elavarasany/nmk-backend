@@ -11,6 +11,9 @@ import nmk_backend.repository.ProductRepository;
 import nmk_backend.repository.ProductVariantRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -120,6 +123,68 @@ public class CustomerProductCatalogService {
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "Customer checkout inventory location is missing or inactive"
                 ));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerProductCatalogResponse.ProductItem> getActiveProducts(Pageable pageable) {
+        InventoryLocation location = getCheckoutLocation();
+        Page<Product> productPage = productRepository.findActiveProductsWithActiveVariants(pageable);
+        List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
+        if (productIds.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, productPage.getTotalElements());
+        }
+
+        List<ProductVariant> activeVariants = variantRepository.findByProductIdInAndActiveTrue(productIds)
+                .stream()
+                .filter(variant -> variant.getProduct().isActive())
+                .sorted(Comparator.comparing(
+                        ProductVariant::getVariantName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
+                ))
+                .toList();
+
+        Map<Long, List<ProductVariant>> variantsByProduct = activeVariants.stream()
+                .collect(Collectors.groupingBy(variant -> variant.getProduct().getId()));
+
+        List<Long> variantIds = activeVariants.stream().map(ProductVariant::getId).toList();
+        Map<Long, InventoryBalance> balances = variantIds.isEmpty()
+                ? Map.of()
+                : balanceRepository.findByLocationIdAndVariantIdIn(location.getId(), variantIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                balance -> balance.getVariant().getId(),
+                                Function.identity()
+                        ));
+
+        List<CustomerProductCatalogResponse.ProductItem> content = productPage.getContent().stream()
+                .map(product -> {
+                    List<CustomerProductCatalogResponse.VariantItem> variants =
+                            variantsByProduct.getOrDefault(product.getId(), List.of()).stream()
+                                    .map(variant -> {
+                                        InventoryBalance balance = balances.get(variant.getId());
+                                        int available = location.isStockCountLocked() || balance == null
+                                                ? 0 : balance.getAvailableQuantity();
+                                        BigDecimal price = variant.getSellingPriceOverride() != null
+                                                ? variant.getSellingPriceOverride() : product.getPrice();
+                                        return CustomerProductCatalogResponse.variant(variant, price, available);
+                                    })
+                                    .toList();
+
+                    BigDecimal displayPrice = variants.stream()
+                            .map(CustomerProductCatalogResponse.VariantItem::price)
+                            .min(BigDecimal::compareTo)
+                            .orElse(product.getPrice());
+                    int availableQuantity = variants.stream()
+                            .mapToInt(CustomerProductCatalogResponse.VariantItem::availableQuantity)
+                            .sum();
+
+                    return CustomerProductCatalogResponse.from(
+                            product, variants, displayPrice, availableQuantity
+                    );
+                })
+                .toList();
+
+        return new PageImpl<>(content, pageable, productPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
