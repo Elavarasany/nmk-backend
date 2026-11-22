@@ -105,6 +105,25 @@ class RazorpayRefundRequestServiceTest {
     }
 
     @Test
+    void blocksANewRefundWhileAnotherRefundIsPending() {
+        Order order = paidOrder();
+        OrderRefund pending = new OrderRefund();
+        pending.setOrder(order);
+        pending.setStatus("PENDING");
+        when(refundRepository.findByRequestIdempotencyKeyForUpdate("another-refund-key-123"))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(45L)).thenReturn(Optional.of(order));
+        when(refundRepository.findByOrderIdOrderByCreatedAtDesc(45L))
+                .thenReturn(java.util.List.of(pending));
+
+        assertThrows(IllegalStateException.class, () ->
+                service().prepare(45L, 1000L, "Second request",
+                        "another-refund-key-123", "admin"));
+
+        verify(refundRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void idempotencyKeyCannotBeReusedForDifferentAmount() {
         Order order = paidOrder();
         OrderRefund existing = new OrderRefund();
