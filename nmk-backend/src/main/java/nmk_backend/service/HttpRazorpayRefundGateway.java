@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClientResponseException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 @Component
 public class HttpRazorpayRefundGateway implements RazorpayRefundGateway {
@@ -56,15 +57,15 @@ public class HttpRazorpayRefundGateway implements RazorpayRefundGateway {
                     "Razorpay payment credentials are not configured");
         }
 
-        Map<String, Object> body = Map.of(
-                "amount", amountPaise,
-                "speed", "normal",
-                "receipt", receipt,
-                "notes", Map.of(
-                        "reason", reason,
-                        "local_order_id", String.valueOf(orderId)
-                )
-        );
+        // Stable field order keeps the serialized payload identical on same-key retries.
+        Map<String, Object> notes = new LinkedHashMap<>();
+        notes.put("reason", reason);
+        notes.put("local_order_id", String.valueOf(orderId));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount", amountPaise);
+        body.put("speed", "normal");
+        body.put("receipt", receipt);
+        body.put("notes", notes);
 
         try {
             Map<String, Object> response = client.post()
