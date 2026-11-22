@@ -74,7 +74,7 @@ public class RazorpaySettlement {
     @Column(name = "totals_balanced", nullable = false)
     private boolean totalsBalanced;
 
-    @Column(name = "raw_payload", columnDefinition = "LONGTEXT")
+    @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
     @PrePersist
