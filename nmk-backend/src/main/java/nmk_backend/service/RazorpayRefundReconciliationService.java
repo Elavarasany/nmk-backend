@@ -80,7 +80,7 @@ public class RazorpayRefundReconciliationService {
         long orderAmountPaise = toPaise(order);
         Optional<OrderRefund> existing = refundRepository.findByRazorpayRefundIdForUpdate(refundId);
         if (existing.isEmpty() && receipt != null && !receipt.isBlank()) {
-            existing = refundRepository.findByReceiptForUpdate(receipt);
+            existing = refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate(paymentId, receipt);
         }
 
         OrderRefund refund;
