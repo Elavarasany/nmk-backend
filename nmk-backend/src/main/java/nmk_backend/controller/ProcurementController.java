@@ -25,8 +25,15 @@ public class ProcurementController {
     }
 
     @GetMapping("/suppliers")
-    public ResponseEntity<?> getSuppliers() {
-        return ResponseEntity.ok(procurementService.getSuppliers());
+    public ResponseEntity<?> getSuppliers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        try {
+            return ResponseEntity.ok(procurementService.getSuppliers(page, size));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
     }
 
     @PostMapping("/suppliers")
@@ -66,8 +73,15 @@ public class ProcurementController {
     }
 
     @GetMapping("/purchase-orders")
-    public ResponseEntity<?> getPurchaseOrders() {
-        return ResponseEntity.ok(procurementService.getPurchaseOrders());
+    public ResponseEntity<?> getPurchaseOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        try {
+            return ResponseEntity.ok(procurementService.getPurchaseOrders(page, size));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
     }
 
     @GetMapping("/purchase-orders/{purchaseOrderId}")
