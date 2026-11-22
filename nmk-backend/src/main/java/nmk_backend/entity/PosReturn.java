@@ -15,7 +15,10 @@ import java.util.List;
                 @UniqueConstraint(name = "uk_pos_returns_number", columnNames = "return_number"),
                 @UniqueConstraint(name = "uk_pos_returns_idempotency", columnNames = "idempotency_key")
         },
-        indexes = @Index(name = "idx_pos_returns_sale_created", columnList = "sale_id, created_at")
+        indexes = {
+                @Index(name = "idx_pos_returns_sale_created", columnList = "sale_id, created_at"),
+                @Index(name = "idx_pos_returns_status_created_sale", columnList = "status, created_at, sale_id")
+        }
 )
 public class PosReturn {
 
@@ -91,7 +94,7 @@ public class PosReturn {
     public String getReturnType() { return returnType; }
     public void setReturnType(String value) { returnType = value; }
     public String getStatus() { return status; }
-    public void setStatus(String value) { status = value; }
+    public void setStatus(String value) { this.status = value; }
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String value) { this.idempotencyKey = value; }
     public String getRequestFingerprint() { return requestFingerprint; }
