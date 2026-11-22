@@ -410,6 +410,7 @@ class PosExchangeMySqlTest {
   Admin admin=new Admin(); admin.setUsername(username); admin.setPassword("test-only-password"); admins.saveAndFlush(admin);
   InventoryLocation location=new InventoryLocation(); location.setCode("EX-"+suffix); location.setName("MySQL Exchange "+suffix);
   location.setActive(true); location=locations.saveAndFlush(location);
+  admin.setAssignedLocations(java.util.Set.of(location)); admins.saveAndFlush(admin);
   PosRegisterResponse register=shiftService.createRegister(new PosRegisterCreateRequest(location.getId(),"EX-"+suffix,"Exchange Register"));
   Long shift=shiftService.openShift(new PosShiftOpenRequest(register.id(),new BigDecimal("100.00"),"MYSQL-EX-SHIFT-"+suffix),username).id();
   Product product=new Product(); product.setName("MySQL Exchange Frame "+suffix); product.setPrice(new BigDecimal("100.00"));
