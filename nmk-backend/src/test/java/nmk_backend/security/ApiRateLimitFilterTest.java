@@ -75,4 +75,11 @@ class ApiRateLimitFilterTest {
         verify(service).isEnabled();
         verifyNoMoreInteractions(service);
     }
-}
+
+    @Test
+    void productionProfileEnablesRateLimitingByDefault() throws Exception {
+        var properties = org.springframework.core.io.support.PropertiesLoaderUtils.loadProperties(
+                new org.springframework.core.io.ClassPathResource("application-prod.properties"));
+        assertEquals("${APP_RATE_LIMIT_ENABLED:true}", properties.getProperty("app.rate-limit.enabled"));
+    }
+\n}
