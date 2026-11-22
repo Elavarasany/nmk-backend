@@ -52,8 +52,7 @@ public class PrescriptionCloudinaryService {
             Map result = cloudinary.uploader().upload(bytes, ObjectUtils.asMap(
                     "resource_type", "auto",
                     "type", "authenticated",
-                    "folder", "nmk-prescriptions",
-                    "public_id", publicId.substring("nmk-prescriptions/".length()),
+                    "public_id", publicId,
                     "use_filename", false,
                     "unique_filename", false,
                     "overwrite", false,
