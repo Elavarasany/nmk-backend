@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class RazorpaySettlementSyncService {
@@ -59,7 +60,7 @@ public class RazorpaySettlementSyncService {
 
                 String key = row.settlementId() + "|" + row.entityId() + "|" + row.type();
                 RazorpaySettlementReconEntry previous = uniqueRows.putIfAbsent(key, row);
-                if (previous != null && !previous.rawPayload().equals(row.rawPayload())) {
+                if (previous != null && !Objects.equals(previous.rawPayload(), row.rawPayload())) {
                     throw new IllegalStateException(
                             "Razorpay returned conflicting duplicate settlement rows; no data was imported");
                 }
