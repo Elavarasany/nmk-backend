@@ -6,6 +6,9 @@ import nmk_backend.service.AdminActionAuthorizationService;
 import org.springframework.security.core.Authentication;
 
 import nmk_backend.dto.UpdateDeliveryDetailsRequest;
+import nmk_backend.dto.CreateRazorpayRefundRequest;
+import nmk_backend.service.RazorpayRefundRequestService;
+import nmk_backend.service.RazorpayRefundInitiationService;
 import nmk_backend.service.SmsService;
 import nmk_backend.dto.AdminOrderResponse;
 import nmk_backend.dto.AdminCustomerSummaryResponse;
@@ -49,6 +52,8 @@ public class AdminOrderController {
     private final OrderRefundRepository orderRefundRepository;
     private final OrderService orderService;
     private final PrescriptionCloudinaryService prescriptionStorage;
+    private final RazorpayRefundRequestService refundRequestService;
+    private final RazorpayRefundInitiationService refundInitiationService;
     private final String publicUrl;
 
     private static final Set<String> ALLOWED_STATUSES = Set.of(
@@ -67,12 +72,16 @@ public class AdminOrderController {
             SmsService smsService,
             AdminActionAuthorizationService authorizationService,
             PrescriptionCloudinaryService prescriptionStorage,
+            RazorpayRefundRequestService refundRequestService,
+            RazorpayRefundInitiationService refundInitiationService,
             @Value("${app.public-url:http://localhost:5173}") String publicUrl
     ) {
         this.orderRepository = orderRepository;
         this.orderRefundRepository = orderRefundRepository;
         this.orderService = orderService;
         this.prescriptionStorage = prescriptionStorage;
+        this.refundRequestService = refundRequestService;
+        this.refundInitiationService = refundInitiationService;
         this.smsService = smsService;
         this.authorizationService = authorizationService;
         this.publicUrl = publicUrl.replaceAll("/+$", "");
@@ -202,6 +211,49 @@ public class AdminOrderController {
             log.warn("Prescription access could not be prepared; orderId={}, itemId={}, exceptionType={}",
                     orderId, itemId, exception.getClass().getSimpleName());
             return ResponseEntity.internalServerError().body(Map.of("message", "Unable to open this prescription."));
+        }
+    }
+
+    @GetMapping("/{orderId}/refunds")
+    public ResponseEntity<?> getOrderRefunds(@PathVariable Long orderId) {
+        try {
+            return ResponseEntity.ok(refundRequestService.listForOrder(orderId));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
+    @PostMapping("/{orderId}/refunds")
+    public ResponseEntity<?> initiateOrderRefund(
+            @PathVariable Long orderId,
+            @Valid @RequestBody CreateRazorpayRefundRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
+            Authentication authentication
+    ) {
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("message", "Admin login required"));
+        }
+        try {
+            authorizationService.consumeAuthorization(
+                    authentication.getName(), authorizationToken, "RAZORPAY_REFUND");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(403).body(Map.of("message", exception.getMessage()));
+        }
+
+        try {
+            var result = refundInitiationService.initiate(orderId, request, authentication.getName());
+            return ResponseEntity.status(result.retryWithSameKey()
+                    ? HttpStatus.ACCEPTED : HttpStatus.CREATED).body(result);
+        } catch (RazorpayRefundInitiationService.RefundProviderRejectedException exception) {
+            return ResponseEntity.unprocessableEntity().body(Map.of("message", exception.getMessage()));
+        } catch (nmk_backend.exception.PaymentConfigurationException exception) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("message", "Razorpay refund credentials are not configured."));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", exception.getMessage()));
         }
     }
 
