@@ -280,6 +280,37 @@ public class ProcurementController {
         }
     }
 
+    @PostMapping("/supplier-bills/{billId}/credit-notes")
+    public ResponseEntity<?> recordSupplierCreditNote(
+            @PathVariable Long billId,
+            @Valid @RequestBody SupplierCreditNoteRequest request,
+            @RequestHeader(value = "X-Admin-Action-Authorization", required = false) String authorizationToken,
+            Authentication authentication
+    ) {
+        try {
+            authorizationService.consumeAuthorization(authentication.getName(), authorizationToken, "SUPPLIER_CREDIT_NOTE");
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(supplierAccountService.recordCreditNote(billId, request, authentication.getName()));
+        } catch (DataIntegrityViolationException exception) {
+            return conflict("Supplier credit note number or idempotency key already exists");
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
+    @GetMapping("/supplier-bills/{billId}/credit-notes")
+    public ResponseEntity<?> getSupplierCreditNotes(@PathVariable Long billId, Authentication authentication) {
+        try {
+            return ResponseEntity.ok(supplierAccountService.getCreditNotes(billId, authentication.getName()));
+        } catch (IllegalArgumentException exception) {
+            return badRequest(exception);
+        }
+    }
+
     @GetMapping("/supplier-bills/{billId}/payments")
     public ResponseEntity<?> getSupplierPayments(@PathVariable Long billId, Authentication authentication) {
         try {
