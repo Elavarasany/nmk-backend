@@ -19,6 +19,9 @@ public interface PosShiftRepository extends JpaRepository<PosShift, Long> {
     @EntityGraph(attributePaths = {"register", "register.location"})
     Page<PosShift> findByRegisterLocationId(Long locationId, Pageable pageable);
     Optional<PosShift> findFirstByOpenedByUsernameAndStatusOrderByOpenedAtDesc(String username, String status);
+    @EntityGraph(attributePaths = {"register", "register.location"})
+    List<PosShift> findByRegisterLocationIdAndOpenedAtGreaterThanEqualAndOpenedAtLessThanOrderByOpenedAtAscIdAsc(
+            Long locationId, java.time.LocalDateTime from, java.time.LocalDateTime to);
     List<PosShift> findByRegisterLocationIdAndStatusOrderByOpenedAtDesc(Long locationId, String status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
