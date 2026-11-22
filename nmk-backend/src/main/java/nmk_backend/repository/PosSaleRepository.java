@@ -32,6 +32,8 @@ public interface PosSaleRepository extends JpaRepository<PosSale, Long> {
     List<PosSale> findByCashierUsernameOrderByCreatedAtDesc(String cashierUsername);
     Page<PosSale> findByLocationId(Long locationId, Pageable pageable);
 
+    Page<PosSale> findByLocationIdIn(java.util.Collection<Long> locationIds, Pageable pageable);
+
     @Query("""
         SELECT s FROM PosSale s
         WHERE s.locationId = :locationId
