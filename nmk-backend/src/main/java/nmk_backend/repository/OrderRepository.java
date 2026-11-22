@@ -3,6 +3,8 @@ package nmk_backend.repository;
 
 import nmk_backend.entity.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
@@ -55,6 +57,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         ORDER BY o.orderDate DESC
     """)
     List<Order> findAllWithItems();
+
+    @Query("SELECT o.id FROM Order o")
+    Page<Long> findAllOrderIds(Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.items
+        WHERE o.id IN :ids
+    """)
+    List<Order> findWithItemsByIdIn(@Param("ids") List<Long> ids);
 
     @Query("""
         SELECT DISTINCT o
