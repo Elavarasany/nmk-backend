@@ -9,6 +9,8 @@ import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -148,6 +150,47 @@ class SupplierAccountServiceTest {
         assertEquals(1, result.size());
         assertEquals(new BigDecimal("125.00"), result.getFirst().landedUnitCost());
         verify(allocationRepository).sumAllocatedAmountByGoodsReceiptItemId(101L);
+    }
+
+    @Test
+    void payablesAgingUsesPaymentsCreditsAndDueDateBuckets() {
+        LocalDate asOf = LocalDate.of(2026, 11, 22);
+        SupplierBill dueWithin30 = bill(21L, new BigDecimal("100.00"));
+        dueWithin30.setPaidAmount(new BigDecimal("20.00"));
+        dueWithin30.setCreditedAmount(new BigDecimal("10.00"));
+        dueWithin30.setDueDate(asOf.minusDays(10));
+
+        SupplierBill dueWithin60 = bill(22L, new BigDecimal("50.00"));
+        dueWithin60.setDueDate(asOf.minusDays(45));
+
+        SupplierBill dueOver90 = bill(23L, new BigDecimal("30.00"));
+        dueOver90.setDueDate(asOf.minusDays(100));
+
+        SupplierBill noDueDate = bill(24L, new BigDecimal("40.00"));
+        SupplierBill paid = bill(25L, new BigDecimal("20.00"));
+        paid.setPaidAmount(new BigDecimal("20.00"));
+        paid.setDueDate(asOf.minusDays(200));
+
+        when(supplierRepository.existsById(7L)).thenReturn(true);
+        when(billRepository.findBySupplierIdOrderByInvoiceDateDescCreatedAtDesc(eq(7L), any()))
+                .thenReturn(new PageImpl<>(List.of(dueWithin30, dueWithin60, dueOver90, noDueDate, paid),
+                        PageRequest.of(0, 100), 5));
+        when(paymentRepository.sumConfirmedAmountByBillId(21L)).thenReturn(new BigDecimal("20.00"));
+        when(paymentRepository.sumConfirmedAmountByBillId(22L)).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.sumConfirmedAmountByBillId(23L)).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.sumConfirmedAmountByBillId(24L)).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.sumConfirmedAmountByBillId(25L)).thenReturn(new BigDecimal("20.00"));
+
+        var result = service.getPayablesAging(7L, asOf, "admin.one");
+
+        assertEquals(4, result.openBillCount());
+        assertEquals(3, result.overdueBillCount());
+        assertEquals(new BigDecimal("40.00"), result.notDue());
+        assertEquals(new BigDecimal("70.00"), result.overdue1To30Days());
+        assertEquals(new BigDecimal("50.00"), result.overdue31To60Days());
+        assertEquals(new BigDecimal("0.00"), result.overdue61To90Days());
+        assertEquals(new BigDecimal("30.00"), result.overdueOver90Days());
+        assertEquals(new BigDecimal("190.00"), result.totalOutstanding());
     }
 
     @Test
