@@ -2,6 +2,7 @@ package nmk_backend.security;
 
 import nmk_backend.config.SecurityConfig;
 import nmk_backend.service.AdminAuditEventService;
+import nmk_backend.security.ApiRateLimitFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.cors.CorsConfiguration;
@@ -14,7 +15,7 @@ class CorsConfigurationTest {
 
     @Test
     void configuresOnlyExplicitOriginsAndExpectedMethods() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)), mock(ApiRateLimitFilter.class));
         ReflectionTestUtils.setField(config, "allowedOrigins",
                 "https://shop.example.com, https://admin.example.com");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", true);
@@ -35,7 +36,7 @@ class CorsConfigurationTest {
 
     @Test
     void rejectsWildcardOrigins() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)), mock(ApiRateLimitFilter.class));
         ReflectionTestUtils.setField(config, "allowedOrigins", "*");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
@@ -44,7 +45,7 @@ class CorsConfigurationTest {
 
     @Test
     void rejectsNonHttpsOriginsWhenProductionPolicyIsEnabled() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)), mock(ApiRateLimitFilter.class));
         ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", true);
 
@@ -60,7 +61,7 @@ class CorsConfigurationTest {
                 "ftp://shop.example.com",
                 "https://shop.example.com#fragment"
         )) {
-            SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
+            SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)), mock(ApiRateLimitFilter.class));
             ReflectionTestUtils.setField(config, "allowedOrigins", value);
             ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
@@ -70,7 +71,7 @@ class CorsConfigurationTest {
 
     @Test
     void acceptsExplicitHttpOriginForLocalDevelopment() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)), mock(ApiRateLimitFilter.class));
         ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
