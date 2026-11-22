@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
@@ -49,7 +50,7 @@ public class RazorpayController {
 
     @PostMapping("/verify")
     public ResponseEntity<?> verifyPayment(
-            @RequestBody VerifyPaymentRequest request) {
+            @Valid @RequestBody VerifyPaymentRequest request) {
 
         if (request == null
                 || isBlank(request.getRazorpayOrderId())
@@ -81,7 +82,7 @@ public class RazorpayController {
                     "Payment service is temporarily unavailable."
             );
         } catch (Exception e) {
-            log.error("Razorpay signature verification could not be completed.", e);
+            log.error("Razorpay signature verification failed; exceptionType={}", e.getClass().getSimpleName());
             return errorResponse(
                     HttpStatus.BAD_GATEWAY,
                     "Unable to verify payment with the payment provider. Please retry."
@@ -117,9 +118,8 @@ public class RazorpayController {
                     .intValueExact();
         } catch (ArithmeticException | NullPointerException e) {
             log.error(
-                    "Invalid stored payment amount for Razorpay order {}",
-                    razorpayOrderId,
-                    e
+                    "Invalid stored payment amount; exceptionType={}",
+                    e.getClass().getSimpleName()
             );
 
             return errorResponse(
@@ -145,9 +145,8 @@ public class RazorpayController {
             );
         } catch (Exception e) {
             log.error(
-                    "Razorpay capture verification could not be completed for order {}",
-                    razorpayOrderId,
-                    e
+                    "Razorpay capture verification failed; exceptionType={}",
+                    e.getClass().getSimpleName()
             );
 
             return errorResponse(
@@ -227,9 +226,8 @@ public class RazorpayController {
 
         } catch (PaymentConfirmationConflictException e) {
             log.warn(
-                    "Payment confirmation conflict for Razorpay order {}: {}",
-                    razorpayOrderId,
-                    e.getMessage()
+                    "Payment confirmation conflict; exceptionType={}",
+                    e.getClass().getSimpleName()
             );
 
             return errorResponse(
@@ -247,9 +245,8 @@ public class RazorpayController {
 
         } catch (Exception e) {
             log.error(
-                    "Unexpected payment confirmation failure for Razorpay order {}",
-                    razorpayOrderId,
-                    e
+                    "Unexpected payment confirmation failure; exceptionType={}",
+                    e.getClass().getSimpleName()
             );
 
             return errorResponse(
