@@ -411,6 +411,56 @@ class ProcurementServiceTest {
                 report.entries().stream().map(ProcurementCostReportResponse.Entry::type).toList());
     }
 
+
+    @Test
+    void procurementCostReportReadsAllReceiptsAcrossBoundedPages() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
+        List<Long> allIds = new java.util.ArrayList<>();
+        List<GoodsReceipt> allReceipts = new java.util.ArrayList<>();
+        for (long id = 1; id <= 201; id++) {
+            GoodsReceipt receipt = new GoodsReceipt();
+            ReflectionTestUtils.setField(receipt, "id", id);
+            ReflectionTestUtils.setField(receipt, "receiptNumber", "GR-" + id);
+            ReflectionTestUtils.setField(receipt, "createdAt", day.atStartOfDay().plusMinutes(id));
+            receipt.setPurchaseOrder(order);
+            receipt.setReceivedByUsername("manager.one");
+            GoodsReceiptItem item = new GoodsReceiptItem();
+            item.setGoodsReceipt(receipt);
+            item.setPurchaseOrderItem(orderItem);
+            item.setQuantity(1);
+            item.setUnitCost(new BigDecimal("1.00"));
+            receipt.getItems().add(item);
+            allIds.add(id);
+            allReceipts.add(receipt);
+        }
+
+        when(goodsReceiptRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(3);
+                    int start = (int) pageable.getOffset();
+                    int end = Math.min(start + pageable.getPageSize(), allIds.size());
+                    return new PageImpl<>(allIds.subList(start, end), pageable, allIds.size());
+                });
+        when(goodsReceiptRepository.findAllByIdIn(anyList()))
+                .thenAnswer(invocation -> {
+                    List<Long> ids = invocation.getArgument(0);
+                    return allReceipts.stream()
+                            .filter(receipt -> ids.contains(ReflectionTestUtils.getField(receipt, "id")))
+                            .toList();
+                });
+        when(supplierReturnRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(3), 0));
+
+        var report = service.getProcurementCostReport(1L, day, day);
+
+        assertEquals(201L, report.receivedQuantity());
+        assertEquals(new BigDecimal("201.00"), report.receivedCost());
+        assertEquals(201, report.entries().size());
+        verify(goodsReceiptRepository, times(2))
+                .findReportIds(eq(1L), any(), any(), any(Pageable.class));
+        verify(goodsReceiptRepository, times(2)).findAllByIdIn(anyList());
+    }
+
     @Test
     void procurementCostReportRejectsInvalidDateRangeAndMissingLocation() {
         java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 21);
