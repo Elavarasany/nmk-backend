@@ -109,7 +109,9 @@ class ProcurementServiceTest {
     void createSupplierTranslatesConcurrentUniqueConstraintViolation() {
         when(supplierRepository.existsByNameIgnoreCase("New Supplier")).thenReturn(false);
         when(supplierRepository.saveAndFlush(any(Supplier.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key", new java.sql.SQLIntegrityConstraintViolationException(
+                        "Duplicate entry for key 'uk_suppliers_name'", "23000", 1062)));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.createSupplier(new SupplierCreateRequest(
@@ -117,6 +119,21 @@ class ProcurementServiceTest {
 
         assertEquals("A supplier with this name already exists", error.getMessage());
         verify(supplierRepository).saveAndFlush(any(Supplier.class));
+    }
+
+    @Test
+    void createSupplierDoesNotMisreportOtherDatabaseConstraintFailuresAsDuplicateNames() {
+        when(supplierRepository.existsByNameIgnoreCase("New Supplier")).thenReturn(false);
+        org.springframework.dao.DataIntegrityViolationException databaseFailure =
+                new org.springframework.dao.DataIntegrityViolationException("foreign key failure");
+        when(supplierRepository.saveAndFlush(any(Supplier.class))).thenThrow(databaseFailure);
+
+        org.springframework.dao.DataIntegrityViolationException thrown = assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> service.createSupplier(new SupplierCreateRequest(
+                        "New Supplier", null, null, null, null)));
+
+        assertSame(databaseFailure, thrown);
     }
 
     @Test
