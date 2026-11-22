@@ -121,7 +121,11 @@ public class RazorpayDisputeReconciliationService {
             dispute.setPhase(limit(phase, 40));
         }
         LocalDateTime respondBy = toIndiaTime(respondByEpoch);
-        if (respondBy != null) dispute.setRespondBy(respondBy);
+        if (respondBy != null) {
+            dispute.setRespondBy(respondBy);
+        } else if (Set.of("WON", "LOST", "CLOSED").contains(nextStatus)) {
+            dispute.setRespondBy(null);
+        }
         LocalDateTime createdAt = toIndiaTime(providerCreatedAtEpoch);
         if (createdAt != null) dispute.setProviderCreatedAt(createdAt);
 
