@@ -8,6 +8,7 @@ import java.util.Map;
 public record PosInventoryReportResponse(
         Long locationId, String locationCode, String locationName, int variantCount,
         long onHandQuantity, long reservedQuantity, long availableQuantity, int lowStockCount,
+        long totalItems, int itemsPage, int itemsSize, boolean itemsHasNext,
         List<VariantStock> items
 ) {
     public record VariantStock(
@@ -45,12 +46,25 @@ public record PosInventoryReportResponse(
                         .thenComparing(VariantStock::sku,
                                 java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
-        return new PosInventoryReportResponse(
+        return fromAggregates(
                 locationId, locationCode, locationName, sorted.size(),
                 sorted.stream().mapToLong(VariantStock::onHandQuantity).sum(),
                 sorted.stream().mapToLong(VariantStock::reservedQuantity).sum(),
                 sorted.stream().mapToLong(VariantStock::availableQuantity).sum(),
-                (int) sorted.stream().filter(VariantStock::lowStock).count(), sorted
+                (int) sorted.stream().filter(VariantStock::lowStock).count(),
+                sorted.size(), 0, sorted.size(), false, sorted
+        );
+    }
+
+    public static PosInventoryReportResponse fromAggregates(
+            Long locationId, String locationCode, String locationName, long totalItems,
+            long onHandQuantity, long reservedQuantity, long availableQuantity, int lowStockCount,
+            long totalItemsCount, int page, int size, boolean hasNext, List<VariantStock> rows
+    ) {
+        return new PosInventoryReportResponse(
+                locationId, locationCode, locationName, Math.toIntExact(totalItems),
+                onHandQuantity, reservedQuantity, availableQuantity, lowStockCount,
+                totalItemsCount, page, size, hasNext, List.copyOf(rows)
         );
     }
 }
