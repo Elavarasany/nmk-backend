@@ -274,12 +274,10 @@ public class AdminOrderController {
                     if ("CONFIRMED".equals(currentStatus)
                             && "CANCELLED".equals(newStatus)) {
 
-                        return ResponseEntity.badRequest().body(
-                                Map.of(
-                                        "message",
-                                        "Paid orders cannot be cancelled through this status action. Initiate the refund with Razorpay; signed provider webhooks update the refund ledger."
-                                )
-                        );
+                        String message = "REFUNDED".equalsIgnoreCase(order.getRefundStatus())
+                                ? "Provider refund is confirmed. Reconcile stock through an audited inventory adjustment before cancelling the order."
+                                : "Paid orders cannot be cancelled through this status action. Initiate the refund with Razorpay; signed provider webhooks update the refund ledger.";
+                        return ResponseEntity.badRequest().body(Map.of("message", message));
                     }
 
                     boolean validTransition = switch (currentStatus) {
