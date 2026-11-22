@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -180,7 +181,7 @@ public class AdminOrderController {
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateOrderStatus(
             @PathVariable Long id,
-            @RequestBody UpdateOrderStatusRequest request) {
+            @Valid @RequestBody UpdateOrderStatusRequest request) {
 
         if (request.status() == null || request.status().isBlank()) {
             return ResponseEntity.badRequest()
@@ -281,15 +282,6 @@ public class AdminOrderController {
                                 ));
                     }
 
-                    if (!validTransition) {
-                        return ResponseEntity.badRequest()
-                                .body(Map.of(
-                                        "message",
-                                        "Invalid status transition: "
-                                                + currentStatus + " to " + newStatus
-                                ));
-                    }
-
                     if ("SHIPPED".equals(newStatus)
                             && (order.getCourierName() == null
                             || order.getCourierName().isBlank()
@@ -348,7 +340,7 @@ public class AdminOrderController {
     @PutMapping("/{id}/delivery")
     public ResponseEntity<?> updateDeliveryDetails(
             @PathVariable Long id,
-            @RequestBody UpdateDeliveryDetailsRequest request) {
+            @Valid @RequestBody UpdateDeliveryDetailsRequest request) {
 
         if (request.courierName() == null
                 || request.courierName().isBlank()
