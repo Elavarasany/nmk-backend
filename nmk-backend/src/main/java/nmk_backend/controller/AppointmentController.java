@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 import nmk_backend.entity.Appointment;
+import nmk_backend.dto.AppointmentStatusRequest;
 import nmk_backend.repository.AppointmentRepository;
 
 import org.springframework.http.ResponseEntity;
@@ -134,7 +135,7 @@ public class AppointmentController {
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(
             @PathVariable Long id,
-            @RequestBody Map<String, String> request) {
+            @Valid @RequestBody AppointmentStatusRequest request) {
 
         Appointment appointment = appointmentRepository.findById(id)
                 .orElse(null);
@@ -143,20 +144,7 @@ public class AppointmentController {
             return ResponseEntity.notFound().build();
         }
 
-        String status = request.get("status");
-
-        Set<String> allowedStatuses = Set.of(
-                "PENDING",
-                "CONFIRMED",
-                "COMPLETED",
-                "CANCELLED"
-        );
-
-        if (status == null || !allowedStatuses.contains(status)) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Invalid appointment status."));
-        }
-
+        String status = request.status();
         appointment.setStatus(status);
 
         return ResponseEntity.ok(appointmentRepository.save(appointment));
