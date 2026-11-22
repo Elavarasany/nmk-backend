@@ -3,6 +3,10 @@ package nmk_backend.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nmk_backend.dto.*;
 import nmk_backend.entity.*;
+import jakarta.persistence.EntityManager;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +58,7 @@ class ProcurementServiceTest {
                 goodsReceiptRepository, supplierReturnRepository, locationRepository,
                 variantRepository, adminRepository, inventoryService, new ObjectMapper()
         );
+        ReflectionTestUtils.setField(service, "entityManager", mock(EntityManager.class));
 
         supplier = new Supplier();
         ReflectionTestUtils.setField(supplier, "id", 2L);
@@ -388,12 +393,12 @@ class ProcurementServiceTest {
         supplierReturn.getItems().add(returned);
 
         when(locationRepository.findById(1L)).thenReturn(Optional.of(location));
-        when(goodsReceiptRepository
-                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
-                        eq(1L), any(), any())).thenReturn(List.of(receipt));
-        when(supplierReturnRepository
-                .findByPurchaseOrder_Location_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(
-                        eq(1L), any(), any())).thenReturn(List.of(supplierReturn));
+        when(goodsReceiptRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(70L), invocation.getArgument(3), 1));
+        when(goodsReceiptRepository.findAllByIdIn(List.of(70L))).thenReturn(List.of(receipt));
+        when(supplierReturnRepository.findReportIds(eq(1L), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(80L), invocation.getArgument(3), 1));
+        when(supplierReturnRepository.findAllByIdIn(List.of(80L))).thenReturn(List.of(supplierReturn));
 
         ProcurementCostReportResponse report = service.getProcurementCostReport(1L, day, day);
 
