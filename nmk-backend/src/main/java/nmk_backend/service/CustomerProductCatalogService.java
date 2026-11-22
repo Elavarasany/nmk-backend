@@ -51,12 +51,74 @@ public class CustomerProductCatalogService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
         }
 
-        return getActiveProducts().stream()
-                .filter(product -> product.id().equals(productId))
-                .findFirst()
+        Product product = productRepository.findById(productId)
+                .filter(Product::isActive)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Product not found"
+                        HttpStatus.NOT_FOUND, "Product not found"
+                ));
+
+        InventoryLocation location = getCheckoutLocation();
+        List<ProductVariant> activeVariants =
+                variantRepository.findByProductIdAndActiveTrue(productId).stream()
+                        .filter(variant -> variant.getProduct().isActive())
+                        .sorted(Comparator.comparing(
+                                ProductVariant::getVariantName,
+                                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
+                        ))
+                        .toList();
+
+        if (activeVariants.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+        }
+
+        Map<Long, InventoryBalance> balances = balanceRepository
+                .findByLocationIdAndVariantIdIn(
+                        location.getId(),
+                        activeVariants.stream().map(ProductVariant::getId).toList()
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        balance -> balance.getVariant().getId(),
+                        Function.identity()
+                ));
+
+        List<CustomerProductCatalogResponse.VariantItem> variants = activeVariants.stream()
+                .map(variant -> {
+                    InventoryBalance balance = balances.get(variant.getId());
+                    int available = location.isStockCountLocked() || balance == null
+                            ? 0 : balance.getAvailableQuantity();
+                    BigDecimal price = variant.getSellingPriceOverride() != null
+                            ? variant.getSellingPriceOverride() : product.getPrice();
+                    return CustomerProductCatalogResponse.variant(variant, price, available);
+                })
+                .toList();
+
+        BigDecimal displayPrice = variants.stream()
+                .map(CustomerProductCatalogResponse.VariantItem::price)
+                .min(BigDecimal::compareTo)
+                .orElse(product.getPrice());
+        int availableQuantity = variants.stream()
+                .mapToInt(CustomerProductCatalogResponse.VariantItem::availableQuantity)
+                .sum();
+
+        return CustomerProductCatalogResponse.from(
+                product, variants, displayPrice, availableQuantity
+        );
+    }
+
+    private InventoryLocation getCheckoutLocation() {
+        if (checkoutLocationCode == null || checkoutLocationCode.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Customer checkout inventory location is not configured"
+            );
+        }
+
+        return locationRepository.findByCode(checkoutLocationCode.trim())
+                .filter(InventoryLocation::isActive)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Customer checkout inventory location is missing or inactive"
                 ));
     }
 
