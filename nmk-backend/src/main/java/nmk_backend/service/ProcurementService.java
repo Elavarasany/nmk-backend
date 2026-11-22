@@ -6,6 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Sort;
 import nmk_backend.dto.*;
 import nmk_backend.entity.*;
@@ -195,27 +196,46 @@ public class ProcurementService {
     }
 
     @Transactional(readOnly = true)
-    public List<GoodsReceiptResponse> getGoodsReceipts(Long purchaseOrderId) {
-        if (purchaseOrderId == null || purchaseOrderId <= 0) {
-            throw new IllegalArgumentException("A valid purchase order id is required");
-        }
+    public Page<GoodsReceiptResponse> getGoodsReceipts(Long purchaseOrderId, int page, int size) {
+        validateProcurementHistoryRequest(purchaseOrderId, page, size);
         if (!purchaseOrderRepository.existsById(purchaseOrderId)) {
             throw new InventoryNotFoundException("Purchase order was not found");
         }
-        return goodsReceiptRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(purchaseOrderId)
-                .stream().map(GoodsReceiptResponse::from).toList();
+        var pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        Page<Long> ids = goodsReceiptRepository.findHistoryIds(purchaseOrderId, pageable);
+        List<GoodsReceiptResponse> content = ids.isEmpty() ? List.of()
+                : goodsReceiptRepository.findAllByIdIn(ids.getContent()).stream()
+                .sorted(Comparator.comparing(GoodsReceipt::getCreatedAt).reversed()
+                        .thenComparing(GoodsReceipt::getId, Comparator.reverseOrder()))
+                .map(GoodsReceiptResponse::from).toList();
+        return new PageImpl<>(content, pageable, ids.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public List<SupplierReturnResponse> getSupplierReturns(Long purchaseOrderId) {
-        if (purchaseOrderId == null || purchaseOrderId <= 0) {
-            throw new IllegalArgumentException("A valid purchase order id is required");
-        }
+    public Page<SupplierReturnResponse> getSupplierReturns(Long purchaseOrderId, int page, int size) {
+        validateProcurementHistoryRequest(purchaseOrderId, page, size);
         if (!purchaseOrderRepository.existsById(purchaseOrderId)) {
             throw new InventoryNotFoundException("Purchase order was not found");
         }
-        return supplierReturnRepository.findByPurchaseOrderIdOrderByCreatedAtDesc(purchaseOrderId)
-                .stream().map(SupplierReturnResponse::from).toList();
+        var pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        Page<Long> ids = supplierReturnRepository.findHistoryIds(purchaseOrderId, pageable);
+        List<SupplierReturnResponse> content = ids.isEmpty() ? List.of()
+                : supplierReturnRepository.findAllByIdIn(ids.getContent()).stream()
+                .sorted(Comparator.comparing(SupplierReturn::getCreatedAt).reversed()
+                        .thenComparing(SupplierReturn::getId, Comparator.reverseOrder()))
+                .map(SupplierReturnResponse::from).toList();
+        return new PageImpl<>(content, pageable, ids.getTotalElements());
+    }
+
+    private void validateProcurementHistoryRequest(Long purchaseOrderId, int page, int size) {
+        if (purchaseOrderId == null || purchaseOrderId <= 0) {
+            throw new IllegalArgumentException("A valid purchase order id is required");
+        }
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
     }
 
     @Transactional
