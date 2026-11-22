@@ -15,6 +15,10 @@ import nmk_backend.repository.OrderRefundRepository;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
@@ -68,18 +72,37 @@ public class AdminOrderController {
         this.publicUrl = publicUrl.replaceAll("/+$", "");
     }
 
-    // Get all customer orders
+    // Get customer orders in bounded pages. Page IDs first, then fetch item graphs
+    // for only those IDs to avoid collection-fetch pagination in Hibernate.
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<List<AdminOrderResponse>> getAllOrders() {
+    public ResponseEntity<?> getAllOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
 
-        List<AdminOrderResponse> orders = orderRepository
-                .findAllWithItems()
+        Page<Long> idPage = orderRepository.findAllOrderIds(PageRequest.of(
+                page, size,
+                Sort.by(Sort.Order.desc("orderDate"), Sort.Order.desc("id"))
+        ));
+        if (idPage.isEmpty()) return ResponseEntity.ok(idPage.map(ignored -> (AdminOrderResponse) null));
+
+        Map<Long, Order> ordersById = orderRepository.findWithItemsByIdIn(idPage.getContent())
                 .stream()
+                .collect(java.util.stream.Collectors.toMap(Order::getId, order -> order));
+
+        List<AdminOrderResponse> content = idPage.getContent().stream()
+                .map(ordersById::get)
+                .filter(java.util.Objects::nonNull)
                 .map(this::convertToResponse)
                 .toList();
 
-        return ResponseEntity.ok(orders);
+        return ResponseEntity.ok(new PageImpl<>(content, idPage.getPageable(), idPage.getTotalElements()));
     }
 
     // Get unique customers from existing orders
