@@ -55,6 +55,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/admin/auth/authorize-action")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
 
+                        // Staff location assignment is administrator-only.
+                        .requestMatchers("/api/admin/staff/**").hasAuthority("ROLE_ADMIN")
                         // Register configuration is administrator-only.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/registers")
                             .hasAuthority("ROLE_ADMIN")
