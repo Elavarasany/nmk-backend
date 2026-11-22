@@ -2,7 +2,6 @@ package nmk_backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -13,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class ApiRateLimitService {
@@ -27,6 +27,7 @@ public class ApiRateLimitService {
 
     private final JdbcTemplate jdbcTemplate;
     private final boolean enabled;
+    private final AtomicLong cleanupCounter = new AtomicLong();
 
     public ApiRateLimitService(
             JdbcTemplate jdbcTemplate,
@@ -52,6 +53,12 @@ public class ApiRateLimitService {
         Timestamp expiryTimestamp = Timestamp.valueOf(LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
 
         jdbcTemplate.update(UPSERT_SQL, key, startTimestamp, expiryTimestamp);
+        if (cleanupCounter.incrementAndGet() % 1000 == 0) {
+            jdbcTemplate.update(
+                    "DELETE FROM api_rate_limit_buckets WHERE expires_at < ? LIMIT 1000",
+                    Timestamp.from(Instant.now())
+            );
+        }
         Integer count = jdbcTemplate.queryForObject(COUNT_SQL, Integer.class, key);
         int currentCount = count == null ? 0 : count;
         int retryAfter = (int) Math.max(1, windowEnd.getEpochSecond() - nowEpoch);
@@ -61,15 +68,6 @@ public class ApiRateLimitService {
 
     public boolean isEnabled() {
         return enabled;
-    }
-
-    @Scheduled(cron = "0 20 * * * *")
-    public void removeExpiredBuckets() {
-        if (!enabled) return;
-        jdbcTemplate.update(
-                "DELETE FROM api_rate_limit_buckets WHERE expires_at < ?",
-                Timestamp.from(Instant.now())
-        );
     }
 
     private static String safeClient(String value) {
