@@ -109,7 +109,7 @@ No deployment, live database access, migration execution, PR merge, or productio
 
 ## Online Razorpay refund release checks
 
-- [ ] Apply and verify manual migration 019 after migration 017 on the approved target schema.
+- [ ] Apply and verify manual migration 019 after migrations 017 and 018 on the approved target schema.
 - [ ] Configure Razorpay key ID and secret on the backend only; confirm credentials are live/test as intended before enabling the endpoint.
 - [ ] Verify only Admin can authorize refunds and that every request requires a fresh password authorization.
 - [ ] Verify normal-speed partial/full refunds, minimum ₹1, remaining-balance enforcement, and the provider `X-Refund-Idempotency` header.
