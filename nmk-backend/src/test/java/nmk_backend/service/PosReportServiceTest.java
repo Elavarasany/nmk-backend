@@ -5,6 +5,9 @@ import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -101,10 +104,10 @@ class PosReportServiceTest {
         voidRefund.setAmount(new BigDecimal("100.00"));
         voided.getRefundPayments().add(voidRefund);
 
-        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any()))
-                .thenReturn(List.of(sale));
-        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any()))
-                .thenReturn(List.of(returned, voided));
+        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sale)));
+        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(returned, voided)));
         // Exchange credit is a non-cash settlement component, not a provider/cash refund.
         when(exchangeCreditRepository.sumExchangeCreditApplied(eq(1L), any(), any()))
                 .thenReturn(new BigDecimal("75.00"));
@@ -157,10 +160,10 @@ class PosReportServiceTest {
         processedRefund.setRefundTotal(new BigDecimal("125.00"));
         ReflectionTestUtils.setField(processedRefund, "createdAt", refundDay.atTime(14, 30));
 
-        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any()))
-                .thenReturn(List.of());
-        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any()))
-                .thenReturn(List.of(processedRefund));
+        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(processedRefund)));
 
         var report = service.getSalesReport(1L, refundDay, refundDay);
 
@@ -172,6 +175,51 @@ class PosReportServiceTest {
                 "A refund processed today remains visible even when its original sale was earlier");
         assertEquals(refundDay, report.daily().get(0).date());
         assertEquals(new BigDecimal("125.00"), report.daily().get(0).refunds());
+    }
+
+    @Test
+    void salesReportReadsAllMatchingSalesAcrossBoundedPages() {
+        LocalDate day = LocalDate.of(2026, 11, 21);
+        List<PosSale> firstBatch = new java.util.ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            PosSale sale = new PosSale();
+            sale.setLocationId(1L);
+            sale.setCashierUsername("cashier.one");
+            sale.setStatus("COMPLETED");
+            sale.setSubtotal(new BigDecimal("10.00"));
+            sale.setDiscountAmount(new BigDecimal("1.00"));
+            sale.setGrandTotal(new BigDecimal("9.00"));
+            ReflectionTestUtils.setField(sale, "createdAt", day.atStartOfDay().plusMinutes(i));
+            firstBatch.add(sale);
+        }
+        PosSale last = new PosSale();
+        last.setLocationId(1L);
+        last.setCashierUsername("cashier.two");
+        last.setStatus("COMPLETED");
+        last.setSubtotal(new BigDecimal("20.00"));
+        last.setDiscountAmount(new BigDecimal("2.00"));
+        last.setGrandTotal(new BigDecimal("18.00"));
+        ReflectionTestUtils.setField(last, "createdAt", day.atTime(23, 59));
+
+        when(saleRepository.findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(3);
+                    return pageable.getPageNumber() == 0
+                            ? new PageImpl<>(firstBatch, pageable, 201)
+                            : new PageImpl<>(List.of(last), pageable, 201);
+                });
+        when(returnRepository.findCompletedReturnsForReport(eq(1L), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var report = service.getSalesReport(1L, day, day);
+
+        assertEquals(201, report.transactionCount());
+        assertEquals(new BigDecimal("2020.00"), report.subtotal());
+        assertEquals(new BigDecimal("202.00"), report.discounts());
+        assertEquals(new BigDecimal("1998.00"), report.netSalesBeforeRefunds());
+        assertEquals(2, report.cashiers().size());
+        verify(saleRepository, times(2))
+                .findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class));
     }
 
     @Test
