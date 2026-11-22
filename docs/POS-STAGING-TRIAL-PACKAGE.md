@@ -42,16 +42,17 @@ The scripts are under `nmk-backend/src/main/resources/db/manual/`. Hibernate sch
 
 ### 3B. Apply POS/application migrations after the chosen baseline
 
-For a clone that is missing the corresponding schema, apply the numbered additive scripts **one at a time in numeric order**:
+For a clone that is missing the corresponding schema, use the branch's full migration set in dependency order, **one script at a time**. The checkout/return/cash trial itself does not exercise every module, but the complete backend artifact has mapped entities beyond the cashier workflow and Hibernate `validate` checks the deployed schema at startup. Do not omit a migration merely because its screen is not part of this trial unless the deployment owner has confirmed that the exact application build does not require the corresponding mapped table:
 
 `005` sales/payments → `006` staff roles → `007` registers/shifts/cash → `008` customer returns → `009` stock counts → `010` procurement base → `011` reorder audit → `012` void type → `013` stock-count cancellation audit → `014` exchanges → `015` report indexes → `016` admin audit chain → `017` provider-refund ledger → `018` shared API rate-limit storage → `019` idempotent refund requests → `020` Razorpay settlement reconciliation → `021` Razorpay dispute ledger → `022` supplier AP/landed-cost ledger.
 
 This list is **not** permission to run every script blindly. Before each script, inspect whether its tables/columns/indexes already exist and whether its preconditions are met. In particular:
 
 - `018-create-api-rate-limit-buckets.sql` is required before using production-profile defaults with the shared DB rate limiter. Verify the table, primary key, expiry index and CHECK constraint; `IF NOT EXISTS` does not prove an existing definition is equivalent.
-- `022-create-supplier-ap-and-landed-cost-ledger.sql` depends on the procurement and POS-shift base schema; verify those tables first. It is needed only if the trial includes supplier AP/landed-cost screens or if Hibernate validation for the deployed application requires those mapped tables.
-- `017`, `019`, `020`, and `021` support provider-refund / Razorpay reconciliation capabilities. They are not part of the checkout/return/cash acceptance script below; include them only where the deployed application/schema baseline requires those enabled modules. Do not enable provider operations merely because their tables exist.
-- `015` and `016` are additive reporting/audit schema changes; verify their exact preconditions and whether the checked-out application expects them before starting the application.
+- `019-add-idempotent-refund-requests.sql` follows 017 and 018; `020-create-razorpay-settlement-reconciliation.sql` follows 017, 018 and 019; `021-create-razorpay-dispute-ledger.sql` follows 020. Preserve these dependencies if those schemas are required by the exact backend artifact.
+- `022-create-supplier-ap-and-landed-cost-ledger.sql` depends on procurement and POS-shift base tables; verify those tables first. The supplier screens are not exercised by this trial, but mapped entities may still require the tables during Hibernate validation.
+- `017`, `019`, `020`, and `021` support provider-refund / Razorpay capabilities. Their presence does not enable or verify a provider integration. Do not configure provider credentials or run settlement sync as part of the cash-only trial.
+- `015` and `016` are additive reporting/audit schema changes. Inspect their exact preconditions and preserve the branch's expected schema before startup.
 
 ### 3C. Separate webhook and rate-limit prerequisites
 
@@ -109,7 +110,7 @@ These are fixture identifiers, not real NMK inventory or recommended product att
 
 ## 6. Stage 4 — cashier checkout / manager return / cash-close acceptance script
 
-Run the following in staging only. Record tester, date, commit, environment, IDs and screenshots/API responses. Use the backend response values as the source of truth; do not hard-code prices, totals, sale IDs, shift IDs or return values.
+Run the following in staging only. Record tester, date, commit, environment, IDs and screenshots/API responses. Use the backend response values as the source of truth; do not hard-code prices, totals, sale IDs, shift IDs or return values. The JSON snippets are request templates: replace every angle-bracket placeholder with the real value using the correct JSON type (IDs as numbers where the DTO expects numbers; money values as JSON numbers), then validate the final body before sending.
 
 ### A. Open shift — cashier
 
