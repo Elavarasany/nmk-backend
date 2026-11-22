@@ -47,6 +47,12 @@ public class AdminAuditEvent {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "previous_hash", nullable = false, length = 64, updatable = false)
+    private String previousHash;
+
+    @Column(name = "event_hash", nullable = false, length = 64, updatable = false)
+    private String eventHash;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
@@ -74,4 +80,9 @@ public class AdminAuditEvent {
     public String getErrorType() { return errorType; }
     public void setErrorType(String value) { errorType = value; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime value) { createdAt = value; }
+    public String getPreviousHash() { return previousHash; }
+    public void setPreviousHash(String value) { previousHash = value; }
+    public String getEventHash() { return eventHash; }
+    public void setEventHash(String value) { eventHash = value; }
 }
