@@ -125,7 +125,7 @@ class PosAuthorizationIntegrationTest {
     @Test
     void managerCanReadShiftHistory() throws Exception {
         String managerToken = tokenForRole("MANAGER");
-        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=1")
+        mockMvc.perform(get("/api/admin/pos/shifts/history?locationId=" + testLocation.getId())
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
     }
@@ -489,17 +489,11 @@ class PosAuthorizationIntegrationTest {
     @Test
     void managerCanReadSalesAndInventoryReports() throws Exception {
         String managerToken = tokenForRole("MANAGER");
-        InventoryLocation location = new InventoryLocation();
-        location.setCode("POS-REPORT-SEC-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-        location.setName("POS report authorization test");
-        location.setActive(true);
-        location = locationRepository.saveAndFlush(location);
-
-        mockMvc.perform(get("/api/admin/pos/reports/sales?locationId=" + location.getId()
+        mockMvc.perform(get("/api/admin/pos/reports/sales?locationId=" + testLocation.getId()
                         + "&from=2026-11-22&to=2026-11-22")
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/admin/pos/reports/inventory?locationId=" + location.getId())
+        mockMvc.perform(get("/api/admin/pos/reports/inventory?locationId=" + testLocation.getId())
                 .header("Authorization", "Bearer " + managerToken))
                 .andExpect(status().isOk());
     }
