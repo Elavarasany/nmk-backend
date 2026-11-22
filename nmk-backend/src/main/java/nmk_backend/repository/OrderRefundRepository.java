@@ -24,7 +24,8 @@ public interface OrderRefundRepository extends JpaRepository<OrderRefund, Long> 
 
     Optional<OrderRefund> findByRequestIdempotencyKey(String key);
 
-    java.util.List<OrderRefund> findByOrderIdOrderByCreatedAtDesc(Long orderId);
+    @Query("SELECT refund FROM OrderRefund refund WHERE refund.order.id = :orderId ORDER BY refund.createdAt DESC")
+    java.util.List<OrderRefund> findByOrderIdOrderByCreatedAtDesc(@Param("orderId") Long orderId);
 
     @Query("""
             SELECT COALESCE(SUM(refund.amountPaise), 0)
