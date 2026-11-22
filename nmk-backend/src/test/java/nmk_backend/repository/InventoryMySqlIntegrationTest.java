@@ -66,7 +66,7 @@ class InventoryMySqlIntegrationTest {
         location.setCode("SD-" + UUID.randomUUID());
         location.setName("Soft Delete Test Location");
         location.setActive(true);
-        location = entityManager.persist(location);
+        entityManager.persist(location);
         entityManager.flush();
 
         InventoryBalance balance = new InventoryBalance();
