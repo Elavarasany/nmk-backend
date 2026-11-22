@@ -42,6 +42,7 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 
 - `GET /api/admin/pos/payments/webhook-review?page=0&size=25` lists only `MANUAL_REVIEW` webhook events, oldest first; page size is capped at 100.
 - Access is restricted to `ROLE_ADMIN` and `ROLE_MANAGER`; cashiers and unauthenticated users must be denied.
+- The entity mapping declares a composite `(status, received_at)` index for queue ordering. Existing production databases need this index included in an approved schema migration; production Hibernate schema validation does not create it. Do not apply ad hoc DDL to the client database.
 - Response includes event ID/type/status/time/attempt count/error and safely extracted provider resource ID, payment ID, order ID, amount in paise, currency and provider status. Raw payload is never returned.
 - This is visibility only. It does not initiate a refund, mark a refund paid, retry an event, or change a review status. Reconciliation remains a documented manual process until a provider-linked ledger and audited resolution workflow are designed.
 
