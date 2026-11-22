@@ -17,6 +17,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -126,6 +128,26 @@ public class SecurityConfig {
         return http.build();
     }
 
+    private static boolean isValidOrigin(String value) {
+        if (value == null || value.isBlank() || value.contains("*")) {
+            return false;
+        }
+        try {
+            URI uri = new URI(value);
+            String scheme = uri.getScheme();
+            String path = uri.getRawPath();
+            return scheme != null
+                    && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null
+                    && uri.getUserInfo() == null
+                    && uri.getRawQuery() == null
+                    && uri.getRawFragment() == null
+                    && (path == null || path.isEmpty());
+        } catch (URISyntaxException invalidOrigin) {
+            return false;
+        }
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -141,12 +163,13 @@ public class SecurityConfig {
         if (origins.isEmpty()) {
             throw new IllegalStateException("At least one explicit CORS origin must be configured");
         }
-        if (origins.contains("*")) {
-            throw new IllegalStateException("Wildcard CORS origins are not allowed when credentials are enabled");
-        }
-        if (requireHttpsOrigins && origins.stream()
-                .anyMatch(origin -> !origin.toLowerCase(java.util.Locale.ROOT).startsWith("https://"))) {
-            throw new IllegalStateException("Production CORS origins must use HTTPS");
+        for (String origin : origins) {
+            if (!isValidOrigin(origin)) {
+                throw new IllegalStateException("CORS entries must be explicit HTTP(S) origins without paths or wildcards");
+            }
+            if (requireHttpsOrigins && !origin.regionMatches(true, 0, "https://", 0, 8)) {
+                throw new IllegalStateException("Production CORS origins must use HTTPS");
+            }
         }
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
