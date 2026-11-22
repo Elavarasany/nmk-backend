@@ -30,15 +30,8 @@ public class OfferBarController {
                 ZoneId.of("Asia/Kolkata")
         );
 
-        return offerBarRepository.findByActiveTrue()
+        return offerBarRepository.findCurrentlyValidOrdered(now)
                 .stream()
-                .filter(offer ->
-                        (offer.getStartDateTime() == null ||
-                                !now.isBefore(offer.getStartDateTime()))
-                                &&
-                                (offer.getEndDateTime() == null ||
-                                        !now.isAfter(offer.getEndDateTime()))
-                )
                 .findFirst()
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
