@@ -86,6 +86,52 @@ class RazorpayRefundReconciliationMySqlTest {
     }
 
     @Test
+    void apiReceiptMergesWebhookRowWithoutReceiptOnMySql() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String paymentId = "pay_" + suffix;
+        String refundId = "rfnd_" + suffix;
+        String receipt = "nmk_" + suffix;
+        String idempotencyKey = "refund_" + suffix;
+
+        Order order = new Order();
+        order.setCustomerName("Refund merge test");
+        order.setTotalAmount(new BigDecimal("125.00"));
+        order.setPaymentStatus("PAID");
+        order.setRazorpayPaymentId(paymentId);
+        order = orderRepository.saveAndFlush(order);
+
+        nmk_backend.entity.OrderRefund providerRow = new nmk_backend.entity.OrderRefund();
+        providerRow.setOrder(order);
+        providerRow.setRazorpayRefundId(refundId);
+        providerRow.setRazorpayPaymentId(paymentId);
+        providerRow.setAmountPaise(5000L);
+        providerRow.setCurrency("INR");
+        providerRow.setStatus("PROCESSED");
+        providerRow.setLastProviderEventId("evt_without_receipt");
+        refundRepository.saveAndFlush(providerRow);
+
+        nmk_backend.entity.OrderRefund localRequest = new nmk_backend.entity.OrderRefund();
+        localRequest.setOrder(order);
+        localRequest.setRazorpayPaymentId(paymentId);
+        localRequest.setAmountPaise(5000L);
+        localRequest.setCurrency("INR");
+        localRequest.setStatus("PENDING");
+        localRequest.setReceipt(receipt);
+        localRequest.setRequestIdempotencyKey(idempotencyKey);
+        localRequest.setReason("Customer cancellation");
+        localRequest.setInitiatedBy("admin");
+        refundRepository.saveAndFlush(localRequest);
+
+        service.reconcile("api_" + suffix, "refund.processed",
+                refundId, paymentId, 5000L, "INR", "processed", receipt);
+
+        var linked = refundRepository.findByRequestIdempotencyKey(idempotencyKey).orElseThrow();
+        assertEquals(refundId, linked.getRazorpayRefundId());
+        assertEquals("PROCESSED", linked.getStatus());
+        assertEquals(1, refundRepository.findByOrderIdOrderByCreatedAtDesc(order.getId()).size());
+    }
+
+    @Test
     void overRefundTransactionRollsBackOnMySql() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         String paymentId = "pay_" + suffix;
