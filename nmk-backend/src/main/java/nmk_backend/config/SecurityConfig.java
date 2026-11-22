@@ -56,6 +56,9 @@ public class SecurityConfig {
                         // Register configuration is administrator-only.
                         .requestMatchers(HttpMethod.POST, "/api/admin/pos/registers")
                             .hasAuthority("ROLE_ADMIN")
+                        // Provider webhook exceptions contain payment identifiers; only managers/admins may review them.
+                        .requestMatchers(HttpMethod.GET, "/api/admin/pos/payments/webhook-review")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                         // Sales and refund reporting is manager/admin only.
                         .requestMatchers(HttpMethod.GET, "/api/admin/pos/reports/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
