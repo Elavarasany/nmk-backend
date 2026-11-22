@@ -397,6 +397,47 @@ class PosShiftServiceTest {
         verifyNoInteractions(locationRepository, shiftRepository, movementRepository);
     }
 
+    @Test
+    void supplierCashPaymentCreatesExactlyOneLinkedDrawerOutMovement() {
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByIdempotencyKey("SUP-PAY-1"))
+                .thenReturn(Optional.empty(), Optional.empty());
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                movement("OPENING_FLOAT", "IN", "100.00", shift),
+                movement("CASH_SALE", "IN", "50.00", shift)
+        ));
+
+        service.recordSupplierPayment(
+                9L, new BigDecimal("40.00"), "SUP-PAY-1",
+                "admin.one", "ADMIN", 701L, 1L
+        );
+
+        var captor = org.mockito.ArgumentCaptor.forClass(PosCashMovement.class);
+        verify(movementRepository).saveAndFlush(captor.capture());
+        PosCashMovement saved = captor.getValue();
+        assertEquals("SUPPLIER_PAYMENT", saved.getMovementType());
+        assertEquals("OUT", saved.getDirection());
+        assertEquals("SUPPLIER_PAYMENT", saved.getReferenceType());
+        assertEquals(701L, saved.getReferenceId());
+        assertEquals(new BigDecimal("40.00"), saved.getAmount());
+    }
+
+    @Test
+    void supplierCashPaymentCannotOverdrawExpectedDrawerCash() {
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+        when(movementRepository.findByIdempotencyKey("SUP-PAY-2"))
+                .thenReturn(Optional.empty(), Optional.empty());
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                movement("OPENING_FLOAT", "IN", "20.00", shift)
+        ));
+
+        assertThrows(IllegalArgumentException.class, () -> service.recordSupplierPayment(
+                9L, new BigDecimal("30.00"), "SUP-PAY-2",
+                "admin.one", "ADMIN", 702L, 1L
+        ));
+        verify(movementRepository, never()).saveAndFlush(any(PosCashMovement.class));
+    }
+
     private PosCashMovement movement(String type, String direction, String amount, PosShift shift) {
         PosCashMovement movement = new PosCashMovement();
         movement.setShift(shift);
