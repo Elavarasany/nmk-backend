@@ -116,6 +116,45 @@ class CustomerProductCatalogServiceTest {
     }
 
     @Test
+    void hidesPurchasableAvailabilityWhileLocationStockCountIsLocked() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setCode("AVP-01");
+        location.setActive(true);
+        location.setStockCountLocked(true);
+
+        Product product = new Product();
+        product.setId(10L);
+        product.setName("Count Freeze Frame");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setActive(true);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setId(25L);
+        variant.setProduct(product);
+        variant.setVariantName("Black");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setActive(true);
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(8);
+        balance.setReservedQuantity(3);
+
+        when(locationRepository.findByCode("AVP-01")).thenReturn(Optional.of(location));
+        when(balanceRepository.findByLocationId(1L)).thenReturn(List.of(balance));
+        when(variantRepository.findAll()).thenReturn(List.of(variant));
+        when(productRepository.findAll()).thenReturn(List.of(product));
+
+        var result = service.getActiveProducts();
+
+        assertEquals(1, result.size());
+        assertEquals(0, result.get(0).stockQuantity());
+        assertEquals(0, result.get(0).variants().get(0).availableQuantity());
+    }
+
+    @Test
     void rejectsMissingCheckoutLocationConfiguration() {
         CustomerProductCatalogService unconfigured = new CustomerProductCatalogService(
                 productRepository,
