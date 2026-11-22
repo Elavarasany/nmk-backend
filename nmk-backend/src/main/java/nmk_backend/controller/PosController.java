@@ -56,7 +56,8 @@ public class PosController {
     public ResponseEntity<?> getSales(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Long locationId
+            @RequestParam(required = false) Long locationId,
+            Authentication authentication
     ) {
         if (page < 0 || size < 1 || size > 100
                 || (locationId != null && locationId <= 0)) {
@@ -68,16 +69,16 @@ public class PosController {
                 page, size, Sort.by(Sort.Direction.DESC, "createdAt")
                         .and(Sort.by(Sort.Direction.DESC, "id"))
         );
-        Page<PosSaleResponse> result = checkoutService.getSales(locationId, pageable);
+        Page<PosSaleResponse> result = checkoutService.getSales(locationId, pageable, authentication.getName(), authenticatedRole(authentication));
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/sales/{saleId}")
-    public ResponseEntity<PosSaleResponse> getSale(@PathVariable Long saleId) {
+    public ResponseEntity<?> getSale(@PathVariable Long saleId, Authentication authentication) {
         if (saleId <= 0) {
             return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.ok(checkoutService.getSale(saleId));
+        return ResponseEntity.ok(checkoutService.getSale(saleId, authentication.getName(), authenticatedRole(authentication)));
     }
 
     @PostMapping("/checkout")
