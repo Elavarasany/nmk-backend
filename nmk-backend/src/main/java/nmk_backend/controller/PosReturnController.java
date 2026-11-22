@@ -26,9 +26,9 @@ public class PosReturnController {
     }
 
     @GetMapping("/returns")
-    public ResponseEntity<?> getReturns(@PathVariable Long saleId) {
+    public ResponseEntity<?> getReturns(@PathVariable Long saleId, Authentication authentication) {
         try {
-            return ResponseEntity.ok(returnService.getReturns(saleId));
+            return ResponseEntity.ok(returnService.getReturns(saleId, authentication.getName(), authenticatedRole(authentication)));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
