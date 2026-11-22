@@ -28,7 +28,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
           AND o.orderDate < :orderDate
           AND o.reservationExpiresAt IS NOT NULL
           AND o.reservationExpiresAt <= :now
-        ORDER BY o.orderDate ASC, o.id ASC
     """)
     Page<Order> findExpiredStalePaymentCreations(
             @Param("paymentCreationStatuses") List<String> paymentCreationStatuses,
