@@ -108,7 +108,8 @@ class InventoryMySqlConcurrencyTest {
             InventoryBalance balance = balanceRepository
                     .findByLocationIdAndVariantId(ids.locationId(), ids.variantId())
                     .orElseThrow();
-            balanceRepository.deleteAndFlush(balance);
+            balanceRepository.delete(balance);
+            balanceRepository.flush();
             return null;
         });
 
