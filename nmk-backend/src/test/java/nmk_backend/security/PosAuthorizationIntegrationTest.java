@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -34,6 +35,9 @@ class PosAuthorizationIntegrationTest {
     private JwtService jwtService;
 
     @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
     private InventoryLocationRepository locationRepository;
 
     private String adminToken;
@@ -47,7 +51,7 @@ class PosAuthorizationIntegrationTest {
         String username = "pos-security-" + role.toLowerCase() + "-" + java.util.UUID.randomUUID();
         Admin account = new Admin();
         account.setUsername(username);
-        account.setPassword("test-only-password");
+        account.setPassword(passwordEncoder.encode("test-only-password"));
         account.setRole(role);
         account.setEnabled(true);
         adminRepository.saveAndFlush(account);
