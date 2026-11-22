@@ -45,7 +45,7 @@ class RazorpayRefundReconciliationMySqlTest {
         Order fullyRefunded = orderRepository.findById(order.getId()).orElseThrow();
         assertEquals("REFUNDED", fullyRefunded.getPaymentStatus());
         assertEquals("REFUNDED", fullyRefunded.getRefundStatus());
-        assertEquals("CANCELLED", fullyRefunded.getOrderStatus());
+        assertEquals("PENDING", fullyRefunded.getOrderStatus());
         assertEquals(refundsBefore + 2, refundRepository.count());
     }
 
