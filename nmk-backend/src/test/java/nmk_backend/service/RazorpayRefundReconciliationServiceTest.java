@@ -101,6 +101,38 @@ class RazorpayRefundReconciliationServiceTest {
     }
 
     @Test
+    void refundWebhookReceiptLinksThePrecreatedIdempotentRequest() {
+        Order order = paidOrder();
+        OrderRefund pending = new OrderRefund();
+        pending.setOrder(order);
+        pending.setRazorpayPaymentId("pay_123");
+        pending.setAmountPaise(5000L);
+        pending.setCurrency("INR");
+        pending.setStatus("PENDING");
+        pending.setReceipt("nmk_receipt_123");
+        pending.setRequestIdempotencyKey("refund-key-123456");
+
+        when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
+                .thenReturn(Optional.of(order));
+        when(refundRepository.findByRazorpayRefundIdForUpdate("rfnd_123"))
+                .thenReturn(Optional.empty());
+        when(refundRepository.findByReceiptForUpdate("nmk_receipt_123"))
+                .thenReturn(Optional.of(pending));
+        when(refundRepository.saveAndFlush(any(OrderRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(refundRepository.sumActiveAmountPaiseByOrderId(17L)).thenReturn(5000L);
+        when(refundRepository.sumProcessedAmountPaiseByOrderId(17L)).thenReturn(5000L);
+
+        service().reconcile("evt_receipt", "refund.processed", "rfnd_123",
+                "pay_123", 5000L, "INR", "processed", "nmk_receipt_123");
+
+        assertEquals("rfnd_123", pending.getRazorpayRefundId());
+        assertEquals("PROCESSED", pending.getStatus());
+        assertEquals("REFUNDED", order.getRefundStatus());
+        verify(refundRepository, never()).findByReceiptForUpdate("different_receipt");
+    }
+
+    @Test
     void refundTotalCannotExceedCapturedOrderAmount() {
         Order order = paidOrder();
         when(orderRepository.findByRazorpayPaymentIdForUpdate("pay_123"))
