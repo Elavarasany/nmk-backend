@@ -111,6 +111,9 @@ public class PosReportService {
             for (PosSale sale : salePage.getContent()) {
                 totals.addSale(sale);
             }
+            // All sale values and lazy child collections have been consumed by the
+            // accumulator; detach this batch before loading the next page.
+            entityManager.clear();
         } while (salePage.hasNext());
 
         pageNumber = 0;
@@ -123,6 +126,8 @@ public class PosReportService {
             for (PosReturn record : returnPage.getContent()) {
                 totals.addReturn(record);
             }
+            // Return details and refund allocations are consumed before detaching.
+            entityManager.clear();
         } while (returnPage.hasNext());
 
         return totals.toResponse(locationId, from, to, exchangeCreditApplied);
