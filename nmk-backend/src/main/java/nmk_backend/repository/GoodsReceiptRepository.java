@@ -22,6 +22,14 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Long
     List<GoodsReceipt> findByPurchaseOrderIdOrderByCreatedAtDesc(Long purchaseOrderId);
 
     @Query("""
+            select receipt.id from GoodsReceipt receipt
+            where receipt.purchaseOrder.id = :purchaseOrderId
+            order by receipt.createdAt desc, receipt.id desc
+            """)
+    Page<Long> findHistoryIds(@Param("purchaseOrderId") Long purchaseOrderId, Pageable pageable);
+
+
+    @Query("""
             select receipt.id
             from GoodsReceipt receipt
             where receipt.purchaseOrder.location.id = :locationId
