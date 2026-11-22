@@ -12,6 +12,9 @@ import java.util.Optional;
 public interface AdminRepository extends JpaRepository<Admin, Long> {
 
     Optional<Admin> findByUsername(String username);
+
+    @Query("select distinct a from Admin a left join fetch a.assignedLocations where lower(a.username) = lower(:username)")
+    Optional<Admin> findWithLocationsByUsername(@Param("username") String username);
     Optional<Admin> findByUsernameIgnoreCase(String username);
     boolean existsByUsername(String username);
     boolean existsByUsernameIgnoreCase(String username);
