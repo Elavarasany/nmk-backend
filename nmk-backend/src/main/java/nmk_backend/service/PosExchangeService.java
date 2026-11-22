@@ -185,6 +185,7 @@ public class PosExchangeService {
    BigDecimal amount=money(row.amount(),"Refund amount"); if(amount.signum()<=0) throw new IllegalArgumentException("Refund amount must be positive");
    String ref=row.transactionReference()==null?null:row.transactionReference().trim();
    if(!"CASH".equals(method)&&(ref==null||ref.isBlank())) throw new IllegalArgumentException("UPI/card refunds require a transaction reference");
+   if(ref!=null&&ref.length()>150) throw new IllegalArgumentException("Refund transaction reference cannot exceed 150 characters");
    PosRefundPayment p=new PosRefundPayment(); p.setReturnRecord(ret); p.setPaymentMethod(method); p.setAmount(amount); p.setTransactionReference(ref); ret.getRefundPayments().add(p); total=total.add(amount);
   }
   if(total.compareTo(due)!=0) throw new IllegalArgumentException("Refund allocations must equal actual refund");
