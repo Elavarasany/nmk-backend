@@ -34,7 +34,7 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 - A worker claims an event under a short row-locking transaction, then performs provider calls outside that transaction. Finalization checks the worker's claim token so a worker whose lease was reclaimed cannot overwrite the newer worker's result.
 - A processing lease expires after five minutes. Retryable provider/processing failures use bounded backoff and stop after eight claims.
 - If a worker repeatedly disappears after claiming an event, stale claims are also counted toward the eight-attempt limit; an event at the limit is moved to `MANUAL_REVIEW` rather than reclaimed indefinitely.
-- `MANUAL_REVIEW` is a terminal operational queue state in the current implementation. It requires an operator to inspect the provider dashboard and local order/refund records, document the outcome, and resolve the case through an approved operational procedure. A read-only manager/admin API queue now lists paginated MANUAL_REVIEW events with event metadata and extracted provider resource/payment/order IDs, amount, currency and provider status. It deliberately does not expose raw webhook JSON. There is still no frontend review screen, resolution action, retry/reconciliation workflow, or audited outcome record in this branch.
+- `MANUAL_REVIEW` is a terminal operational queue state in the current implementation. It requires an operator to inspect the provider dashboard and local order/refund records, document the outcome, and resolve the case through an approved operational procedure. A read-only manager/admin API queue now lists paginated MANUAL_REVIEW events with event metadata and extracted provider resource/payment/order IDs, amount, currency and provider status. It deliberately does not expose raw webhook JSON. A manager/admin-only Payment exceptions tab is now available in the POS frontend and consumes this read-only API. There is still no resolution action, retry/reconciliation workflow, or audited outcome record in this branch.
 - Operations must monitor `RETRY`, stale `PROCESSING`, and `MANUAL_REVIEW` records. The current scheduler logs processing failures but does not send alerts or provide a dashboard/metrics view.
 - The retry/claim SQL scripts are manual staging-first schema changes. The POS migration chain does not create the pre-existing webhook event table; verify that table and all expected columns/indexes exist during the client-schema inspection. Do not apply these scripts to a live database without backup, exact schema comparison and an approved migration record.
 
@@ -44,6 +44,16 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 - Access is restricted to `ROLE_ADMIN` and `ROLE_MANAGER`; cashiers and unauthenticated users must be denied.
 - Response includes event ID/type/status/time/attempt count/error and safely extracted provider resource ID, payment ID, order ID, amount in paise, currency and provider status. Raw payload is never returned.
 - This is visibility only. It does not initiate a refund, mark a refund paid, retry an event, or change a review status. Reconciliation remains a documented manual process until a provider-linked ledger and audited resolution workflow are designed.
+
+### Interim manual handling procedure
+
+1. Open POS → Payment exceptions using a manager/admin account. Do not share screenshots containing customer or payment identifiers outside approved business channels.
+2. Match the event ID and provider refund/payment ID in the Razorpay merchant dashboard. Confirm the exact amount, currency, original payment, current provider status and event timestamp.
+3. Locate the corresponding local order or POS return using the payment/order identifiers and the recorded POS return reference. If there is no reliable match, stop and escalate; do not guess based on amount alone.
+4. Preserve the provider dashboard/export evidence and record the reviewer, review time, event ID, local sale/return reference, provider refund ID, confirmed amount/status and discrepancy/outcome in the shop's approved reconciliation log.
+5. Do not mark a local refund complete, issue a second refund, or alter the event status through SQL. The queue is intentionally read-only until an audited resolution workflow and provider linkage are implemented.
+
+This procedure is a temporary control, not an automated reconciliation feature. Agree the evidence location, retention period and responsible reviewer with the client before go-live.
 
 ## What is not implemented
 
