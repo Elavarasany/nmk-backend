@@ -114,6 +114,95 @@ class PosReturnMySqlConcurrencyTest {
         }
     }
 
+
+    @Test
+    void shiftCloseAndCashRefundSerializeOnMySql() throws Exception {
+        Fixture fixture = createFixture();
+        inventoryService.receiveStock(
+                fixture.locationId(), fixture.variantId(), 1,
+                "MYSQL-CLOSE-REFUND-OPENING-" + UUID.randomUUID(), null,
+                "Opening unit for close/refund race test"
+        );
+
+        PosCheckoutRequest checkout = new PosCheckoutRequest();
+        checkout.setLocationId(fixture.locationId());
+        checkout.setShiftId(fixture.shiftId());
+        checkout.setIdempotencyKey("MYSQL-CLOSE-REFUND-SALE-" + UUID.randomUUID());
+        checkout.setDiscountAmount(new BigDecimal("0.00"));
+        PosSaleItemRequest saleItem = new PosSaleItemRequest();
+        saleItem.setProductId(fixture.productId());
+        saleItem.setVariantId(fixture.variantId());
+        saleItem.setQuantity(1);
+        checkout.setItems(List.of(saleItem));
+        PosPaymentRequest payment = new PosPaymentRequest();
+        payment.setPaymentMethod("CASH");
+        payment.setAmount(new BigDecimal("100.00"));
+        payment.setTenderedAmount(new BigDecimal("100.00"));
+        checkout.setPayments(List.of(payment));
+
+        PosSaleResponse sale = checkoutService.checkout(checkout, fixture.username());
+        Long saleItemId = saleItemRepository.findBySaleId(sale.id()).get(0).getId();
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<Outcome> refundFuture = executor.submit(() -> {
+                ready.countDown();
+                try {
+                    if (!start.await(15, TimeUnit.SECONDS)) {
+                        return new Outcome(false, new TimeoutException("Race start timed out"));
+                    }
+                    PosReturnRequest request = new PosReturnRequest(
+                            fixture.shiftId(), "Close/refund serialization test",
+                            "MYSQL-CLOSE-REFUND-KEY-" + UUID.randomUUID(),
+                            List.of(new PosReturnItemRequest(saleItemId, 1, "RESTOCK", null)),
+                            List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("100.00"), null))
+                    );
+                    returnService.processReturn(sale.id(), request, fixture.username());
+                    return new Outcome(true, null);
+                } catch (Throwable failure) {
+                    return new Outcome(false, failure);
+                }
+            });
+            Future<?> closeFuture = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(15, TimeUnit.SECONDS)) {
+                    throw new TimeoutException("Race start timed out");
+                }
+                return shiftService.closeShift(
+                        fixture.shiftId(),
+                        new PosShiftCloseRequest(new BigDecimal("100.00"),
+                                "Count fixed for close/refund concurrency test"),
+                        fixture.username(), "CASHIER"
+                );
+            });
+
+            assertTrue(ready.await(15, TimeUnit.SECONDS), "Both MySQL workers should be ready");
+            start.countDown();
+            Outcome refund = refundFuture.get(30, TimeUnit.SECONDS);
+            var closedShift = (nmk_backend.dto.PosShiftResponse) closeFuture.get(30, TimeUnit.SECONDS);
+
+            assertEquals("CLOSED", closedShift.status());
+            if (refund.successful()) {
+                assertEquals(new BigDecimal("100.00"), closedShift.expectedCash(),
+                        "Refund must be included before the shift is closed");
+                assertEquals(1, returnRepository.findBySaleIdOrderByCreatedAtDesc(sale.id()).size());
+                assertEquals(new BigDecimal("0.00"), closedShift.cashVariance());
+            } else {
+                assertTrue(refund.failure() instanceof IllegalArgumentException,
+                        "A refund arriving after close must be rejected, not fail unexpectedly");
+                assertEquals(new BigDecimal("200.00"), closedShift.expectedCash(),
+                        "A close that wins the lock must preserve pre-refund drawer cash");
+                assertEquals(0, returnRepository.findBySaleIdOrderByCreatedAtDesc(sale.id()).size());
+                assertEquals(new BigDecimal("-100.00"), closedShift.cashVariance());
+            }
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private Outcome returnOne(
             Fixture fixture, Long saleId, Long saleItemId,
             CountDownLatch ready, CountDownLatch start
