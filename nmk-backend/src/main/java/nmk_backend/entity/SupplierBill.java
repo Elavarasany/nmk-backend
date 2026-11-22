@@ -42,6 +42,9 @@ public class SupplierBill {
     @Column(name = "paid_amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal paidAmount = new BigDecimal("0.00");
 
+    @Column(name = "credited_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal creditedAmount = new BigDecimal("0.00");
+
     @Column(name = "bill_type", nullable = false, length = 20)
     private String billType;
 
@@ -64,6 +67,7 @@ public class SupplierBill {
     void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (paidAmount == null) paidAmount = new BigDecimal("0.00");
+        if (creditedAmount == null) creditedAmount = new BigDecimal("0.00");
     }
 
     public Long getId() { return id; }
@@ -81,6 +85,8 @@ public class SupplierBill {
     public void setAmount(BigDecimal value) { amount = value; }
     public BigDecimal getPaidAmount() { return paidAmount; }
     public void setPaidAmount(BigDecimal value) { paidAmount = value; }
+    public BigDecimal getCreditedAmount() { return creditedAmount; }
+    public void setCreditedAmount(BigDecimal value) { creditedAmount = value; }
     public String getBillType() { return billType; }
     public void setBillType(String value) { billType = value; }
     public String getStatus() { return status; }
