@@ -25,7 +25,9 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 
 - Checkout signatures are verified, and payment confirmation fetches the payment from Razorpay to confirm captured status, matching Razorpay order ID and exact amount.
 - Signed webhook events are durably stored and deduplicated by event ID. Only `payment.captured` can confirm an online order; the worker verifies provider state before confirmation and sends conflicts/late captures to manual review.
-- Other signed non-refund event types are stored/processed for webhook audit. Signed `refund.*` events are now routed to `MANUAL_REVIEW` rather than marked `PROCESSED`, because no provider-refund-to-POS-ledger reconciliation exists yet. They do not automatically update a POS refund or online-order refund state.
+- Signed `refund.created`, `refund.processed` and `refund.failed` events update the online-order refund ledger. They are matched by Razorpay refund ID, or by the local receipt when a webhook arrives before the refund API response is saved. Conflicts and unmatched events go to manual review.
+- Admins can initiate full or partial normal-speed refunds from Admin → Orders. The backend requires a fresh admin password authorization, a verified paid order, a reason, a remaining refundable balance, and a unique local idempotency key. It reserves the amount locally before the provider call and sends Razorpay's `X-Refund-Idempotency` header plus a unique receipt. A lost/ambiguous provider response remains pending and must be retried with the same key; the UI recovers that key from the local request record.
+- Instant refunds are not exposed. Provider webhook status, not the initial button response, remains authoritative for final refund completion.
 - The online-order Razorpay payment flow is separate from the walk-in POS UPI/card tender records. A POS transaction reference is not automatically linked to a Razorpay order/payment ID.
 
 ### Webhook retry and worker recovery controls
@@ -60,10 +62,9 @@ This procedure is a temporary control, not an automated reconciliation feature. 
 
 1. Provider-backed validation of POS UPI/card payments.
 2. Durable mapping from POS tender rows to provider account, provider payment ID, order ID, capture status and settlement batch.
-3. Automated Razorpay refund creation, refund ID storage, provider status polling/webhook reconciliation and idempotent retry. Refund webhook events currently require manual review; they are not proof that a POS or online-order refund ledger was updated.
-4. Bank payout/settlement import and matching of gross captured amounts, fees, taxes on fees, refunds, chargebacks and net deposits.
-5. Exception queues for unmatched, duplicate, short-paid, late, reversed or disputed transactions.
-6. A daily settlement reconciliation report that proves POS tender totals against provider settlement statements and bank credits.
+3. Bank payout/settlement import and matching of gross captured amounts, fees, taxes on fees, refunds, chargebacks and net deposits.
+4. Exception queues for unmatched, duplicate, short-paid, late, reversed or disputed POS transactions and bank settlements.
+5. A daily settlement reconciliation report that proves POS tender totals against provider settlement statements and bank credits.
 
 The current POS payment-method report is an operational total of amounts entered at checkout. It is not a Razorpay settlement report, bank reconciliation, or proof of cleared funds.
 
@@ -71,7 +72,8 @@ The current POS payment-method report is an operational total of amounts entered
 
 - Cash: reconcile expected drawer cash against the physical count at shift close; investigate and document variance.
 - UPI/card: independently confirm successful payment in the merchant/provider app before completing the sale. Record the actual provider transaction reference, not a customer screenshot or arbitrary note.
-- Refunds: complete and verify the refund through the provider/bank first; only then record the confirmed reference and allocation in POS. Do not treat a POS refund record as evidence of provider transfer.
+- Online orders: initiate normal-speed full/partial refunds only from Admin → Orders. Every request requires fresh admin password authorization and a unique idempotency key. If the provider result is uncertain, retry the same request with the same key; never generate a new key to work around a timeout. Wait for signed Razorpay webhooks to confirm final status.
+- Refunds do not automatically cancel orders or restock inventory. After a confirmed refund, use the approved audited inventory adjustment/return workflow and obtain the client's stock disposition policy. POS walk-in UPI/card refund allocations remain operator-entered records and are not provider-verified.
 - Daily close: compare POS UPI/card totals against provider transaction exports, then compare provider net settlement against bank credits after fees/refunds. Keep the provider statement and reconciliation evidence.
 - Escalate any amount/reference mismatch; do not silently edit or delete a completed POS sale.
 
@@ -84,6 +86,6 @@ The current POS payment-method report is an operational total of amounts entered
 
 ## Release status
 
-POS cash drawer controls are implemented, but non-cash POS tender and refund records remain operator-entered operational records. Do not describe POS financial close as fully reconciled or enable automated provider refunds until provider integration, settlement matching and exception handling are implemented and tested.
+POS cash drawer controls are implemented. Online-order Razorpay normal-speed refunds now have an admin-only, password-authorized, idempotent initiation path with signed webhook reconciliation. Walk-in POS non-cash tender/refund records remain operator-entered operational records. Bank settlement matching, provider validation of POS tenders, chargeback reconciliation and full financial close remain unimplemented.
 
 No provider credentials, client bank data or live settlement files were accessed during this review. No live database was changed.
