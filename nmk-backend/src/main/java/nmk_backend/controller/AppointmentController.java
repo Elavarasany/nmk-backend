@@ -9,11 +9,13 @@ import nmk_backend.entity.Appointment;
 import nmk_backend.repository.AppointmentRepository;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import nmk_backend.service.AdminActionAuthorizationService;
@@ -25,13 +27,16 @@ public class AppointmentController {
     private final AdminActionAuthorizationService authorizationService;
 
     private final AppointmentRepository appointmentRepository;
+    private final ZoneId businessZone;
 
     public AppointmentController(
             AppointmentRepository appointmentRepository,
-            AdminActionAuthorizationService authorizationService
+            AdminActionAuthorizationService authorizationService,
+            @Value("${app.business.time-zone:Asia/Kolkata}") String businessTimeZone
     ) {
         this.appointmentRepository = appointmentRepository;
         this.authorizationService = authorizationService;
+        this.businessZone = ZoneId.of(businessTimeZone);
     }
     @DeleteMapping("/clear")
     @Transactional
@@ -87,7 +92,7 @@ public class AppointmentController {
                     .body(Map.of("message", "Please provide all required details."));
         }
 
-        if (appointment.getAppointmentDate().isBefore(LocalDate.now())) {
+        if (appointment.getAppointmentDate().isBefore(LocalDate.now(businessZone))) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Appointment date cannot be in the past."));
         }
