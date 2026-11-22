@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -20,22 +21,28 @@ public class PosCheckoutRequest {
     @Positive
     private Long shiftId;
 
+    @Size(max = 150)
     private String customerName;
+
+    @Size(max = 30)
     private String customerPhone;
 
     @NotNull
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
     @NotBlank
+    @Size(max = 100)
     private String idempotencyKey;
 
     @NotEmpty
+    @Size(max = 100)
     @Valid
-    private List<PosSaleItemRequest> items;
+    private List<@NotNull @Valid PosSaleItemRequest> items;
 
     @NotEmpty
+    @Size(max = 3)
     @Valid
-    private List<PosPaymentRequest> payments;
+    private List<@NotNull @Valid PosPaymentRequest> payments;
 
     public Long getLocationId() {
         return locationId;
