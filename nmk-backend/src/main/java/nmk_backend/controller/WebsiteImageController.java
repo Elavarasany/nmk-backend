@@ -13,7 +13,13 @@ import java.util.Set;
 @RequestMapping("/api")
 public class WebsiteImageController {
 
-    private static final Set<String> ALLOWED_IMAGE_KEYS = Set.of("HERO", "LOGO", "STORE");
+    private static final Set<String> ALLOWED_IMAGE_KEYS = Set.of(
+            "HERO", "LOGO", "STORE",
+            "CATEGORY_EYEGLASSES",
+            "CATEGORY_SUNGLASSES",
+            "CATEGORY_CONTACT_LENSES",
+            "CATEGORY_COMPUTER_GLASSES"
+    );
 
     private final WebsiteImageRepository websiteImageRepository;
 
