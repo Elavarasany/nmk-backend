@@ -17,7 +17,6 @@ import java.util.regex.Pattern;
 public class RazorpayRefundReconciliationService {
     private static final Pattern REFUND_ID = Pattern.compile("rfnd_[A-Za-z0-9]+");
     private static final Pattern PAYMENT_ID = Pattern.compile("pay_[A-Za-z0-9]+");
-    private static final Pattern RECEIPT = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
     private final OrderRepository orderRepository;
     private final OrderRefundRepository refundRepository;
@@ -61,7 +60,7 @@ public class RazorpayRefundReconciliationService {
                 || paymentId == null || !PAYMENT_ID.matcher(paymentId).matches()
                 || amountPaise <= 0
                 || !"INR".equalsIgnoreCase(currency)
-                || (receipt != null && !receipt.isBlank() && !RECEIPT.matcher(receipt).matches())) {
+                || (receipt != null && (receipt.length() > 64 || receipt.chars().anyMatch(Character::isISOControl)))) {
             throw new IllegalArgumentException("Razorpay refund payload is incomplete or invalid");
         }
 
