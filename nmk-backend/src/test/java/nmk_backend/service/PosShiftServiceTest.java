@@ -349,6 +349,47 @@ class PosShiftServiceTest {
         );
     }
 
+    @Test
+    void dailyCashReconciliationRecalculatesDrawerTotalsFromTheMovementLedger() {
+        shift.setStatus("CLOSED");
+        shift.setExpectedCash(new BigDecimal("130.00"));
+        shift.setClosingCashCount(new BigDecimal("125.00"));
+        shift.setCashVariance(new BigDecimal("-5.00"));
+        shift.setClosingReason("Short count investigated");
+        when(locationRepository.findById(1L)).thenReturn(Optional.of(shift.getRegister().getLocation()));
+        when(shiftRepository
+                .findByRegisterLocationIdAndOpenedAtGreaterThanEqualAndOpenedAtLessThanOrderByOpenedAtAscIdAsc(
+                        eq(1L), any(), any()))
+                .thenReturn(List.of(shift));
+        when(movementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                movement("OPENING_FLOAT", "IN", "100.00", shift),
+                movement("CASH_SALE", "IN", "40.00", shift),
+                movement("CASH_OUT", "OUT", "10.00", shift)
+        ));
+
+        var result = service.getDailyCashReconciliation(
+                1L, java.time.LocalDate.of(2026, 11, 22), "manager.one", "MANAGER"
+        );
+
+        assertEquals(1, result.shiftCount());
+        assertEquals(0, result.openShiftCount());
+        assertEquals(1, result.closedShiftCount());
+        assertEquals(1, result.discrepancyCount());
+        assertEquals(new BigDecimal("130.00"), result.expectedCashTotal());
+        assertEquals(new BigDecimal("125.00"), result.countedCashTotal());
+        assertEquals(new BigDecimal("-5.00"), result.varianceTotal());
+        assertTrue(result.shifts().getFirst().ledgerConsistent());
+        assertEquals(new BigDecimal("130.00"), result.shifts().getFirst().ledgerExpectedCash());
+    }
+
+    @Test
+    void dailyCashReconciliationIsRestrictedToManagersAndAdministrators() {
+        assertThrows(IllegalArgumentException.class, () -> service.getDailyCashReconciliation(
+                1L, java.time.LocalDate.of(2026, 11, 22), "cashier.one", "CASHIER"
+        ));
+        verifyNoInteractions(locationRepository, shiftRepository, movementRepository);
+    }
+
     private PosCashMovement movement(String type, String direction, String amount, PosShift shift) {
         PosCashMovement movement = new PosCashMovement();
         movement.setShift(shift);
