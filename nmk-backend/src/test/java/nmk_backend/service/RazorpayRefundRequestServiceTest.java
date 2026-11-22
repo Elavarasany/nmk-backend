@@ -92,6 +92,7 @@ class RazorpayRefundRequestServiceTest {
         existing.setRequestIdempotencyKey("refund-key-123456");
         existing.setReceipt("nmk_receipt_123");
         existing.setRazorpayPaymentId("pay_123");
+        when(orderRepository.findByIdForUpdate(45L)).thenReturn(Optional.of(order));
         when(refundRepository.findByRequestIdempotencyKeyForUpdate("refund-key-123456"))
                 .thenReturn(Optional.of(existing));
 
@@ -100,7 +101,7 @@ class RazorpayRefundRequestServiceTest {
 
         assertEquals("nmk_receipt_123", prepared.receipt());
         assertFalse(prepared.newlyCreated());
-        verifyNoInteractions(orderRepository);
+        verify(orderRepository).findByIdForUpdate(45L);
         verify(refundRepository, never()).saveAndFlush(any());
     }
 
@@ -131,6 +132,7 @@ class RazorpayRefundRequestServiceTest {
         existing.setAmountPaise(5000L);
         existing.setStatus("PENDING");
         existing.setReason("Customer cancellation");
+        when(orderRepository.findByIdForUpdate(45L)).thenReturn(Optional.of(order));
         when(refundRepository.findByRequestIdempotencyKeyForUpdate("refund-key-123456"))
                 .thenReturn(Optional.of(existing));
 
