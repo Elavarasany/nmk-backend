@@ -240,6 +240,8 @@ class PosReturnMySqlConcurrencyTest {
         location.setName("MySQL Return Test " + suffix);
         location.setActive(true);
         location = locationRepository.saveAndFlush(location);
+        admin.setAssignedLocations(java.util.Set.of(location));
+        adminRepository.saveAndFlush(admin);
 
         PosRegisterResponse register = shiftService.createRegister(
                 new PosRegisterCreateRequest(location.getId(), "RET-" + suffix, "Return Test Register")
