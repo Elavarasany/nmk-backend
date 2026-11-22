@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Sort;
+import org.springframework.dao.DataIntegrityViolationException;
 import nmk_backend.dto.*;
 import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
@@ -173,7 +174,13 @@ public class ProcurementService {
         supplier.setPhone(trimToNull(request.phone()));
         supplier.setEmail(trimToNull(request.email()));
         supplier.setAddress(trimToNull(request.address()));
-        return SupplierResponse.from(supplierRepository.saveAndFlush(supplier));
+        try {
+            // The pre-check gives a friendly response, while the database unique
+            // constraint remains the final guard against concurrent duplicate inserts.
+            return SupplierResponse.from(supplierRepository.saveAndFlush(supplier));
+        } catch (DataIntegrityViolationException exception) {
+            throw new IllegalArgumentException("A supplier with this name already exists");
+        }
     }
 
     @Transactional
