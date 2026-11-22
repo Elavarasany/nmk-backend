@@ -211,6 +211,12 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
     }
 
     @Test
+    void disputeLedgerRequiresAdminAuthentication() throws Exception {
+        mockMvc.perform(get("/api/admin/pos/payments/disputes"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void settlementSynchronizationRequiresAdminAuthentication() throws Exception {
         mockMvc.perform(post("/api/admin/pos/payments/settlements/sync")
                         .param("year", "2026")
