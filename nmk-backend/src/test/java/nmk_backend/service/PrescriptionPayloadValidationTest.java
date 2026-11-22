@@ -106,4 +106,33 @@ class PrescriptionPayloadValidationTest {
                 () -> OrderService.validatePrescriptionPayload(prescription)
         );
     }
+    @Test
+    void acceptsPrescriptionImageFromApprovedCloudinaryFolder() {
+        assertDoesNotThrow(() -> {
+            if (!OrderService.isAllowedPrescriptionImageUrl(
+                    "https://res.cloudinary.com/nmk/image/upload/v123/nmk-prescriptions/rx.pdf")) {
+                throw new IllegalArgumentException("URL should be allowed");
+            }
+        });
+    }
+
+    @Test
+    void rejectsPrescriptionImagesFromUntrustedHostsOrFolders() {
+        org.junit.jupiter.api.Assertions.assertFalse(
+                OrderService.isAllowedPrescriptionImageUrl(
+                        "https://evil.example/nmk-prescriptions/rx.pdf"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                OrderService.isAllowedPrescriptionImageUrl(
+                        "https://res.cloudinary.com/nmk/image/upload/v123/other/rx.jpg"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                OrderService.isAllowedPrescriptionImageUrl(
+                        "https://user@res.cloudinary.com/nmk-prescriptions/rx.jpg"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                OrderService.isAllowedPrescriptionImageUrl(
+                        "https://res.cloudinary.com.evil.example/nmk-prescriptions/rx.jpg"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                OrderService.isAllowedPrescriptionImageUrl(
+                        "http://res.cloudinary.com/nmk-prescriptions/rx.jpg"));
+    }
+
 }
