@@ -30,6 +30,7 @@ class RazorpayRefundReconciliationMySqlTest {
         order.setPaymentStatus("PAID");
         order.setRazorpayPaymentId(paymentId);
         order = orderRepository.saveAndFlush(order);
+        long refundsBefore = refundRepository.count();
 
         service.reconcile("evt_" + suffix + "a", "refund.processed",
                 "rfnd_" + suffix + "a", paymentId, 5000L, "INR", "processed");
@@ -44,7 +45,7 @@ class RazorpayRefundReconciliationMySqlTest {
         Order fullyRefunded = orderRepository.findById(order.getId()).orElseThrow();
         assertEquals("REFUNDED", fullyRefunded.getPaymentStatus());
         assertEquals("REFUNDED", fullyRefunded.getRefundStatus());
-        assertEquals(2, refundRepository.count());
+        assertEquals(refundsBefore + 2, refundRepository.count());
     }
 
     @Test
