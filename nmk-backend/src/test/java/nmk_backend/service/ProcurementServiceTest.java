@@ -338,6 +338,36 @@ class ProcurementServiceTest {
         verify(supplierReturnRepository, never()).saveAndFlush(any());
         verifyNoInteractions(inventoryService);
     }
+
+    @Test
+    void supplierListingUsesBoundedPagesAndPreservesSupplierDtos() {
+        when(supplierRepository.findAllByOrderByNameAsc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(supplier), PageRequest.of(0, 50), 1));
+
+        var result = service.getSuppliers(0, 50);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Optical Frames Supplier", result.getContent().get(0).name());
+        verify(supplierRepository).findAllByOrderByNameAsc(any(Pageable.class));
+        assertThrows(IllegalArgumentException.class, () -> service.getSuppliers(0, 101));
+    }
+
+    @Test
+    void purchaseOrderListingPagesIdsAndReturnsCompleteOrderDtos() {
+        when(purchaseOrderRepository.findHistoryIds(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(20L), PageRequest.of(0, 25), 1));
+        when(purchaseOrderRepository.findAllByIdIn(List.of(20L))).thenReturn(List.of(order));
+
+        var result = service.getPurchaseOrders(0, 25);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("PO-TEST-002", result.getContent().get(0).orderNumber());
+        assertEquals(1, result.getContent().get(0).items().size());
+        verify(purchaseOrderRepository).findHistoryIds(any(Pageable.class));
+        verify(purchaseOrderRepository).findAllByIdIn(List.of(20L));
+        assertThrows(IllegalArgumentException.class, () -> service.getPurchaseOrders(0, 101));
+    }
+
     @Test
     void procurementAuditHistoryReturnsEmptyListsForExistingOrder() {
         when(purchaseOrderRepository.existsById(20L)).thenReturn(true);
