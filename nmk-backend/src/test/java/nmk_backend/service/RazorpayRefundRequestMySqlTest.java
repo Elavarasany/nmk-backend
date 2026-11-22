@@ -10,6 +10,10 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,6 +23,45 @@ class RazorpayRefundRequestMySqlTest {
     @Autowired private RazorpayRefundRequestService requestService;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderRefundRepository refundRepository;
+
+    @Test
+    void concurrentRefundRequestsCannotReserveMoreThanOnePendingRefund() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        Order order = new Order();
+        order.setCustomerName("Concurrent refund request test");
+        order.setTotalAmount(new BigDecimal("125.00"));
+        order.setPaymentStatus("PAID");
+        order.setRazorpayPaymentId("pay_" + suffix);
+        order.setRazorpayOrderId("order_" + suffix);
+        order = orderRepository.saveAndFlush(order);
+        Long orderId = order.getId();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> first = executor.submit(() -> attempt(orderId, suffix, "one", ready, start));
+            Future<Boolean> second = executor.submit(() -> attempt(orderId, suffix, "two", ready, start));
+            ready.await();
+            start.countDown();
+
+            int accepted = (first.get() ? 1 : 0) + (second.get() ? 1 : 0);
+            assertEquals(1, accepted);
+            assertEquals(1, refundRepository.findByOrderIdOrderByCreatedAtDesc(orderId).size());
+        }
+    }
+
+    private boolean attempt(Long orderId, String suffix, String label,
+                            CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        start.await();
+        try {
+            requestService.prepare(orderId, 7000L, "Concurrent partial refund",
+                    "refund_" + suffix + "_" + label, "admin");
+            return true;
+        } catch (IllegalStateException exception) {
+            return false;
+        }
+    }
 
     @Test
     void persistsAndReusesTheSameRefundRequestOnMySql() {
