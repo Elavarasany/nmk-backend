@@ -36,11 +36,13 @@ class StalePaymentCreationReviewServiceTest {
         order.setInventoryLocationId(7L);
         order.setReservationExpiresAt(now.plusMinutes(15));
 
-        when(orderRepository
-                .findByPaymentCreationStatusAndPaymentStatusAndStockReservedTrueAndOrderDateBeforeOrderByOrderDateAsc(
-                        eq("IN_PROGRESS"), eq("PENDING"), any(LocalDateTime.class), any(PageRequest.class)
-                ))
-                .thenReturn(new PageImpl<>(List.of(order)));
+        when(orderRepository.findExpiredStalePaymentCreations(
+                eq(List.of("IN_PROGRESS", "CREATED")),
+                eq("PENDING"),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(PageRequest.class)
+        )).thenReturn(new PageImpl<>(List.of(order)));
 
         var page = new StalePaymentCreationReviewService(orderRepository)
                 .getStalePaymentCreations(0, 25, 10);
