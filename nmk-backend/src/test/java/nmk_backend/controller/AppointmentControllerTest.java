@@ -1,6 +1,11 @@
 package nmk_backend.controller;
 
 import nmk_backend.entity.Appointment;
+import nmk_backend.dto.AppointmentResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import java.util.List;
 import nmk_backend.repository.AppointmentRepository;
 import nmk_backend.service.AdminActionAuthorizationService;
 import org.junit.jupiter.api.Test;
@@ -44,8 +49,32 @@ class AppointmentControllerTest {
         var response = controller.bookAppointment(appointment);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertEquals("PENDING", ((Appointment) response.getBody()).getStatus());
+        assertEquals("PENDING", ((AppointmentResponse) response.getBody()).status());
         verify(repository).save(appointment);
+    }
+
+    @Test
+    void returnsAppointmentsInDeterministicPages() {
+        Appointment appointment = validAppointment();
+        appointment.setId(12L);
+        when(repository.findAllByOrderByAppointmentDateAscAppointmentTimeAscIdAsc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(appointment)));
+
+        var response = controller.getAllAppointments(0, 25);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Page<?> page = (Page<?>) response.getBody();
+        assertNotNull(page);
+        assertEquals(1, page.getTotalElements());
+        assertEquals(12L, ((AppointmentResponse) page.getContent().get(0)).id());
+    }
+
+    @Test
+    void rejectsInvalidAppointmentPageBounds() {
+        assertEquals(HttpStatus.BAD_REQUEST, controller.getAllAppointments(-1, 25).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.getAllAppointments(0, 0).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.getAllAppointments(0, 101).getStatusCode());
+        verifyNoInteractions(repository);
     }
 
     private Appointment validAppointment() {
