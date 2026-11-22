@@ -19,10 +19,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByTrackingToken(String trackingToken);
 
-    Page<Order> findByPaymentCreationStatusAndPaymentStatusAndStockReservedTrueAndOrderDateBeforeOrderByOrderDateAsc(
-            String paymentCreationStatus,
-            String paymentStatus,
-            LocalDateTime orderDate,
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.paymentCreationStatus IN :paymentCreationStatuses
+          AND o.paymentStatus = :paymentStatus
+          AND o.stockReserved = true
+          AND o.orderDate < :orderDate
+          AND o.reservationExpiresAt IS NOT NULL
+          AND o.reservationExpiresAt <= :now
+        ORDER BY o.orderDate ASC, o.id ASC
+    """)
+    Page<Order> findExpiredStalePaymentCreations(
+            @Param("paymentCreationStatuses") List<String> paymentCreationStatuses,
+            @Param("paymentStatus") String paymentStatus,
+            @Param("orderDate") LocalDateTime orderDate,
+            @Param("now") LocalDateTime now,
             Pageable pageable
     );
 
