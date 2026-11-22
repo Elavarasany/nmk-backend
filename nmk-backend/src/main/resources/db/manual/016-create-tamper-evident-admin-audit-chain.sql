@@ -5,7 +5,7 @@
 -- verified backup. Flyway remains disabled until the legacy schema is baselined.
 --
 -- Run once. This creates the audit event table, a singleton serialization row,
--- and database triggers that reject UPDATE/DELETE against recorded events.
+-- and database triggers that reject UPDATE/DELETE against recorded events.\n-- If a pre-chain admin_audit_events table already exists without hash columns, stop\n-- and perform a reviewed data backfill; CREATE TABLE IF NOT EXISTS will not alter it.
 -- The application writes SHA-256(previous_hash + canonical event fields) and
 -- advances the singleton state row in the same transaction.
 
@@ -39,24 +39,19 @@ CREATE TABLE IF NOT EXISTS admin_audit_chain_state (
 ) ENGINE=InnoDB;
 
 INSERT INTO admin_audit_chain_state (id, last_event_id, last_hash)
-VALUES (1, NULL, '0000000000000000000000000000000000000000000000000000000000000000');
+VALUES (1, NULL, '0000000000000000000000000000000000000000000000000000000000000000')\nON DUPLICATE KEY UPDATE id = VALUES(id);
 
-DELIMITER //
+DROP TRIGGER IF EXISTS trg_admin_audit_events_no_update;
+DROP TRIGGER IF EXISTS trg_admin_audit_events_no_delete;
 
 CREATE TRIGGER trg_admin_audit_events_no_update
 BEFORE UPDATE ON admin_audit_events
 FOR EACH ROW
-BEGIN
-    SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Admin audit events are append-only';
-END//
+SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Admin audit events are append-only';
 
 CREATE TRIGGER trg_admin_audit_events_no_delete
 BEFORE DELETE ON admin_audit_events
 FOR EACH ROW
-BEGIN
-    SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Admin audit events are append-only';
-END//
-
-DELIMITER ;
+SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Admin audit events are append-only';
