@@ -160,7 +160,8 @@ class RazorpayWebhookProcessorTest {
                         "payment_id":"pay_123",
                         "amount":5000,
                         "currency":"INR",
-                        "status":"processed"
+                        "status":"processed",
+                        "receipt":"nmk_receipt_123"
                       }
                     }
                   }
@@ -179,7 +180,7 @@ class RazorpayWebhookProcessorTest {
         assertNull(event.getProcessingStartedAt());
 
         verify(refundReconciliationService).reconcile(
-                "evt_test_1", "refund.processed", "rfnd_123", "pay_123", 5000L, "INR", "processed"
+                "evt_test_1", "refund.processed", "rfnd_123", "pay_123", 5000L, "INR", "processed", "nmk_receipt_123"
         );
         verifyNoInteractions(orderRepository, razorpayService, paymentVerificationService);
     }
