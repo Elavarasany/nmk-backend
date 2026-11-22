@@ -115,6 +115,9 @@ class PosCheckoutTransactionIntegrationTest {
     @Autowired
     private PosShiftService shiftService;
 
+    @Autowired
+    private PosReportService reportService;
+
     private Long shiftId;
     private InventoryLocation location;
     private Product product;
@@ -839,6 +842,54 @@ class PosCheckoutTransactionIntegrationTest {
         assertEquals(0, finalBalance.getOnHandQuantity(),
                 "The restock must roll back because the drawer refund could not be funded");
         assertEquals(0, finalBalance.getReservedQuantity());
+    }
+
+
+    @Test
+    void exchangeReportSeparatesRetailCreditFromActualTenderAndRefundsOnMySql() {
+        InventoryBalance balance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        balance.setOnHandQuantity(2);
+        balanceRepository.saveAndFlush(balance);
+
+        var original = checkoutService.checkout(
+                buildCheckoutRequest("POS-REPORT-EXCHANGE-ORIGINAL-" + System.nanoTime()),
+                "pos-rollback-test-cashier"
+        );
+        Long originalItemId = saleItemRepository.findBySaleId(original.id()).get(0).getId();
+
+        PosSaleItemRequest replacementLine = new PosSaleItemRequest();
+        replacementLine.setProductId(product.getId());
+        replacementLine.setVariantId(variant.getId());
+        replacementLine.setQuantity(1);
+        PosExchangeRequest exchangeRequest = new PosExchangeRequest(
+                shiftId,
+                "Equal value exchange report reconciliation",
+                "POS-REPORT-EXCHANGE-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(originalItemId, 1, "RESTOCK", null)),
+                List.of(replacementLine),
+                new BigDecimal("0.00"),
+                List.of(),
+                List.of()
+        );
+        exchangeService.exchange(original.id(), exchangeRequest, "pos-rollback-test-cashier", "CASHIER");
+
+        var report = reportService.getSalesReport(location.getId(), LocalDate.now(), LocalDate.now());
+
+        assertEquals(2, report.transactionCount(),
+                "The original sale and replacement sale both represent retail sales");
+        assertEquals(new BigDecimal("200.00"), report.netSalesBeforeRefunds());
+        assertEquals(new BigDecimal("100.00"), report.refunds(),
+                "The returned original item must reduce retail sales once");
+        assertEquals(new BigDecimal("100.00"), report.netSalesAfterRefunds());
+        assertEquals(new BigDecimal("100.00"), report.exchangeCreditApplied(),
+                "Exchange credit is a separate settlement component");
+        assertEquals(new BigDecimal("100.00"), report.salesByPaymentMethod().get("CASH"),
+                "Only the original cash tender was collected");
+        assertTrue(report.refundsByPaymentMethod().isEmpty(),
+                "Equal-value exchange credit is not a cash or provider refund");
+        assertEquals(new BigDecimal("0.00"), report.recordedRefundPayments());
     }
 
     private PosCheckoutRequest buildCheckoutRequest(String idempotencyKey) {
