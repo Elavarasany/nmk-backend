@@ -398,6 +398,29 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void existingJwtUsesUpdatedStaffRoleOnTheNextRequest() throws Exception {
+        String username = "role-change-" + java.util.UUID.randomUUID();
+        Admin account = new Admin();
+        account.setUsername(username);
+        account.setPassword("test-only-password");
+        account.setRole("CASHIER");
+        account.setEnabled(true);
+        adminRepository.saveAndFlush(account);
+        String existingToken = jwtService.generateToken(username);
+
+        mockMvc.perform(get("/api/admin/pos/sales")
+                .header("Authorization", "Bearer " + existingToken))
+                .andExpect(status().isForbidden());
+
+        account.setRole("MANAGER");
+        adminRepository.saveAndFlush(account);
+
+        mockMvc.perform(get("/api/admin/pos/sales")
+                .header("Authorization", "Bearer " + existingToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void disabledStaffAccountCannotUsePreviouslyIssuedJwt() throws Exception {
         String username = "disabled-" + java.util.UUID.randomUUID();
         Admin admin = new Admin();
