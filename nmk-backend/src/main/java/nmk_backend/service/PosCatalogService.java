@@ -13,6 +13,7 @@ import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.ProductRepository;
 import nmk_backend.repository.ProductVariantRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -29,6 +30,7 @@ public class PosCatalogService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final InventoryBalanceRepository balanceRepository;
+    private final AdminLocationAccessService locationAccessService;
 
     public PosCatalogService(
             InventoryLocationRepository locationRepository,
@@ -36,10 +38,22 @@ public class PosCatalogService {
             ProductVariantRepository variantRepository,
             InventoryBalanceRepository balanceRepository
     ) {
+        this(locationRepository, productRepository, variantRepository, balanceRepository, null);
+    }
+
+    @Autowired
+    public PosCatalogService(
+            InventoryLocationRepository locationRepository,
+            ProductRepository productRepository,
+            ProductVariantRepository variantRepository,
+            InventoryBalanceRepository balanceRepository,
+            AdminLocationAccessService locationAccessService
+    ) {
         this.locationRepository = locationRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.balanceRepository = balanceRepository;
+        this.locationAccessService = locationAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -51,10 +65,27 @@ public class PosCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public List<PosLocationResponse> getActiveLocations(String username, String role) {
+        if (locationAccessService == null) return getActiveLocations();
+        List<Long> allowed = locationAccessService.getAccessibleLocationIds(username, role);
+        return locationRepository.findAllById(allowed).stream()
+                .filter(InventoryLocation::isActive)
+                .sorted(Comparator.comparing(InventoryLocation::getCode))
+                .map(PosLocationResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
     public PosCatalogResponse getCatalog(Long locationId) {
+        return getCatalog(locationId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PosCatalogResponse getCatalog(Long locationId, String username, String role) {
         if (locationId == null || locationId <= 0) {
             throw new InvalidInventoryOperationException("A valid inventory location is required");
         }
+
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
 
         InventoryLocation location = locationRepository.findById(locationId)
                 .orElseThrow(() -> new InventoryNotFoundException(
