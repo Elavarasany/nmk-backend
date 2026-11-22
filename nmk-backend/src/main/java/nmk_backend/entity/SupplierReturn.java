@@ -11,7 +11,8 @@ import java.util.List;
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_supplier_return_number", columnNames = "return_number"),
                 @UniqueConstraint(name = "uk_supplier_return_idempotency", columnNames = "idempotency_key")
-        })
+        },
+        indexes = @Index(name = "idx_supplier_returns_po_created", columnList = "purchase_order_id, created_at"))
 public class SupplierReturn {
 
     @Id
