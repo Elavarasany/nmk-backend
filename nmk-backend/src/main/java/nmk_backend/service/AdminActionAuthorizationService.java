@@ -118,6 +118,17 @@ public class AdminActionAuthorizationService {
 
         LocalDateTime now = LocalDateTime.now();
 
+        Admin currentAdmin = adminRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Staff account is no longer available"));
+        String currentRole = currentAdmin.getRole() == null
+                ? ""
+                : currentAdmin.getRole().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!currentAdmin.isEnabled()
+                || (!"ADMIN".equals(currentRole)
+                && !("MANAGER".equals(currentRole) && MANAGER_ALLOWED_ACTIONS.contains(expectedAction)))) {
+            throw new IllegalArgumentException("Staff account is no longer authorized for this action");
+        }
+
         if (!authorization.getAdminUsername().equals(username)
                 || !authorization.getAction().equals(expectedAction)
                 || authorization.getConsumedAt() != null
