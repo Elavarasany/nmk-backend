@@ -210,7 +210,7 @@ class ProcurementMySqlIntegrationTest {
         ));
 
         assertEquals("ORDERED", procurement.getPurchaseOrder(draft.id()).status());
-        assertTrue(procurement.getGoodsReceipts(draft.id()).isEmpty(),
+        assertTrue(procurement.getGoodsReceipts(draft.id(), 0, 25).isEmpty(),
                 "The failed receipt document must roll back");
         assertTrue(balances.findByLocationIdAndVariantId(location.getId(), firstVariant.getId()).isEmpty(),
                 "The first line's stock increase must roll back when a later line fails");
