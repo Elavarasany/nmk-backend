@@ -33,7 +33,7 @@ public class AdminLocationAccessService {
                 .filter(Admin::isEnabled)
                 .orElseThrow(() -> new IllegalArgumentException("Staff account is disabled or missing"));
         boolean assigned = staff.getAssignedLocations().stream()
-                .anyMatch(location -> location.getId().equals(locationId));
+                .anyMatch(location -> location.getId().equals(locationId) && location.isActive());
         if (!assigned) {
             throw new IllegalArgumentException("You are not assigned to this inventory location");
         }
