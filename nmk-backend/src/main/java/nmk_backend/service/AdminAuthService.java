@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class AdminAuthService {
@@ -26,6 +27,7 @@ public class AdminAuthService {
     }
 
     public String login(String username, String password) {
+        validatePasswordLength(password);
         Admin admin = adminRepository.findByUsernameIgnoreCase(username.trim())
                 .orElseThrow(() -> new RuntimeException("Invalid username or password"));
 
@@ -44,12 +46,19 @@ public class AdminAuthService {
     }
 
     public void verifyPassword(String username, String password) {
+        validatePasswordLength(password);
         Admin admin = adminRepository.findByUsernameIgnoreCase(username.trim())
                 .filter(Admin::isEnabled)
                 .orElseThrow(() -> new RuntimeException("Invalid admin"));
 
         if (!passwordEncoder.matches(password, admin.getPassword())) {
             throw new RuntimeException("Incorrect password");
+        }
+    }
+    private void validatePasswordLength(String password) {
+        if (password == null
+                || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Invalid username or password");
         }
     }
 }
