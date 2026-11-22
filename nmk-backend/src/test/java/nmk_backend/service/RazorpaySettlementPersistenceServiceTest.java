@@ -10,6 +10,7 @@ import nmk_backend.repository.OrderRefundRepository;
 import nmk_backend.repository.OrderRepository;
 import nmk_backend.repository.RazorpaySettlementEntryRepository;
 import nmk_backend.repository.RazorpaySettlementRepository;
+import nmk_backend.repository.RazorpayDisputeRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -31,10 +32,11 @@ class RazorpaySettlementPersistenceServiceTest {
     @Mock private RazorpaySettlementEntryRepository entryRepository;
     @Mock private OrderRepository orderRepository;
     @Mock private OrderRefundRepository refundRepository;
+    @Mock private RazorpayDisputeRepository disputeRepository;
 
     private RazorpaySettlementPersistenceService service() {
         return new RazorpaySettlementPersistenceService(
-                settlementRepository, entryRepository, orderRepository, refundRepository);
+                settlementRepository, entryRepository, orderRepository, refundRepository, disputeRepository);
     }
 
     private void stubPersistence() {
