@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS razorpay_settlement_entries (
     match_message VARCHAR(500) NULL,
     local_order_id BIGINT NULL,
     local_refund_id BIGINT NULL,
+    local_dispute_id BIGINT NULL,
     raw_payload TEXT NULL,
     created_at DATETIME NOT NULL,
     last_synced_at DATETIME NOT NULL,
