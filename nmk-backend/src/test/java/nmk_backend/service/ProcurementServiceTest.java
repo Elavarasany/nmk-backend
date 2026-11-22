@@ -184,6 +184,43 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void goodsReceiptExactRetryDoesNotReceiveInventoryTwice() {
+        AtomicReference<GoodsReceipt> savedReceipt = new AtomicReference<>();
+        when(goodsReceiptRepository.findByIdempotencyKey("gr-retry-key"))
+                .thenAnswer(invocation -> Optional.ofNullable(savedReceipt.get()));
+        when(purchaseOrderRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(order));
+        when(purchaseOrderItemRepository.findByOrderAndIdForUpdate(20L, 200L))
+                .thenReturn(Optional.of(orderItem));
+        when(goodsReceiptRepository.saveAndFlush(any(GoodsReceipt.class))).thenAnswer(invocation -> {
+            GoodsReceipt receipt = invocation.getArgument(0);
+            ReflectionTestUtils.setField(receipt, "id", 71L);
+            ReflectionTestUtils.setField(receipt, "receiptNumber", "GR-TEST-071");
+            savedReceipt.set(receipt);
+            return receipt;
+        });
+        when(purchaseOrderRepository.saveAndFlush(any(PurchaseOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        GoodsReceiptRequest request = new GoodsReceiptRequest(
+                "Supplier delivery received and checked",
+                "gr-retry-key",
+                List.of(new GoodsReceiptItemRequest(200L, 4))
+        );
+
+        GoodsReceiptResponse first = service.receiveGoods(20L, request, "manager.one");
+        GoodsReceiptResponse retry = service.receiveGoods(20L, request, "manager.one");
+
+        assertEquals(first.receiptNumber(), retry.receiptNumber());
+        assertEquals(4, orderItem.getReceivedQuantity());
+        assertEquals("PARTIALLY_RECEIVED", order.getStatus());
+        verify(goodsReceiptRepository, times(1)).saveAndFlush(any(GoodsReceipt.class));
+        verify(inventoryService, times(1)).receivePurchaseOrderStock(
+                1L, 5L, 4, "GR:gr-retry-key:200", 7L,
+                "Supplier delivery received and checked", 71L
+        );
+    }
+
+    @Test
     void goodsReceiptCannotExceedOutstandingPurchaseOrderQuantity() {
         orderItem.setReceivedQuantity(8);
         when(goodsReceiptRepository.findByIdempotencyKey("gr-key-2")).thenReturn(Optional.empty());
