@@ -241,6 +241,77 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void supplierReturnExactRetryDoesNotDeductInventoryTwice() {
+        order.setStatus("RECEIVED");
+        orderItem.setReceivedQuantity(5);
+        AtomicReference<SupplierReturn> savedReturn = new AtomicReference<>();
+        when(supplierReturnRepository.findByIdempotencyKey("supplier-return-retry"))
+                .thenAnswer(invocation -> Optional.ofNullable(savedReturn.get()));
+        when(purchaseOrderRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(order));
+        when(purchaseOrderItemRepository.findByOrderAndIdForUpdate(20L, 200L))
+                .thenReturn(Optional.of(orderItem));
+        when(supplierReturnRepository.saveAndFlush(any(SupplierReturn.class))).thenAnswer(invocation -> {
+            SupplierReturn record = invocation.getArgument(0);
+            ReflectionTestUtils.setField(record, "id", 81L);
+            ReflectionTestUtils.setField(record, "returnNumber", "SUP-RET-081");
+            savedReturn.set(record);
+            return record;
+        });
+        when(purchaseOrderRepository.saveAndFlush(any(PurchaseOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        SupplierReturnRequest request = new SupplierReturnRequest(
+                "Damaged shipment",
+                "supplier-return-retry",
+                List.of(new SupplierReturnItemRequest(200L, 2))
+        );
+
+        SupplierReturnResponse first = service.returnGoodsToSupplier(
+                20L, request, "manager.one"
+        );
+        SupplierReturnResponse retry = service.returnGoodsToSupplier(
+                20L, request, "manager.one"
+        );
+
+        assertEquals(first.returnNumber(), retry.returnNumber());
+        assertEquals(2, orderItem.getReturnedQuantity());
+        verify(supplierReturnRepository, times(1)).saveAndFlush(any(SupplierReturn.class));
+        verify(inventoryService, times(1)).returnStockToSupplier(
+                1L, 5L, 2, "SUP-RET:supplier-return-retry:200", 7L,
+                "Damaged shipment", 81L
+        );
+    }
+
+    @Test
+    void supplierReturnIdempotencyKeyCannotBeReusedWithDifferentPayload() {
+        order.setStatus("RECEIVED");
+        orderItem.setReceivedQuantity(5);
+        SupplierReturn existing = new SupplierReturn();
+        existing.setPurchaseOrder(order);
+        existing.setProcessedByUsername("manager.one");
+        existing.setReason("Damaged shipment");
+        existing.setIdempotencyKey("supplier-return-existing");
+        existing.setRequestFingerprint("different-fingerprint");
+        existing.getItems().add(new SupplierReturnItem());
+
+        when(supplierReturnRepository.findByIdempotencyKey("supplier-return-existing"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class, () -> service.returnGoodsToSupplier(
+                20L,
+                new SupplierReturnRequest(
+                        "Damaged shipment",
+                        "supplier-return-existing",
+                        List.of(new SupplierReturnItemRequest(200L, 1))
+                ),
+                "manager.one"
+        ));
+
+        verifyNoInteractions(inventoryService);
+        verify(supplierReturnRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void supplierReturnCannotExceedReceivedQuantityNotPreviouslyReturned() {
         order.setStatus("RECEIVED");
         orderItem.setReceivedQuantity(5);
