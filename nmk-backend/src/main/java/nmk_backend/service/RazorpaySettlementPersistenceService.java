@@ -171,7 +171,7 @@ public class RazorpaySettlementPersistenceService {
             } else if (!totalsBalanced || unmatched > 0 || manualReview > 0) {
                 settlement.setReconciliationStatus("REVIEW_REQUIRED");
             } else {
-                settlement.setReconciliationStatus("RECONCILED");
+                settlement.setReconciliationStatus("PROVIDER_RECONCILED");
             }
             settlementRepository.save(settlement);
         }
