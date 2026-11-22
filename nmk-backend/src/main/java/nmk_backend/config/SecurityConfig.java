@@ -134,7 +134,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/appointments/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(apiRateLimitFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
+                .addFilterAfter(apiRateLimitFilter, org.springframework.web.filter.CorsFilter.class)
                 .addFilterAfter(adminSecurityRejectionAuditFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
