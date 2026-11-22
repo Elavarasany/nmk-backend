@@ -143,6 +143,45 @@ class RazorpayWebhookProcessorTest {
     }
 
     @Test
+    void refundWebhookIsAuditedButDoesNotClaimToProcessAProviderRefund()
+            throws Exception {
+
+        RazorpayWebhookEvent event = event("""
+                {
+                  "event":"refund.processed",
+                  "payload":{
+                    "refund":{
+                      "entity":{
+                        "id":"rfnd_123",
+                        "payment_id":"pay_123",
+                        "amount":5000,
+                        "status":"processed"
+                      }
+                    }
+                  }
+                }
+                """);
+        event.setEventType("refund.processed");
+
+        when(eventRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(event));
+
+        processor.processOne(1L);
+
+        assertEquals("PROCESSED", event.getStatus(),
+                "The signed event is recorded as handled by the current generic webhook path");
+        assertNotNull(event.getProcessedAt());
+        assertNull(event.getClaimToken());
+        assertNull(event.getProcessingStartedAt());
+
+        verifyNoInteractions(
+                orderRepository,
+                razorpayService,
+                paymentVerificationService
+        );
+    }
+
+    @Test
     void capturedPaymentIsVerifiedBeforeConfirmation() throws Exception {
 
         RazorpayWebhookEvent event =
