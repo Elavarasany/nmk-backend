@@ -78,7 +78,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                     MAX(o.phone) AS phone,
                     COUNT(o.id) AS totalOrders,
                     COALESCE(SUM(CASE WHEN UPPER(o.paymentStatus) = 'PAID'
-                                      THEN o.totalAmount ELSE 0 END), 0) AS totalSpent
+                                      THEN o.totalAmount ELSE 0.00 END), 0.00) AS totalSpent
                 FROM Order o
                 GROUP BY COALESCE(NULLIF(LOWER(TRIM(o.email)), ''), o.phone)
                 ORDER BY MAX(o.orderDate) DESC,
