@@ -40,9 +40,13 @@ public class PosExchangeService {
  }
 
  @Transactional(readOnly=true)
- public List<PosExchangeResponse> getExchanges(Long originalSaleId) {
+ public List<PosExchangeResponse> getExchanges(Long originalSaleId) { return getExchanges(originalSaleId,null,null); }
+
+ @Transactional(readOnly=true)
+ public List<PosExchangeResponse> getExchanges(Long originalSaleId,String username,String role) {
   if(originalSaleId==null||originalSaleId<=0) throw new IllegalArgumentException("A valid original sale ID is required");
-  if(!sales.existsById(originalSaleId)) throw new InventoryNotFoundException("Original POS sale was not found");
+  PosSale original=sales.findById(originalSaleId).orElseThrow(()->new InventoryNotFoundException("Original POS sale was not found"));
+  shifts.assertLocationAccessForStaff(username,role,original.getLocationId());
   return exchanges.findByOriginalSaleIdOrderByCreatedAtDesc(originalSaleId).stream()
    .map(PosExchangeResponse::from).toList();
  }
@@ -51,10 +55,12 @@ public class PosExchangeService {
  public PosExchangeResponse exchange(Long saleId,PosExchangeRequest req,String username,String role) {
   validate(saleId,req,username);
   String key=req.idempotencyKey().trim(), fp=fingerprint(saleId,req,username);
+  PosSale snapshot=sales.findById(saleId).orElseThrow(()->new InventoryNotFoundException("Original POS sale was not found"));
+  shifts.assertLocationAccessForStaff(username,role,snapshot.getLocationId());
   var prior=exchanges.findByIdempotencyKey(key);
   if(prior.isPresent()) return replay(prior.get(),fp);
 
-  PosSale snapshot=sales.findById(saleId).orElseThrow(()->new InventoryNotFoundException("Original POS sale was not found"));
+  
   InventoryLocation location=locations.findByIdForUpdate(snapshot.getLocationId())
    .orElseThrow(()->new InventoryNotFoundException("Original sale location was not found"));
   if(!location.isActive()) throw new IllegalArgumentException("Original sale location is inactive");
