@@ -773,6 +773,74 @@ class PosCheckoutTransactionIntegrationTest {
         }
     }
 
+
+    @Test
+    void failedCashRefundRollsBackReturnRecordAndRestockOnMySql() {
+        inventoryService.receiveStock(
+                location.getId(), variant.getId(), 1,
+                "POS-RETURN-ROLLBACK-OPEN-" + System.nanoTime(), null,
+                "Opening stock for cash-refund rollback test"
+        );
+
+        PosRegisterResponse cashlessRegister = shiftService.createRegister(
+                new PosRegisterCreateRequest(location.getId(), "CASHLESS", "Cashless Test Register")
+        );
+        Long cashlessShiftId = shiftService.openShift(
+                new PosShiftOpenRequest(
+                        cashlessRegister.id(), new BigDecimal("0.00"),
+                        "POS-TEST-CASHLESS-SHIFT-" + System.nanoTime()
+                ),
+                "pos-rollback-test-cashier"
+        ).id();
+
+        PosCheckoutRequest checkout = buildCheckoutRequest("POS-RETURN-ROLLBACK-SALE-" + System.nanoTime());
+        checkout.setShiftId(cashlessShiftId);
+        PosPaymentRequest upi = new PosPaymentRequest();
+        upi.setPaymentMethod("UPI");
+        upi.setAmount(new BigDecimal("100.00"));
+        upi.setTransactionReference("UPI-SETTLED-ROLLBACK-TEST");
+        checkout.setPayments(List.of(upi));
+
+        var sale = checkoutService.checkout(checkout, "pos-rollback-test-cashier");
+        Long saleItemId = saleItemRepository.findBySaleId(sale.id()).get(0).getId();
+        long movementsBeforeReturn = movementRepository.count();
+        long cashMovementsBeforeReturn = cashMovementRepository.count();
+
+        PosReturnRequest request = new PosReturnRequest(
+                cashlessShiftId,
+                "Test atomic rollback when drawer cannot fund cash refund",
+                "POS-RETURN-ROLLBACK-KEY-" + System.nanoTime(),
+                List.of(new PosReturnItemRequest(saleItemId, 1, "RESTOCK", null)),
+                List.of(new PosRefundPaymentRequest("CASH", new BigDecimal("100.00"), null))
+        );
+
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> returnService.processReturn(
+                        sale.id(), request, "pos-rollback-test-cashier", "ADMIN"
+                )
+        );
+        assertTrue(failure.getMessage().contains("exceeds the cash currently expected"));
+
+        assertEquals(0, returnRepository.count(),
+                "A failed cash refund must not leave a completed return record");
+        assertEquals(0, returnItemRepository.count(),
+                "A failed cash refund must not leave return line records");
+        assertEquals(0, refundPaymentRepository.count(),
+                "A failed cash refund must not leave refund tender records");
+        assertEquals(movementsBeforeReturn, movementRepository.count(),
+                "The earlier restock movement must roll back with the failed cash refund");
+        assertEquals(cashMovementsBeforeReturn, cashMovementRepository.count(),
+                "The failed refund must not leave a cash drawer movement");
+
+        InventoryBalance finalBalance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), variant.getId())
+                .orElseThrow();
+        assertEquals(0, finalBalance.getOnHandQuantity(),
+                "The restock must roll back because the drawer refund could not be funded");
+        assertEquals(0, finalBalance.getReservedQuantity());
+    }
+
     private PosCheckoutRequest buildCheckoutRequest(String idempotencyKey) {
         PosCheckoutRequest request = new PosCheckoutRequest();
         request.setLocationId(location.getId());
