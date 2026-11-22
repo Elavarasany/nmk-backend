@@ -124,6 +124,11 @@ public class PosShiftService {
 
     @Transactional
     public PosShiftResponse openShift(PosShiftOpenRequest request, String username) {
+        return openShift(request, username, "CASHIER");
+    }
+
+    @Transactional
+    public PosShiftResponse openShift(PosShiftOpenRequest request, String username, String role) {
         validateActor(username);
         BigDecimal openingFloat = money(request.openingFloat(), "Opening float");
         String key = normalizeKey(request.idempotencyKey());
@@ -131,6 +136,7 @@ public class PosShiftService {
         var previous = shiftRepository.findByIdempotencyKey(key);
         if (previous.isPresent()) {
             PosShift existing = previous.get();
+            assertLocationAccess(username, role, existing.getRegister().getLocation().getId());
             if (!Objects.equals(existing.getRegister().getId(), request.registerId())
                     || !existing.getOpenedByUsername().equalsIgnoreCase(username)
                     || existing.getOpeningFloat().compareTo(openingFloat) != 0) {
@@ -145,6 +151,7 @@ public class PosShiftService {
         var racedShift = shiftRepository.findByIdempotencyKey(key);
         if (racedShift.isPresent()) {
             PosShift existing = racedShift.get();
+            assertLocationAccess(username, role, existing.getRegister().getLocation().getId());
             if (!Objects.equals(existing.getRegister().getId(), request.registerId())
                     || !existing.getOpenedByUsername().equalsIgnoreCase(username)
                     || existing.getOpeningFloat().compareTo(openingFloat) != 0) {
@@ -152,7 +159,7 @@ public class PosShiftService {
             }
             return response(existing);
         }
-        assertLocationAccess(username, null, register.getLocation().getId());
+        assertLocationAccess(username, role, register.getLocation().getId());
         if (!register.isActive() || !register.getLocation().isActive()) {
             throw new IllegalArgumentException("POS register or its location is inactive");
         }
