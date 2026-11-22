@@ -1,6 +1,7 @@
 package nmk_backend.controller;
 
 import jakarta.validation.Valid;
+import nmk_backend.util.DatabaseConstraintUtils;
 import nmk_backend.dto.InventoryBalanceResponse;
 import nmk_backend.dto.InventoryReceiptRequest;
 import nmk_backend.entity.Admin;
@@ -50,7 +51,7 @@ public class InventoryController {
         }
 
         try {
-            var balance = inventoryService.receiveStock(
+            var balance = inventoryService.receiveStockByAdmin(
                     request.getLocationId(),
                     request.getVariantId(),
                     request.getQuantity(),
@@ -63,12 +64,18 @@ public class InventoryController {
                     .body(InventoryBalanceResponse.from(balance));
 
         } catch (DataIntegrityViolationException exception) {
-            // A concurrent request may win the globally unique movement-key insert.
-            // The service transaction is rolled back before control reaches this catch.
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                    "message",
-                    "An inventory operation with this idempotency key conflicts with an existing operation. Verify the key and request details before retrying."
-            ));
+
+            if (DatabaseConstraintUtils.isUniqueConstraintViolation(
+                    exception,
+                    "uk_stock_movements_idempotency"
+            )) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                        "message",
+                        "An inventory operation with this idempotency key conflicts with an existing operation."
+                ));
+            }
+
+            throw exception;
         }
     }
 }

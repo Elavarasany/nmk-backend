@@ -43,6 +43,34 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance receiveStockByAdmin(
+            Long locationId,
+            Long variantId,
+            int quantity,
+            String idempotencyKey,
+            Long actorAdminId,
+            String reason
+    ) {
+        validateQuantity(quantity);
+
+        return execute(
+                locationId,
+                variantId,
+                quantity,
+                idempotencyKey,
+                null,
+                actorAdminId,
+                reason,
+                "RECEIPT",
+                quantity,
+                0,
+                true,
+                null,
+                null
+        );
+    }
+
+    @Transactional
     public InventoryBalance receiveStock(
             Long locationId, Long variantId, int quantity,
             String idempotencyKey, Long actorStaffId, String reason,
@@ -50,7 +78,7 @@ public class InventoryService {
     ) {
         validateQuantity(quantity);
         return execute(locationId, variantId, quantity, idempotencyKey,
-                actorStaffId, reason, "RECEIPT", quantity, 0, true,
+                actorStaffId, null, reason, "RECEIPT", quantity, 0, true,
                 referenceType, referenceId);
     }
 
@@ -141,12 +169,43 @@ public class InventoryService {
         );
     }
 
+    @Transactional
+    public InventoryBalance sellStockByAdmin(
+            Long locationId,
+            Long variantId,
+            int quantity,
+            String idempotencyKey,
+            Long actorAdminId,
+            String reason,
+            String referenceType,
+            Long referenceId
+    ) {
+        validateQuantity(quantity);
+
+        return execute(
+                locationId,
+                variantId,
+                quantity,
+                idempotencyKey,
+                null,
+                actorAdminId,
+                reason,
+                "SALE",
+                -quantity,
+                0,
+                false,
+                referenceType,
+                referenceId
+        );
+    }
+
     private InventoryBalance execute(
             Long locationId,
             Long variantId,
             int quantity,
             String idempotencyKey,
             Long actorStaffId,
+            Long actorAdminId,
             String reason,
             String movementType,
             int quantityDelta,
@@ -369,6 +428,7 @@ public class InventoryService {
         movement.setReferenceId(referenceId);
         movement.setIdempotencyKey(normalizedKey);
         movement.setActorStaffId(actorStaffId);
+        movement.setActorAdminId(actorAdminId);
         movement.setReason(reason);
 
         movementRepository.saveAndFlush(movement);

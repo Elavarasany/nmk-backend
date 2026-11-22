@@ -69,9 +69,12 @@ public class StockMovement {
     @Column(name = "idempotency_key", nullable = false, length = 150)
     private String idempotencyKey;
 
-    // Keep this as a scalar until a StaffAccount entity is implemented.
+    // Staff and admin identities belong to separate tables.
     @Column(name = "actor_staff_id")
     private Long actorStaffId;
+
+    @Column(name = "actor_admin_id")
+    private Long actorAdminId;
 
     @Column(length = 500)
     private String reason;
@@ -172,6 +175,14 @@ public class StockMovement {
 
     public void setActorStaffId(Long actorStaffId) {
         this.actorStaffId = actorStaffId;
+    }
+
+    public Long getActorAdminId() {
+        return actorAdminId;
+    }
+
+    public void setActorAdminId(Long actorAdminId) {
+        this.actorAdminId = actorAdminId;
     }
 
     public String getReason() {

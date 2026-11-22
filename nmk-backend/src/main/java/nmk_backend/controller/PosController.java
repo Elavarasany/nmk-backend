@@ -94,11 +94,18 @@ public class PosController {
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (DataIntegrityViolationException exception) {
-            // Covers simultaneous requests racing on the unique sale/stock idempotency keys.
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                    "message",
-                    "A checkout with this idempotency key is already being processed or was already recorded. Retry using the same key to retrieve the completed sale."
-            ));
+
+            if (DatabaseConstraintUtils.isUniqueConstraintViolation(
+                    exception,
+                    "uk_pos_sales_idempotency_key"
+            )) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                        "message",
+                        "A checkout with this idempotency key is already being processed or was already recorded. Retry using the same key to retrieve the completed sale."
+                ));
+            }
+
+            throw exception;
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message",

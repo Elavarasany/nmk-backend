@@ -3,7 +3,8 @@ package nmk_backend.security;
 import nmk_backend.entity.Admin;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.security.JwtService;
-
+import nmk_backend.entity.InventoryLocation;
+import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.AppointmentRepository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -27,6 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class SecurityAuthorizationIntegrationTest {
     @Autowired
+    private InventoryLocationRepository inventoryLocationRepository;
+    @Autowired
 private AdminRepository adminRepository;
 
 @Autowired
@@ -42,6 +45,15 @@ private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUp() {
+        if (!inventoryLocationRepository.existsByCode("SECURITY-TEST")) {
+            InventoryLocation location = new InventoryLocation();
+            location.setCode("SECURITY-TEST");
+            location.setName("Security Test Location");
+            location.setActive(true);
+
+            inventoryLocationRepository.saveAndFlush(location);
+        }
+
         mockMvc = MockMvcBuilders
                 .webAppContextSetup(context)
                 .apply(springSecurity())

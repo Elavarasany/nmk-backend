@@ -109,7 +109,7 @@ class PosCheckoutServiceTest {
         assertEquals("NMK", response.invoiceNumber().substring(0, 3));
         assertEquals(123L, response.id());
 
-        verify(inventoryService).sellStock(
+        verify(inventoryService).sellStockByAdmin(
                 eq(1L),
                 eq(20L),
                 eq(1),

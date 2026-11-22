@@ -253,7 +253,7 @@ public class PosCheckoutService {
 
         for (PosSaleItem item : sale.getItems()) {
             String movementKey = "POS:" + idempotencyKey + ":" + item.getVariantId();
-            inventoryService.sellStock(
+            inventoryService.sellStockByAdmin(
                     location.getId(),
                     item.getVariantId(),
                     item.getQuantity(),
