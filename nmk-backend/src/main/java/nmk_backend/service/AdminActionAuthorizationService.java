@@ -24,6 +24,7 @@ public class AdminActionAuthorizationService {
     private static final Set<String> ALLOWED_ACTIONS = Set.of(
             "CLEAR_ORDERS",
             "CLEAR_APPOINTMENTS",
+            "RAZORPAY_REFUND",
             "INVENTORY_RECEIPT",
             "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN", "PURCHASE_ORDER_SUBMIT"
     );
