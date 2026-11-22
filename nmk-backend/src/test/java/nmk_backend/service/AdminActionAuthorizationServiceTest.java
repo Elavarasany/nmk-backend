@@ -177,6 +177,35 @@ class AdminActionAuthorizationServiceTest {
     }
 
     @Test
+    void consumeAuthorizationRejectsStaffDisabledAfterTokenWasIssued() {
+        AdminActionAuthorization authorization = validAuthorization();
+        when(authorizationRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(authorization));
+        when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        admin.setEnabled(false);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.consumeAuthorization("admin", "raw-token", "CLEAR_ORDERS"));
+        assertNull(authorization.getConsumedAt());
+        verify(authorizationRepository, never()).save(authorization);
+    }
+
+    @Test
+    void consumeAuthorizationRejectsManagerDemotedAfterTokenWasIssued() {
+        AdminActionAuthorization authorization = validAuthorization();
+        authorization.setAction("POS_RETURN");
+        when(authorizationRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(authorization));
+        when(adminRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        admin.setRole("CASHIER");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.consumeAuthorization("admin", "raw-token", "POS_RETURN"));
+        assertNull(authorization.getConsumedAt());
+        verify(authorizationRepository, never()).save(authorization);
+    }
+
+    @Test
     void consumeAuthorizationRejectsWrongAdmin() {
         AdminActionAuthorization authorization = validAuthorization();
 
