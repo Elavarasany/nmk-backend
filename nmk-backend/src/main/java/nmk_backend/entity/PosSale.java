@@ -1,4 +1,3 @@
-
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
@@ -75,7 +74,6 @@ public class PosSale {
     private LocalDateTime createdAt;
 
     @BatchSize(size = 50)
-    @BatchSize(size = 50)
     @OneToMany(
             mappedBy = "sale",
             cascade = CascadeType.ALL,
@@ -83,6 +81,7 @@ public class PosSale {
     )
     private List<PosSaleItem> items = new ArrayList<>();
 
+    @BatchSize(size = 50)
     @OneToMany(
             mappedBy = "sale",
             cascade = CascadeType.ALL,
@@ -110,115 +109,32 @@ public class PosSale {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getInvoiceNumber() {
-        return invoiceNumber;
-    }
-
-    public void setInvoiceNumber(String invoiceNumber) {
-        this.invoiceNumber = invoiceNumber;
-    }
-
-    public String getCustomerName() {
-        return customerName;
-    }
-
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
-    }
-
-    public String getCustomerPhone() {
-        return customerPhone;
-    }
-
-    public void setCustomerPhone(String customerPhone) {
-        this.customerPhone = customerPhone;
-    }
-
-    public Long getLocationId() {
-        return locationId;
-    }
-
-    public void setLocationId(Long locationId) {
-        this.locationId = locationId;
-    }
-
-    public Long getShiftId() {
-        return shiftId;
-    }
-
-    public void setShiftId(Long shiftId) {
-        this.shiftId = shiftId;
-    }
-
-    public String getCashierUsername() {
-        return cashierUsername;
-    }
-
-    public void setCashierUsername(String cashierUsername) {
-        this.cashierUsername = cashierUsername;
-    }
-
-    public BigDecimal getSubtotal() {
-        return subtotal;
-    }
-
-    public void setSubtotal(BigDecimal subtotal) {
-        this.subtotal = subtotal;
-    }
-
-    public BigDecimal getDiscountAmount() {
-        return discountAmount;
-    }
-
-    public void setDiscountAmount(BigDecimal discountAmount) {
-        this.discountAmount = discountAmount;
-    }
-
-    public BigDecimal getGrandTotal() {
-        return grandTotal;
-    }
-
-    public void setGrandTotal(BigDecimal grandTotal) {
-        this.grandTotal = grandTotal;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getIdempotencyKey() {
-        return idempotencyKey;
-    }
-
-    public void setIdempotencyKey(String idempotencyKey) {
-        this.idempotencyKey = idempotencyKey;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public List<PosSaleItem> getItems() {
-        return items;
-    }
-
-    public List<PosPayment> getPayments() {
-        return payments;
-    }
-
-    public String getRequestFingerprint() {
-        return requestFingerprint;
-    }
-
-    public void setRequestFingerprint(String requestFingerprint) {
-        this.requestFingerprint = requestFingerprint;
-    }
+    public Long getId() { return id; }
+    public String getInvoiceNumber() { return invoiceNumber; }
+    public void setInvoiceNumber(String invoiceNumber) { this.invoiceNumber = invoiceNumber; }
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+    public Long getLocationId() { return locationId; }
+    public void setLocationId(Long locationId) { this.locationId = locationId; }
+    public Long getShiftId() { return shiftId; }
+    public void setShiftId(Long shiftId) { this.shiftId = shiftId; }
+    public String getCashierUsername() { return cashierUsername; }
+    public void setCashierUsername(String cashierUsername) { this.cashierUsername = cashierUsername; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
+    public BigDecimal getGrandTotal() { return grandTotal; }
+    public void setGrandTotal(BigDecimal grandTotal) { this.grandTotal = grandTotal; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public List<PosSaleItem> getItems() { return items; }
+    public List<PosPayment> getPayments() { return payments; }
+    public String getRequestFingerprint() { return requestFingerprint; }
+    public void setRequestFingerprint(String requestFingerprint) { this.requestFingerprint = requestFingerprint; }
 }
