@@ -11,6 +11,8 @@ import nmk_backend.dto.AdminOrderResponse;
 import nmk_backend.dto.AdminCustomerSummaryResponse;
 import nmk_backend.dto.UpdateOrderStatusRequest;
 import nmk_backend.entity.Order;
+import nmk_backend.entity.OrderItem;
+import nmk_backend.service.PrescriptionCloudinaryService;
 import nmk_backend.repository.OrderRepository;
 import nmk_backend.repository.OrderRefundRepository;
 
@@ -46,6 +48,7 @@ public class AdminOrderController {
     private final OrderRepository orderRepository;
     private final OrderRefundRepository orderRefundRepository;
     private final OrderService orderService;
+    private final PrescriptionCloudinaryService prescriptionStorage;
     private final String publicUrl;
 
     private static final Set<String> ALLOWED_STATUSES = Set.of(
@@ -63,11 +66,13 @@ public class AdminOrderController {
             OrderService orderService,
             SmsService smsService,
             AdminActionAuthorizationService authorizationService,
+            PrescriptionCloudinaryService prescriptionStorage,
             @Value("${app.public-url:http://localhost:5173}") String publicUrl
     ) {
         this.orderRepository = orderRepository;
         this.orderRefundRepository = orderRefundRepository;
         this.orderService = orderService;
+        this.prescriptionStorage = prescriptionStorage;
         this.smsService = smsService;
         this.authorizationService = authorizationService;
         this.publicUrl = publicUrl.replaceAll("/+$", "");
@@ -154,6 +159,50 @@ public class AdminOrderController {
                 .findCustomerSummaries(PageRequest.of(page, size))
                 .map(AdminCustomerSummaryResponse::from);
         return ResponseEntity.ok(customers);
+    }
+
+    @GetMapping("/{orderId}/items/{itemId}/prescription")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getPrescriptionAccess(
+            @PathVariable Long orderId,
+            @PathVariable Long itemId
+    ) {
+        if (orderId == null || orderId <= 0 || itemId == null || itemId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Invalid order or item."));
+        }
+        Order order = orderRepository.findWithItemsByIdIn(List.of(orderId))
+                .stream().filter(candidate -> orderId.equals(candidate.getId()))
+                .findFirst().orElse(null);
+        if (order == null) {
+            return ResponseEntity.notFound().build();
+        }
+        OrderItem item = order.getItems().stream()
+                .filter(candidate -> itemId.equals(candidate.getId()))
+                .findFirst().orElse(null);
+        if (item == null || item.getPrescriptionJson() == null || item.getPrescriptionJson().isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+        try {
+            Map<String, Object> prescription = new ObjectMapper().readValue(
+                    item.getPrescriptionJson(), new TypeReference<Map<String, Object>>() {});
+            if (!"image".equalsIgnoreCase(String.valueOf(prescription.get("mode")))) {
+                return ResponseEntity.badRequest().body(Map.of("message", "This item has no uploaded prescription."));
+            }
+            String publicId = String.valueOf(prescription.getOrDefault("publicId", ""));
+            if (!publicId.isBlank()) {
+                String url = prescriptionStorage.createPrivateDownloadUrl(prescription);
+                return ResponseEntity.ok(Map.of("url", url, "expiresInSeconds", 300));
+            }
+            String legacyUrl = String.valueOf(prescription.getOrDefault("imageUrl", ""));
+            if (!OrderService.isAllowedPrescriptionImageUrl(legacyUrl)) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok(Map.of("url", legacyUrl, "legacyPublicAsset", true));
+        } catch (Exception exception) {
+            log.warn("Prescription access could not be prepared; orderId={}, itemId={}, exceptionType={}",
+                    orderId, itemId, exception.getClass().getSimpleName());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Unable to open this prescription."));
+        }
     }
 
     @DeleteMapping("/clear")
