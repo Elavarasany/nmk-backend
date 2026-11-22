@@ -81,6 +81,8 @@ public class RazorpaySettlementPersistenceService {
             settlement.setUtr(blankToNull(summary.utr()));
             settlement.setProviderCreatedAt(summary.createdAt());
             settlement.setRawPayload(summary.rawPayload());
+            // Obtain the database ID before upserting child entries.
+            settlementRepository.saveAndFlush(settlement);
 
             List<RazorpaySettlementReconEntry> settlementRows =
                     rowsBySettlement.getOrDefault(summary.settlementId(), List.of());
