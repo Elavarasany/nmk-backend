@@ -54,9 +54,9 @@ Reviewed the feature branch payment records, POS checkout/return/exchange servic
 2. Match the event ID and provider refund/payment ID in the Razorpay merchant dashboard. Confirm the exact amount, currency, original payment, current provider status and event timestamp.
 3. Locate the corresponding local order or POS return using the payment/order identifiers and the recorded POS return reference. If there is no reliable match, stop and escalate; do not guess based on amount alone.
 4. Preserve the provider dashboard/export evidence and record the reviewer, review time, event ID, local sale/return reference, provider refund ID, confirmed amount/status and discrepancy/outcome in the shop's approved reconciliation log.
-5. Do not mark a local refund complete, issue a second refund, or alter the event status through SQL. The queue is intentionally read-only until an audited resolution workflow and provider linkage are implemented.
+5. For online orders, inspect Admin → Orders refund history before taking action. If a local pending request exists, retry only with its original idempotency key; never initiate a second refund to work around a timeout. Do not alter event status or refund rows through SQL. The queue remains read-only until an audited manual-review resolution workflow is implemented.
 
-This procedure is a temporary control, not an automated reconciliation feature. Agree the evidence location, retention period and responsible reviewer with the client before go-live.
+This procedure applies only to unmatched or conflicting events in the MANUAL_REVIEW queue. Routine online-order refund events are linked to the online refund ledger automatically. Agree the evidence location, retention period and responsible reviewer with the client before go-live.
 
 ## What is not implemented
 
