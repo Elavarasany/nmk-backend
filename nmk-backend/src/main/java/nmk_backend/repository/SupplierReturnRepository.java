@@ -24,7 +24,6 @@ public interface SupplierReturnRepository extends JpaRepository<SupplierReturn, 
     @Query("""
             select supplierReturn.id from SupplierReturn supplierReturn
             where supplierReturn.purchaseOrder.id = :purchaseOrderId
-            order by supplierReturn.createdAt desc, supplierReturn.id desc
             """)
     Page<Long> findHistoryIds(@Param("purchaseOrderId") Long purchaseOrderId, Pageable pageable);
 
@@ -35,7 +34,6 @@ public interface SupplierReturnRepository extends JpaRepository<SupplierReturn, 
             where supplierReturn.purchaseOrder.location.id = :locationId
               and supplierReturn.createdAt >= :from
               and supplierReturn.createdAt < :to
-            order by supplierReturn.createdAt asc, supplierReturn.id asc
             """)
     Page<Long> findReportIds(
             @Param("locationId") Long locationId,
