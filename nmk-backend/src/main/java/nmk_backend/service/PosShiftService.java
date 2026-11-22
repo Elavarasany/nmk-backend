@@ -538,6 +538,65 @@ public class PosShiftService {
         );
     }
 
+    @Transactional
+    public void recordSupplierPayment(
+            Long shiftId, BigDecimal amount, String idempotencyKey,
+            String username, String role, Long paymentId, Long locationId
+    ) {
+        validateActor(username);
+        if (shiftId == null || paymentId == null || locationId == null) {
+            throw new IllegalArgumentException("Cash shift, supplier payment and location are required");
+        }
+        BigDecimal value = money(amount, "Supplier cash payment");
+        String key = normalizeKey(idempotencyKey);
+        var previous = cashMovementRepository.findByIdempotencyKey(key);
+        if (previous.isPresent()) {
+            PosCashMovement movement = previous.get();
+            if (!"SUPPLIER_PAYMENT".equals(movement.getMovementType())
+                    || !"OUT".equals(movement.getDirection())
+                    || !shiftId.equals(movement.getShift().getId())
+                    || !paymentId.equals(movement.getReferenceId())
+                    || !"SUPPLIER_PAYMENT".equals(movement.getReferenceType())
+                    || !username.equals(movement.getActorUsername())
+                    || movement.getAmount().compareTo(value) != 0) {
+                throw new IllegalArgumentException("Supplier payment cash movement key was reused with different details");
+            }
+            return;
+        }
+
+        PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
+                .orElseThrow(() -> new InventoryNotFoundException("Cashier shift was not found"));
+        assertLocationAccess(username, role, locationId);
+        if (!"OPEN".equals(shift.getStatus())) {
+            throw new IllegalArgumentException("Supplier cash payments require an open register shift");
+        }
+        if (!locationId.equals(shift.getRegister().getLocation().getId())) {
+            throw new IllegalArgumentException("Cashier shift belongs to a different location than the supplier bill");
+        }
+        if (!canManageOtherShifts(role) && !username.equals(shift.getOpenedByUsername())) {
+            throw new IllegalArgumentException("Staff can only record supplier cash payments against their own shift");
+        }
+        var raced = cashMovementRepository.findByIdempotencyKey(key);
+        if (raced.isPresent()) {
+            PosCashMovement movement = raced.get();
+            if (!"SUPPLIER_PAYMENT".equals(movement.getMovementType())
+                    || !shiftId.equals(movement.getShift().getId())
+                    || !paymentId.equals(movement.getReferenceId())
+                    || movement.getAmount().compareTo(value) != 0) {
+                throw new IllegalArgumentException("Supplier payment cash movement key was reused with different details");
+            }
+            return;
+        }
+        if (value.compareTo(calculateExpectedCash(shiftId)) > 0) {
+            throw new IllegalArgumentException("Supplier cash payment exceeds the expected cash currently in the drawer");
+        }
+        saveCashMovement(
+                shift, "SUPPLIER_PAYMENT", "OUT", value,
+                "SUPPLIER_PAYMENT", paymentId, key, username,
+                "Supplier payment #" + paymentId
+        );
+    }
+
     private void saveCashMovement(
             PosShift shift, String type, String direction, BigDecimal amount,
             String referenceType, Long referenceId, String key,
