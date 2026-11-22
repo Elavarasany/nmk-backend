@@ -6,6 +6,7 @@ import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -29,6 +30,7 @@ public class PosShiftService {
     private final PosShiftRepository shiftRepository;
     private final PosCashMovementRepository cashMovementRepository;
     private final AdminLocationAccessService locationAccessService;
+    private final ZoneId businessZone;
 
     public PosShiftService(
             InventoryLocationRepository locationRepository,
@@ -36,7 +38,18 @@ public class PosShiftService {
             PosShiftRepository shiftRepository,
             PosCashMovementRepository cashMovementRepository
     ) {
-        this(locationRepository, registerRepository, shiftRepository, cashMovementRepository, null);
+        this(locationRepository, registerRepository, shiftRepository, cashMovementRepository, null, "Asia/Kolkata");
+    }
+
+    public PosShiftService(
+            InventoryLocationRepository locationRepository,
+            PosRegisterRepository registerRepository,
+            PosShiftRepository shiftRepository,
+            PosCashMovementRepository cashMovementRepository,
+            AdminLocationAccessService locationAccessService
+    ) {
+        this(locationRepository, registerRepository, shiftRepository, cashMovementRepository,
+                locationAccessService, "Asia/Kolkata");
     }
 
     @Autowired
@@ -45,13 +58,15 @@ public class PosShiftService {
             PosRegisterRepository registerRepository,
             PosShiftRepository shiftRepository,
             PosCashMovementRepository cashMovementRepository,
-            AdminLocationAccessService locationAccessService
+            AdminLocationAccessService locationAccessService,
+            @Value("${app.business.time-zone:Asia/Kolkata}") String businessTimeZone
     ) {
         this.locationRepository = locationRepository;
         this.registerRepository = registerRepository;
         this.shiftRepository = shiftRepository;
         this.cashMovementRepository = cashMovementRepository;
         this.locationAccessService = locationAccessService;
+        this.businessZone = ZoneId.of(businessTimeZone);
     }
 
     @Transactional(readOnly = true)
@@ -123,7 +138,7 @@ public class PosShiftService {
         if (!canManageOtherShifts(role)) {
             throw new IllegalArgumentException("Only managers and administrators can view daily cash reconciliation");
         }
-        if (businessDate.isAfter(LocalDate.now(ZoneId.of("Asia/Kolkata")))) {
+        if (businessDate.isAfter(LocalDate.now(businessZone))) {
             throw new IllegalArgumentException("A future business date cannot be reconciled");
         }
         assertLocationAccess(username, role, locationId);

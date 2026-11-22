@@ -59,6 +59,17 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void dailyCashReconciliationUsesConfiguredBusinessTimezone() {
+        PosShiftService configuredService = new PosShiftService(
+                locationRepository, registerRepository, shiftRepository, movementRepository,
+                null, "Pacific/Auckland"
+        );
+
+        assertEquals(java.time.ZoneId.of("Pacific/Auckland"),
+                ReflectionTestUtils.getField(configuredService, "businessZone"));
+    }
+
+    @Test
     void concurrentShiftOpenRetryReplaysAfterRegisterLock() {
         shift.setIdempotencyKey("SHIFT-OPEN-RACE");
         shift.setStatus("CLOSED");
