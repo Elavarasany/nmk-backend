@@ -112,11 +112,6 @@ public class AppointmentController {
         appointment.setCreatedAt(null);
 
         Appointment saved = appointmentRepository.save(appointment);
-        System.out.println("SAVED APPOINTMENT ID: " + saved.getId());
-        System.out.println("SAVED CUSTOMER: " + saved.getCustomerName());
-        System.out.println("SAVED DATE: " + saved.getAppointmentDate());
-        System.out.println("SAVED TIME: " + saved.getAppointmentTime());
-
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
@@ -125,8 +120,6 @@ public class AppointmentController {
     public List<Appointment> getAllAppointments() {
         List<Appointment> appointments =
                 appointmentRepository.findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
-
-        System.out.println("TOTAL APPOINTMENTS: " + appointments.size());
 
         return appointments;
     }
