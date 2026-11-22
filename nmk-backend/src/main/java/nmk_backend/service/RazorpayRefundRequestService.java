@@ -42,16 +42,15 @@ public class RazorpayRefundRequestService {
         }
 
         String cleanReason = reason.trim();
-        Optional<OrderRefund> existing = refundRepository.findByRequestIdempotencyKeyForUpdate(idempotencyKey);
-        if (existing.isPresent()) {
-            return reuseExisting(existing.get(), orderId, amountPaise, cleanReason);
-        }
-
+        // Lock the order first. Querying a missing idempotency-key row first can
+        // acquire InnoDB next-key gap locks and deadlock two distinct refund requests
+        // that are competing for the same order.
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found"));
 
-        // Re-check after acquiring the order lock to serialize simultaneous requests.
-        existing = refundRepository.findByRequestIdempotencyKeyForUpdate(idempotencyKey);
+        // Every refund request for this order now follows the same lock order.
+        Optional<OrderRefund> existing =
+                refundRepository.findByRequestIdempotencyKeyForUpdate(idempotencyKey);
         if (existing.isPresent()) {
             return reuseExisting(existing.get(), orderId, amountPaise, cleanReason);
         }
