@@ -197,6 +197,7 @@ public class RazorpayWebhookProcessor {
             String paymentId = refund.path("payment_id").asText("");
             String currency = refund.path("currency").asText("");
             String providerStatus = refund.path("status").asText("");
+            String receipt = refund.path("receipt").asText("");
             JsonNode amountNode = refund.path("amount");
 
             if (refund.isMissingNode() || refund.isNull()
@@ -212,7 +213,8 @@ public class RazorpayWebhookProcessor {
                         paymentId,
                         amountNode.longValue(),
                         currency,
-                        providerStatus
+                        providerStatus,
+                        receipt.isBlank() ? null : receipt
                 );
             } catch (IllegalArgumentException invalidRefund) {
                 throw new ManualReviewException(safeMessage(invalidRefund));
