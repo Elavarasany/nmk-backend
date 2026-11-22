@@ -590,4 +590,22 @@ class ProcurementServiceTest {
         verifyNoInteractions(goodsReceiptRepository, supplierReturnRepository);
     }
 
+    private ProcurementCostReportRow reportRow(
+            String type, String reference, java.time.LocalDateTime createdAt
+    ) {
+        return new ProcurementCostReportRow() {
+            public String getType() { return type; }
+            public String getReference() { return reference; }
+            public Long getPurchaseOrderId() { return 20L; }
+            public String getPurchaseOrderNumber() { return "PO-TEST-002"; }
+            public String getSupplierName() { return "Optical Frames Supplier"; }
+            public String getSku() { return "FRAME-005"; }
+            public Integer getQuantity() { return 1; }
+            public BigDecimal getUnitCost() { return new BigDecimal("250.00"); }
+            public BigDecimal getTotalCost() { return new BigDecimal("250.00"); }
+            public String getRecordedBy() { return "manager.one"; }
+            public java.time.LocalDateTime getCreatedAt() { return createdAt; }
+        };
+    }
+
 }
