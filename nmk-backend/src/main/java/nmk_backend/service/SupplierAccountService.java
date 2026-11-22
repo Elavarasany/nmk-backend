@@ -30,6 +30,8 @@ public class SupplierAccountService {
     private final SupplierRepository supplierRepository;
     private final SupplierBillRepository billRepository;
     private final SupplierPaymentRepository paymentRepository;
+    private final SupplierBillCreditNoteRepository creditNoteRepository;
+    private final SupplierReturnRepository supplierReturnRepository;
     private final SupplierBillLandedCostAllocationRepository allocationRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
@@ -41,6 +43,8 @@ public class SupplierAccountService {
             SupplierRepository supplierRepository,
             SupplierBillRepository billRepository,
             SupplierPaymentRepository paymentRepository,
+            SupplierBillCreditNoteRepository creditNoteRepository,
+            SupplierReturnRepository supplierReturnRepository,
             SupplierBillLandedCostAllocationRepository allocationRepository,
             PurchaseOrderRepository purchaseOrderRepository,
             GoodsReceiptRepository goodsReceiptRepository,
@@ -51,6 +55,8 @@ public class SupplierAccountService {
         this.supplierRepository = supplierRepository;
         this.billRepository = billRepository;
         this.paymentRepository = paymentRepository;
+        this.creditNoteRepository = creditNoteRepository;
+        this.supplierReturnRepository = supplierReturnRepository;
         this.allocationRepository = allocationRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.goodsReceiptRepository = goodsReceiptRepository;
@@ -163,7 +169,8 @@ public class SupplierAccountService {
         // Use the locked bill row as the current-read payable balance. A SUM query here
         // would use an older REPEATABLE READ snapshot when concurrent payments waited on this bill.
         BigDecimal paid = bill.getPaidAmount() == null ? ZERO : bill.getPaidAmount();
-        BigDecimal outstanding = bill.getAmount().subtract(paid).setScale(2);
+        BigDecimal credited = bill.getCreditedAmount() == null ? ZERO : bill.getCreditedAmount();
+        BigDecimal outstanding = bill.getAmount().subtract(paid).subtract(credited).setScale(2);
         if (amount.compareTo(outstanding) > 0) {
             throw new IllegalArgumentException("Supplier payment exceeds the outstanding bill balance of " + outstanding);
         }
@@ -190,6 +197,81 @@ public class SupplierAccountService {
             );
         }
         return toPaymentResponse(payment);
+    }
+
+    @Transactional
+    public SupplierCreditNoteResponse recordCreditNote(
+            Long billId, SupplierCreditNoteRequest request, String username
+    ) {
+        Admin actor = requireActor(username);
+        validateCreditNoteRequest(request);
+        String key = normalizeKey(request.idempotencyKey());
+        String fingerprint = fingerprint("CREDIT_NOTE", billId, request, actor.getUsername());
+
+        var previous = creditNoteRepository.findByIdempotencyKey(key);
+        if (previous.isPresent()) return replayCreditNote(previous.get(), fingerprint);
+
+        SupplierBill bill = billRepository.findByIdForUpdate(billId)
+                .orElseThrow(() -> new InventoryNotFoundException("Supplier bill was not found"));
+        var raced = creditNoteRepository.findByIdempotencyKey(key);
+        if (raced.isPresent()) return replayCreditNote(raced.get(), fingerprint);
+        if (!"POSTED".equals(bill.getStatus())) {
+            throw new IllegalArgumentException("Only a posted supplier bill can receive a credit note");
+        }
+        if (creditNoteRepository.existsBySupplierIdAndCreditNoteNumberIgnoreCase(
+                bill.getSupplier().getId(), request.creditNoteNumber().trim())) {
+            throw new IllegalArgumentException("This supplier credit note number has already been recorded");
+        }
+
+        SupplierReturn supplierReturn = null;
+        if (request.supplierReturnId() != null) {
+            supplierReturn = supplierReturnRepository.findById(request.supplierReturnId())
+                    .orElseThrow(() -> new InventoryNotFoundException("Supplier return was not found"));
+            if (!supplierReturn.getPurchaseOrder().getSupplier().getId().equals(bill.getSupplier().getId())) {
+                throw new IllegalArgumentException("Supplier return belongs to a different supplier");
+            }
+            if (bill.getPurchaseOrder() == null
+                    || !bill.getPurchaseOrder().getId().equals(supplierReturn.getPurchaseOrder().getId())) {
+                throw new IllegalArgumentException("Supplier return must belong to the purchase order linked to this bill");
+            }
+        }
+
+        BigDecimal paid = bill.getPaidAmount() == null ? ZERO : bill.getPaidAmount();
+        BigDecimal credited = bill.getCreditedAmount() == null ? ZERO : bill.getCreditedAmount();
+        BigDecimal outstanding = bill.getAmount().subtract(paid).subtract(credited).setScale(2);
+        BigDecimal amount = money(request.amount(), "Supplier credit note amount");
+        if (amount.compareTo(outstanding) > 0) {
+            throw new IllegalArgumentException("Credit note exceeds the outstanding bill balance of " + outstanding
+                    + "; supplier credit balances on already-paid bills are not supported");
+        }
+
+        SupplierBillCreditNote creditNote = new SupplierBillCreditNote();
+        creditNote.setBill(bill);
+        creditNote.setSupplier(bill.getSupplier());
+        creditNote.setSupplierReturn(supplierReturn);
+        creditNote.setCreditNoteNumber(request.creditNoteNumber().trim());
+        creditNote.setIssueDate(request.issueDate());
+        creditNote.setAmount(amount);
+        creditNote.setReason(request.reason().trim());
+        creditNote.setStatus("CONFIRMED");
+        creditNote.setCreatedByUsername(actor.getUsername());
+        creditNote.setIdempotencyKey(key);
+        creditNote.setRequestFingerprint(fingerprint);
+        creditNoteRepository.saveAndFlush(creditNote);
+
+        bill.setCreditedAmount(credited.add(amount).setScale(2));
+        billRepository.saveAndFlush(bill);
+        return toCreditNoteResponse(creditNote);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SupplierCreditNoteResponse> getCreditNotes(Long billId, String username) {
+        requireActor(username);
+        if (billId == null || billId <= 0 || !billRepository.existsById(billId)) {
+            throw new InventoryNotFoundException("Supplier bill was not found");
+        }
+        return creditNoteRepository.findByBillIdOrderByIssueDateDescIdDesc(billId)
+                .stream().map(this::toCreditNoteResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -258,7 +340,8 @@ public class SupplierAccountService {
     private SupplierBillResponse toBillResponse(SupplierBill bill) {
         BigDecimal paid = paymentRepository.sumConfirmedAmountByBillId(bill.getId());
         if (paid == null) paid = ZERO;
-        BigDecimal outstanding = bill.getAmount().subtract(paid).setScale(2);
+        BigDecimal credited = bill.getCreditedAmount() == null ? ZERO : bill.getCreditedAmount();
+        BigDecimal outstanding = bill.getAmount().subtract(paid).subtract(credited).setScale(2);
         BigDecimal landedAmount = allocationRepository.sumAllocatedAmountByBillId(bill.getId());
         if (landedAmount == null) landedAmount = ZERO;
         int allocationCount = allocationRepository.findByBillIdOrderByIdAsc(bill.getId()).size();
@@ -267,9 +350,28 @@ public class SupplierAccountService {
                 bill.getId(), bill.getSupplier().getId(), bill.getSupplier().getName(),
                 order == null ? null : order.getId(), order == null ? null : order.getOrderNumber(),
                 bill.getInvoiceNumber(), bill.getInvoiceDate(), bill.getDueDate(),
-                bill.getAmount(), paid.setScale(2), outstanding, bill.getBillType(), bill.getStatus(),
+                bill.getAmount(), paid.setScale(2), credited.setScale(2), outstanding, bill.getBillType(), bill.getStatus(),
                 allocationCount, landedAmount.setScale(2), bill.getCreatedAt()
         );
+    }
+
+    private SupplierCreditNoteResponse toCreditNoteResponse(SupplierBillCreditNote creditNote) {
+        SupplierReturn supplierReturn = creditNote.getSupplierReturn();
+        return new SupplierCreditNoteResponse(
+                creditNote.getId(), creditNote.getBill().getId(), creditNote.getSupplier().getId(),
+                supplierReturn == null ? null : supplierReturn.getId(),
+                supplierReturn == null ? null : supplierReturn.getReturnNumber(),
+                creditNote.getCreditNoteNumber(), creditNote.getIssueDate(), creditNote.getAmount(),
+                creditNote.getReason(), creditNote.getStatus(), creditNote.getCreatedByUsername(),
+                creditNote.getCreatedAt()
+        );
+    }
+
+    private SupplierCreditNoteResponse replayCreditNote(SupplierBillCreditNote creditNote, String fingerprint) {
+        if (!fingerprint.equals(creditNote.getRequestFingerprint())) {
+            throw new IllegalArgumentException("Supplier credit note idempotency key was reused with different details");
+        }
+        return toCreditNoteResponse(creditNote);
     }
 
     private SupplierPaymentResponse toPaymentResponse(SupplierPayment payment) {
@@ -323,6 +425,17 @@ public class SupplierAccountService {
         money(request.amount(), "Supplier bill amount");
         normalizeKey(request.idempotencyKey());
         normalizeBillType(request.billType());
+    }
+
+    private void validateCreditNoteRequest(SupplierCreditNoteRequest request) {
+        if (request == null || request.creditNoteNumber() == null || request.creditNoteNumber().isBlank()
+                || request.creditNoteNumber().trim().length() > 100 || request.issueDate() == null
+                || request.amount() == null || request.reason() == null || request.reason().isBlank()
+                || request.reason().trim().length() > 500) {
+            throw new IllegalArgumentException("Credit note number, issue date, amount and reason are required");
+        }
+        money(request.amount(), "Supplier credit note amount");
+        normalizeKey(request.idempotencyKey());
     }
 
     private void validatePaymentRequest(SupplierPaymentRequest request) {
