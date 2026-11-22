@@ -8,6 +8,9 @@ import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.InventoryBalanceRepository;
 import nmk_backend.repository.PosReturnRepository;
 import nmk_backend.repository.PosSaleRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,7 @@ import java.util.*;
 public class PosReportService {
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
+    private static final int REPORT_BATCH_SIZE = 200;
 
     private final PosSaleRepository saleRepository;
     private final PosReturnRepository returnRepository;
@@ -67,25 +71,56 @@ public class PosReportService {
 
         var fromDateTime = from.atStartOfDay();
         var toExclusive = to.plusDays(1).atStartOfDay();
-        List<PosSale> sales = saleRepository.findCompletedSalesForReport(
-                locationId, fromDateTime, toExclusive
-        );
-        List<PosReturn> returns = returnRepository.findCompletedReturnsForReport(
-                locationId, fromDateTime, toExclusive
-        );
 
-        BigDecimal exchangeCreditApplied = Optional.ofNullable(exchangeCreditRepository.sumExchangeCreditApplied(locationId, fromDateTime, toExclusive)).orElse(ZERO);
+        BigDecimal exchangeCreditApplied = Optional.ofNullable(
+                exchangeCreditRepository.sumExchangeCreditApplied(locationId, fromDateTime, toExclusive)
+        ).orElse(ZERO);
 
-        BigDecimal subtotal = ZERO;
-        BigDecimal discounts = ZERO;
-        BigDecimal netSales = ZERO;
-        Map<String, BigDecimal> salesByPayment = new TreeMap<>();
-        Map<String, BigDecimal> refundsByPayment = new TreeMap<>();
-        Map<String, MutableCashier> cashiers = new TreeMap<>();
-        Map<LocalDate, MutableDaily> daily = new TreeMap<>();
-        Map<Long, MutableProduct> products = new HashMap<>();
+        ReportAccumulator totals = new ReportAccumulator();
+        int pageNumber = 0;
+        Page<PosSale> salePage;
+        do {
+            salePage = saleRepository.findCompletedSalesForReport(
+                    locationId, fromDateTime, toExclusive,
+                    PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "createdAt", "id"))
+            );
+            for (PosSale sale : salePage.getContent()) {
+                totals.addSale(sale);
+            }
+        } while (salePage.hasNext());
 
-        for (PosSale sale : sales) {
+        pageNumber = 0;
+        Page<PosReturn> returnPage;
+        do {
+            returnPage = returnRepository.findCompletedReturnsForReport(
+                    locationId, fromDateTime, toExclusive,
+                    PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "createdAt", "id"))
+            );
+            for (PosReturn record : returnPage.getContent()) {
+                totals.addReturn(record);
+            }
+        } while (returnPage.hasNext());
+
+        return totals.toResponse(locationId, from, to, exchangeCreditApplied);
+    }
+
+    private static class ReportAccumulator {
+        private int transactionCount;
+        private BigDecimal subtotal = ZERO;
+        private BigDecimal discounts = ZERO;
+        private BigDecimal netSales = ZERO;
+        private BigDecimal refundTotal = ZERO;
+        private BigDecimal salesReversals = ZERO;
+        private BigDecimal recordedRefundPaymentTotal = ZERO;
+        private int customerReturnCount;
+        private final Map<String, BigDecimal> salesByPayment = new TreeMap<>();
+        private final Map<String, BigDecimal> refundsByPayment = new TreeMap<>();
+        private final Map<String, MutableCashier> cashiers = new TreeMap<>();
+        private final Map<LocalDate, MutableDaily> daily = new TreeMap<>();
+        private final Map<Long, MutableProduct> products = new HashMap<>();
+
+        private void addSale(PosSale sale) {
+            transactionCount++;
             subtotal = subtotal.add(sale.getSubtotal());
             discounts = discounts.add(sale.getDiscountAmount());
             netSales = netSales.add(sale.getGrandTotal());
@@ -105,11 +140,7 @@ public class PosReportService {
             day.netSales = day.netSales.add(sale.getGrandTotal());
 
             for (PosPayment payment : sale.getPayments()) {
-                salesByPayment.merge(
-                        payment.getPaymentMethod(),
-                        payment.getAmount(),
-                        BigDecimal::add
-                );
+                salesByPayment.merge(payment.getPaymentMethod(), payment.getAmount(), BigDecimal::add);
             }
             for (PosSaleItem item : sale.getItems()) {
                 MutableProduct product = products.computeIfAbsent(
@@ -121,11 +152,7 @@ public class PosReportService {
             }
         }
 
-        BigDecimal refundTotal = ZERO;
-        BigDecimal salesReversals = ZERO;
-        BigDecimal recordedRefundPaymentTotal = ZERO;
-        int customerReturnCount = 0;
-        for (PosReturn record : returns) {
+        private void addReturn(PosReturn record) {
             refundTotal = refundTotal.add(record.getRefundTotal());
             if ("VOID".equals(record.getReturnType())) {
                 salesReversals = salesReversals.add(record.getRefundTotal());
@@ -133,8 +160,7 @@ public class PosReportService {
             MutableDaily day = daily.computeIfAbsent(
                     record.getCreatedAt().toLocalDate(), ignored -> new MutableDaily()
             );
-            // A full void is a reversal, not a customer return. Keep its refund
-            // in the financial totals, but do not inflate the operational return count.
+            // A full void is a reversal, not a customer return.
             if ("RETURN".equals(record.getReturnType())) {
                 customerReturnCount++;
                 day.returnCount++;
@@ -142,61 +168,52 @@ public class PosReportService {
             day.refunds = day.refunds.add(record.getRefundTotal());
 
             for (PosRefundPayment payment : record.getRefundPayments()) {
-                refundsByPayment.merge(
-                        payment.getPaymentMethod(),
-                        payment.getAmount(),
-                        BigDecimal::add
-                );
+                refundsByPayment.merge(payment.getPaymentMethod(), payment.getAmount(), BigDecimal::add);
                 recordedRefundPaymentTotal = recordedRefundPaymentTotal.add(payment.getAmount());
             }
         }
 
-        List<PosSalesReportResponse.CashierTotals> cashierRows = cashiers.entrySet().stream()
-                .map(entry -> new PosSalesReportResponse.CashierTotals(
-                        entry.getKey(),
-                        entry.getValue().transactionCount,
-                        entry.getValue().subtotal,
-                        entry.getValue().discounts,
-                        entry.getValue().netSales
-                ))
-                .sorted(Comparator.comparing(
-                        PosSalesReportResponse.CashierTotals::netSales,
-                        Comparator.reverseOrder()
-                ))
-                .toList();
+        private PosSalesReportResponse toResponse(
+                Long locationId, LocalDate from, LocalDate to, BigDecimal exchangeCreditApplied
+        ) {
+            List<PosSalesReportResponse.CashierTotals> cashierRows = cashiers.entrySet().stream()
+                    .map(entry -> new PosSalesReportResponse.CashierTotals(
+                            entry.getKey(), entry.getValue().transactionCount,
+                            entry.getValue().subtotal, entry.getValue().discounts, entry.getValue().netSales
+                    ))
+                    .sorted(Comparator.comparing(
+                            PosSalesReportResponse.CashierTotals::netSales, Comparator.reverseOrder()
+                    ))
+                    .toList();
 
-        List<PosSalesReportResponse.DailyTotals> dailyRows = daily.entrySet().stream()
-                .map(entry -> new PosSalesReportResponse.DailyTotals(
-                        entry.getKey(),
-                        entry.getValue().transactionCount,
-                        entry.getValue().netSales,
-                        entry.getValue().returnCount,
-                        entry.getValue().refunds,
-                        entry.getValue().netSales.subtract(entry.getValue().refunds)
-                ))
-                .toList();
+            List<PosSalesReportResponse.DailyTotals> dailyRows = daily.entrySet().stream()
+                    .map(entry -> new PosSalesReportResponse.DailyTotals(
+                            entry.getKey(), entry.getValue().transactionCount, entry.getValue().netSales,
+                            entry.getValue().returnCount, entry.getValue().refunds,
+                            entry.getValue().netSales.subtract(entry.getValue().refunds)
+                    ))
+                    .toList();
 
-        List<PosSalesReportResponse.ProductTotals> topProducts = products.values().stream()
-                .map(product -> new PosSalesReportResponse.ProductTotals(
-                        product.productId, product.productName,
-                        product.quantitySold, product.grossLineTotal
-                ))
-                .sorted(Comparator.comparing(
-                        PosSalesReportResponse.ProductTotals::grossLineTotal,
-                        Comparator.reverseOrder()
-                ))
-                .limit(10)
-                .toList();
+            List<PosSalesReportResponse.ProductTotals> topProducts = products.values().stream()
+                    .map(product -> new PosSalesReportResponse.ProductTotals(
+                            product.productId, product.productName, product.quantitySold, product.grossLineTotal
+                    ))
+                    .sorted(Comparator.comparing(
+                            PosSalesReportResponse.ProductTotals::grossLineTotal, Comparator.reverseOrder()
+                    ))
+                    .limit(10)
+                    .toList();
 
-        return new PosSalesReportResponse(
-                locationId, from, to, sales.size(),
-                subtotal, discounts, netSales,
-                customerReturnCount, refundTotal, salesReversals,
-                recordedRefundPaymentTotal, exchangeCreditApplied, netSales.subtract(refundTotal),
-                Collections.unmodifiableMap(salesByPayment),
-                Collections.unmodifiableMap(refundsByPayment),
-                cashierRows, dailyRows, topProducts
-        );
+            return new PosSalesReportResponse(
+                    locationId, from, to, transactionCount,
+                    subtotal, discounts, netSales,
+                    customerReturnCount, refundTotal, salesReversals,
+                    recordedRefundPaymentTotal, exchangeCreditApplied, netSales.subtract(refundTotal),
+                    Collections.unmodifiableMap(salesByPayment),
+                    Collections.unmodifiableMap(refundsByPayment),
+                    cashierRows, dailyRows, topProducts
+            );
+        }
     }
 
     private static class MutableCashier {
