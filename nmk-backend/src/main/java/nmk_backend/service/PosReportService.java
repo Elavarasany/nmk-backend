@@ -27,6 +27,7 @@ public class PosReportService {
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final int REPORT_BATCH_SIZE = 200;
+    private static final int INVENTORY_FIRST_PAGE_SIZE = 50;
 
     private final PosSaleRepository saleRepository;
     private final PosReturnRepository returnRepository;
@@ -81,7 +82,12 @@ public class PosReportService {
         Long reportLocationId = location.getId();
         String locationCode = location.getCode();
         String locationName = location.getName();
-        List<PosInventoryReportResponse.VariantStock> rows = new ArrayList<>();
+        List<PosInventoryReportResponse.VariantStock> firstPageRows = new ArrayList<>(INVENTORY_FIRST_PAGE_SIZE);
+        long variantCount = 0;
+        long onHandQuantity = 0;
+        long reservedQuantity = 0;
+        long availableQuantity = 0;
+        int lowStockCount = 0;
         int pageNumber = 0;
         Page<InventoryBalance> page;
         do {
@@ -89,15 +95,45 @@ public class PosReportService {
                     locationId,
                     PageRequest.of(pageNumber++, REPORT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "id"))
             );
-            page.getContent().stream()
-                    .map(PosInventoryReportResponse.VariantStock::from)
-                    .forEach(rows::add);
-            // DTOs are fully materialized before clearing; this prevents the persistence
-            // context from retaining every inventory entity and its product/variant graph.
+            for (InventoryBalance balance : page.getContent()) {
+                var row = PosInventoryReportResponse.VariantStock.from(balance);
+                variantCount++;
+                onHandQuantity += row.onHandQuantity();
+                reservedQuantity += row.reservedQuantity();
+                availableQuantity += row.availableQuantity();
+                if (row.lowStock()) lowStockCount++;
+                if (firstPageRows.size() < INVENTORY_FIRST_PAGE_SIZE) firstPageRows.add(row);
+            }
+            // Keep only the first display page in memory while accumulating scalar totals.
             entityManager.clear();
         } while (page.hasNext());
 
-        return PosInventoryReportResponse.fromRows(reportLocationId, locationCode, locationName, rows);
+        return PosInventoryReportResponse.fromAggregates(
+                reportLocationId, locationCode, locationName, variantCount,
+                onHandQuantity, reservedQuantity, availableQuantity, lowStockCount,
+                0, INVENTORY_FIRST_PAGE_SIZE, variantCount > INVENTORY_FIRST_PAGE_SIZE, firstPageRows
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PosInventoryReportResponse.VariantStock> getInventoryReportEntries(
+            Long locationId, int page, int size, String username, String role
+    ) {
+        if (locationId == null || locationId <= 0) {
+            throw new IllegalArgumentException("A valid inventory location is required");
+        }
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
+        locationRepository.findById(locationId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
+
+        return inventoryBalanceRepository.findByLocationId(
+                        locationId,
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "id"))
+                )
+                .map(PosInventoryReportResponse.VariantStock::from);
     }
 
     @Transactional(readOnly = true)
