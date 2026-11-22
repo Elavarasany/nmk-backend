@@ -2,6 +2,8 @@ package nmk_backend.repository;
 
 import nmk_backend.entity.PosReturn;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -30,11 +32,12 @@ public interface PosReturnRepository extends JpaRepository<PosReturn, Long> {
           and r.status = 'COMPLETED'
           and r.createdAt >= :from
           and r.createdAt < :to
-        order by r.createdAt asc
+        order by r.createdAt asc, r.id asc
     """)
-    List<PosReturn> findCompletedReturnsForReport(
+    Page<PosReturn> findCompletedReturnsForReport(
             @Param("locationId") Long locationId,
             @Param("from") java.time.LocalDateTime from,
-            @Param("to") java.time.LocalDateTime to
+            @Param("to") java.time.LocalDateTime to,
+            Pageable pageable
     );
 }
