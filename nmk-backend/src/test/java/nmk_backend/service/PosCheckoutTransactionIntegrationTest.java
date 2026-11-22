@@ -878,7 +878,7 @@ class PosCheckoutTransactionIntegrationTest {
         );
         exchangeService.exchange(original.id(), exchangeRequest, "pos-rollback-test-cashier", "CASHIER");
 
-        var report = reportService.getSalesReport(location.getId(), LocalDate.now(), LocalDate.now());
+        var report = reportService.getSalesReport(location.getId(), LocalDate.now(), LocalDate.now(), "pos-rollback-test-cashier", "CASHIER");
 
         assertEquals(2, report.transactionCount(),
                 "The original sale and replacement sale both represent retail sales");
