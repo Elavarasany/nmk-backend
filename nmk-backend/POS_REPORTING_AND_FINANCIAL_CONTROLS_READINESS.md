@@ -34,6 +34,7 @@ It is a **net recorded procurement-cost activity measure** only. It is not proof
 ## Cash and payment controls
 
 - Cash drawer expected balance is based on recorded cash movements only. UPI/card amounts do not belong in the cash drawer.
+- Shift close and cash-refund operations both lock the shift row before changing drawer state. A MySQL concurrency regression test now races a cash refund against shift close and verifies that either the refund is included before close or is rejected after close, with no post-close drawer mutation.
 - UPI/card sale and refund references are operator-entered. Verify transactions in the merchant/provider portal independently.
 - POS does not initiate or verify provider refunds. Complete and verify noncash refunds externally before recording them.
 - Reconcile daily sales tender totals against provider transaction exports and provider net settlements against bank credits. Investigate fees, timing differences, reversals, chargebacks, and unmatched references.
