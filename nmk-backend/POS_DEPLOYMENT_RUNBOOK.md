@@ -51,6 +51,10 @@ The webhook worker expects the pre-existing `razorpay_webhook_events` table plus
 
 Do not skip these scripts on a database where the webhook worker is enabled, and do not run them blindly if the columns or index already exist.
 
+### Shared API rate-limit storage (required for production defaults)
+
+Before activating the production profile, inspect the target schema and apply `018-create-api-rate-limit-buckets.sql` if the table and its expiry index are not already present. Verify the table, primary key, expiry index and CHECK constraint. This script uses `CREATE TABLE IF NOT EXISTS`, but still review the existing table definition rather than treating that clause as proof of schema equivalence. Production enables `app.rate-limit.enabled` by default; the application returns 503 for protected requests if the shared database store is unavailable. Do not override `APP_RATE_LIMIT_ENABLED=false` as a routine workaround. Rehearse the migration and rate-limit behavior on the disposable MySQL staging clone first.
+
 ## 4. Verify schema before starting the application
 
 - Confirm all POS tables, foreign keys, unique idempotency constraints, indexes and required columns exist.
