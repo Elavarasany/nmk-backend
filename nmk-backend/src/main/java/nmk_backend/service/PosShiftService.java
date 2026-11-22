@@ -103,6 +103,9 @@ public class PosShiftService {
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
         }
+        if (username != null && !canManageOtherShifts(role)) {
+            throw new IllegalArgumentException("Only managers and administrators can view register shift history");
+        }
         assertLocationAccess(username, role, locationId);
         var pageable = PageRequest.of(page, size, Sort.by(
                 Sort.Order.desc("openedAt"), Sort.Order.desc("id")));
