@@ -28,6 +28,10 @@ import java.time.LocalDateTime;
         @Index(
             name = "idx_stock_movements_reference",
             columnList = "reference_type, reference_id"
+        ),
+        @Index(
+            name = "idx_stock_movements_actor_admin",
+            columnList = "actor_admin_id"
         )
     }
 )
