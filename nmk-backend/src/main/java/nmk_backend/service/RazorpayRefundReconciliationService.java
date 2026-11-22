@@ -84,8 +84,7 @@ public class RazorpayRefundReconciliationService {
             OrderRefund providerRow = existing.get();
             Optional<OrderRefund> receiptRequest =
                     refundRepository.findByRazorpayPaymentIdAndReceiptForUpdate(paymentId, receipt);
-            if (receiptRequest.isPresent()
-                    && !receiptRequest.get().getId().equals(providerRow.getId())) {
+            if (receiptRequest.isPresent() && receiptRequest.get() != providerRow) {
                 OrderRefund localRequest = receiptRequest.get();
                 if (!order.getId().equals(localRequest.getOrder().getId())
                         || !paymentId.equals(localRequest.getRazorpayPaymentId())
