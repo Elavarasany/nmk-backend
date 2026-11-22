@@ -1,6 +1,9 @@
 package nmk_backend.service;
 
 import nmk_backend.entity.Order;
+import nmk_backend.dto.RazorpayOrderSnapshot;
+import nmk_backend.dto.RazorpayPaymentAttemptSnapshot;
+import java.util.Optional;
 import nmk_backend.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +27,9 @@ class StalePaymentCreationReviewServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private RazorpayOrderStatusGateway providerGateway;
+
     @Test
     void returnsOnlyPendingOrdersWithAnOutstandingStockReservation() {
         LocalDateTime now = LocalDateTime.now();
@@ -44,7 +50,7 @@ class StalePaymentCreationReviewServiceTest {
                 any(PageRequest.class)
         )).thenReturn(new PageImpl<>(List.of(order)));
 
-        var page = new StalePaymentCreationReviewService(orderRepository)
+        var page = new StalePaymentCreationReviewService(orderRepository, providerGateway)
                 .getStalePaymentCreations(0, 25, 10);
 
         assertEquals(1, page.getTotalElements());
@@ -62,6 +68,69 @@ class StalePaymentCreationReviewServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(-1, 25, 10));
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(0, 101, 10));
         assertThrows(IllegalArgumentException.class, () -> service.getStalePaymentCreations(0, 25, 0));
-        verifyNoInteractions(orderRepository);
+        verifyNoInteractions(orderRepository, providerGateway);
+    }
+
+    @Test
+    void fetchesProviderOrderAndPaymentsWithoutChangingLocalOrder() {
+        LocalDateTime now = LocalDateTime.now();
+        Order order = new Order();
+        ReflectionTestUtils.setField(order, "id", 42L);
+        order.setTotalAmount(new BigDecimal("125.00"));
+        order.setRazorpayOrderId("order_Abc123");
+        order.setPaymentStatus("PENDING");
+        order.setPaymentCreationStatus("IN_PROGRESS");
+        order.setStockReserved(true);
+        order.setReservationExpiresAt(now.minusMinutes(5));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(providerGateway.fetchOrderAndPayments("order_Abc123")).thenReturn(
+                new RazorpayOrderSnapshot(
+                        "order_Abc123", "attempted", 12500, 0, 12500, "INR", 2,
+                        List.of(new RazorpayPaymentAttemptSnapshot("pay_Abc123", "failed", 12500, "INR", false))
+                )
+        );
+
+        var result = new StalePaymentCreationReviewService(orderRepository, providerGateway)
+                .getProviderStatus(42L);
+
+        assertEquals("attempted", result.providerOrderStatus());
+        assertEquals(2, result.providerAttempts());
+        assertTrue(result.providerAmountMatchesLocal());
+        assertEquals("failed", result.paymentAttempts().get(0).status());
+        assertTrue(result.stockReserved());
+        assertEquals("PENDING", order.getPaymentStatus());
+        assertTrue(order.isStockReserved());
+        verify(providerGateway).fetchOrderAndPayments("order_Abc123");
+    }
+
+    @Test
+    void refusesProviderLookupBeforeReservationExpires() {
+        Order order = new Order();
+        order.setRazorpayOrderId("order_Abc123");
+        order.setPaymentStatus("PENDING");
+        order.setStockReserved(true);
+        order.setReservationExpiresAt(LocalDateTime.now().plusMinutes(5));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+
+        var service = new StalePaymentCreationReviewService(orderRepository, providerGateway);
+        assertThrows(IllegalStateException.class, () -> service.getProviderStatus(42L));
+        verifyNoInteractions(providerGateway);
+    }
+
+    @Test
+    void failsClosedWhenProviderLookupFails() throws Exception {
+        Order order = new Order();
+        order.setRazorpayOrderId("order_Abc123");
+        order.setPaymentStatus("PENDING");
+        order.setStockReserved(true);
+        order.setReservationExpiresAt(LocalDateTime.now().minusMinutes(5));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(providerGateway.fetchOrderAndPayments("order_Abc123")).thenThrow(new RuntimeException("provider unavailable"));
+
+        var service = new StalePaymentCreationReviewService(orderRepository, providerGateway);
+        assertThrows(StalePaymentCreationReviewService.ProviderStatusUnavailableException.class,
+                () -> service.getProviderStatus(42L));
+        assertTrue(order.isStockReserved());
+        assertEquals("PENDING", order.getPaymentStatus());
     }
 }
