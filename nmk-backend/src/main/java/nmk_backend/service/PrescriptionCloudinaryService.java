@@ -9,6 +9,11 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -76,12 +81,14 @@ public class PrescriptionCloudinaryService {
                 }
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Prescription storage returned an invalid asset.");
             }
+            long numericVersion = Long.parseLong(version);
             return Map.of(
                     "publicId", returnedId,
                     "resourceType", resourceType,
                     "format", returnedFormat,
-                    "version", Long.parseLong(version),
+                    "version", numericVersion,
                     "signature", signature,
+                    "assetProof", createAssetProof(returnedId, resourceType, returnedFormat, numericVersion),
                     "imageName", safeFileName(file.getOriginalFilename())
             );
         } catch (ResponseStatusException exception) {
@@ -96,11 +103,16 @@ public class PrescriptionCloudinaryService {
     public boolean verifyUploadedAsset(Map<String, Object> asset) {
         if (!isValidAssetShape(asset) || cloudName.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) return false;
         try {
-            return cloudinary.verifyApiResponseSignature(
-                    String.valueOf(asset.get("publicId")),
-                    String.valueOf(asset.get("version")),
-                    String.valueOf(asset.get("signature"))
-            );
+            String publicId = String.valueOf(asset.get("publicId"));
+            String resourceType = String.valueOf(asset.get("resourceType"));
+            String format = String.valueOf(asset.get("format")).toLowerCase(Locale.ROOT);
+            long version = Long.parseLong(String.valueOf(asset.get("version")));
+            boolean cloudinarySignatureValid = cloudinary.verifyApiResponseSignature(
+                    publicId, String.valueOf(version), String.valueOf(asset.get("signature")));
+            byte[] expected = createAssetProof(publicId, resourceType, format, version)
+                    .getBytes(StandardCharsets.US_ASCII);
+            byte[] actual = String.valueOf(asset.get("assetProof")).getBytes(StandardCharsets.US_ASCII);
+            return cloudinarySignatureValid && MessageDigest.isEqual(expected, actual);
         } catch (RuntimeException exception) {
             return false;
         }
@@ -108,7 +120,7 @@ public class PrescriptionCloudinaryService {
 
     public String createPrivateDownloadUrl(Map<String, Object> asset) {
         requireConfigured();
-        if (!isValidAssetShape(asset)) {
+        if (!verifyUploadedAsset(asset)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Prescription asset details are invalid.");
         }
         try {
@@ -139,7 +151,19 @@ public class PrescriptionCloudinaryService {
                 && ("image".equals(resourceType) || "raw".equals(resourceType))
                 && ALLOWED_FORMATS.contains(format)
                 && version.matches("[0-9]{1,20}")
-                && signature.matches("[a-fA-F0-9]{40}|[a-fA-F0-9]{64}");
+                && signature.matches("[a-fA-F0-9]{40}|[a-fA-F0-9]{64}")
+                && String.valueOf(asset.getOrDefault("assetProof", "")).matches("[a-fA-F0-9]{64}");
+    }
+
+    private String createAssetProof(String publicId, String resourceType, String format, long version) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(apiSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            String payload = publicId + "|" + resourceType + "|" + format + "|" + version;
+            return HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to verify private prescription metadata.", exception);
+        }
     }
 
     private void requireConfigured() {
