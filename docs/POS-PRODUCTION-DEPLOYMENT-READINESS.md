@@ -127,3 +127,13 @@ No deployment, live database access, migration execution, PR merge, or productio
 - [ ] Verify provider settlement net amount, fee, tax and UTR totals; verify payment rows match local paid orders and refund rows match processed refund ledger rows.
 - [ ] Review all transfer, adjustment, unmatched, mismatch and on-hold entries before treating a settlement as complete.
 - [ ] Do not label provider reconciliation as bank reconciliation. Bank statement import, UTR-to-bank-credit matching and settlement variance approval remain outstanding.
+
+
+## Razorpay dispute release checks
+
+- [ ] Apply and verify manual migration 021 after migration 020 on the approved target schema.
+- [ ] Configure and verify the signed Razorpay webhook URL and backend-only webhook secret.
+- [ ] Subscribe to the dispute lifecycle events supported by the merchant account and confirm test events reach the backend.
+- [ ] Verify dispute IDs/payment IDs match local orders; review unmatched and amount-mismatch records.
+- [ ] Assign a staff owner to monitor response deadlines and submit evidence/decisions in Razorpay Dashboard.
+- [ ] Review historical webhook payload retention separately; the new sanitizer only affects events received after deployment.
