@@ -62,12 +62,18 @@ class OnlineCheckoutRequestValidationTest {
         item.setVariantId(null);
         item.setQuantity(0);
         item.setPrescriptionFileName("F".repeat(256));
-        item.setPrescription(Map.of(
-                "a", "1", "b", "2", "c", "3", "d", "4", "e", "5",
-                "f", "6", "g", "7", "h", "8", "i", "9", "j", "10",
-                "k", "11", "l", "12", "m", "13", "n", "14", "o", "15",
-                "p", "16", "q", "17", "r", "18", "s", "19", "t", "20",
-                "u", "21"
+        item.setPrescription(Map.ofEntries(
+                Map.entry("a", "1"), Map.entry("b", "2"),
+                Map.entry("c", "3"), Map.entry("d", "4"),
+                Map.entry("e", "5"), Map.entry("f", "6"),
+                Map.entry("g", "7"), Map.entry("h", "8"),
+                Map.entry("i", "9"), Map.entry("j", "10"),
+                Map.entry("k", "11"), Map.entry("l", "12"),
+                Map.entry("m", "13"), Map.entry("n", "14"),
+                Map.entry("o", "15"), Map.entry("p", "16"),
+                Map.entry("q", "17"), Map.entry("r", "18"),
+                Map.entry("s", "19"), Map.entry("t", "20"),
+                Map.entry("u", "21")
         ));
         request.setItems(List.of(item));
 
