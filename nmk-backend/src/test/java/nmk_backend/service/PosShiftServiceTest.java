@@ -78,6 +78,31 @@ class PosShiftServiceTest {
     }
 
     @Test
+    void openingFloatCannotBeNegative() {
+        assertThrows(IllegalArgumentException.class, () -> service.openShift(
+                new nmk_backend.dto.PosShiftOpenRequest(
+                        3L, new BigDecimal("-0.01"), "SHIFT-NEGATIVE-FLOAT"
+                ),
+                "cashier.one"
+        ));
+        verifyNoInteractions(registerRepository, shiftRepository, movementRepository);
+    }
+
+    @Test
+    void closingCashCountCannotBeNegative() {
+        when(shiftRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(shift));
+
+        assertThrows(IllegalArgumentException.class, () -> service.closeShift(
+                9L,
+                new PosShiftCloseRequest(new BigDecimal("-0.01"), "Invalid negative count"),
+                "cashier.one",
+                "CASHIER"
+        ));
+        verify(movementRepository, never()).findByShiftIdOrderByCreatedAtAscIdAsc(9L);
+        verify(shiftRepository, never()).saveAndFlush(any(PosShift.class));
+    }
+
+    @Test
     void anotherManagerCannotReplayACashMovementCreatedByDifferentStaff() {
         PosCashMovement existing = movement("CASH_OUT", "OUT", "25.00", shift);
         existing.setIdempotencyKey("CASH-OUT-3");
