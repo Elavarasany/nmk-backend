@@ -270,7 +270,7 @@ class PosReportServiceTest {
             balance.setVariant(variant);
             balance.setOnHandQuantity(10);
             balance.setReservedQuantity(2);
-            balance.setReorderLevel(9);
+            balance.setReorderLevel(7);
             firstBatch.add(balance);
         }
         Product lastProduct = new Product();
