@@ -114,7 +114,7 @@ public class PosReportService {
             for (PosSaleItem item : sale.getItems()) {
                 MutableProduct product = products.computeIfAbsent(
                         item.getProductId(),
-                        ignored -> new MutableProduct(item.getProductId(), item.getProductName(), item.getSku())
+                        ignored -> new MutableProduct(item.getProductId(), item.getProductName())
                 );
                 product.quantitySold += item.getQuantity();
                 product.grossLineTotal = product.grossLineTotal.add(item.getLineTotal());
@@ -174,7 +174,7 @@ public class PosReportService {
 
         List<PosSalesReportResponse.ProductTotals> topProducts = products.values().stream()
                 .map(product -> new PosSalesReportResponse.ProductTotals(
-                        product.productId, product.productName, product.sku,
+                        product.productId, product.productName,
                         product.quantitySold, product.grossLineTotal
                 ))
                 .sorted(Comparator.comparing(
@@ -212,14 +212,12 @@ public class PosReportService {
     private static class MutableProduct {
         private final Long productId;
         private final String productName;
-        private final String sku;
         private long quantitySold;
         private BigDecimal grossLineTotal = ZERO;
 
-        private MutableProduct(Long productId, String productName, String sku) {
+        private MutableProduct(Long productId, String productName) {
             this.productId = productId;
             this.productName = productName;
-            this.sku = sku;
         }
     }
 }
