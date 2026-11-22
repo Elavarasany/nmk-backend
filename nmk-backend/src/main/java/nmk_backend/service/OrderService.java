@@ -755,6 +755,7 @@ public class OrderService {
                 out.put("format", text(rx.get("format")).toLowerCase(java.util.Locale.ROOT));
                 out.put("version", rx.get("version"));
                 out.put("signature", text(rx.get("signature")));
+                out.put("assetProof", text(rx.get("assetProof")));
                 out.put("imageName", fileName == null ? "" : fileName.trim());
             } else {
                 // Preserve access to older orders while new uploads move to private assets.
