@@ -714,6 +714,14 @@ public class OrderService {
             return null;
         }
 
+        validatePrescriptionPayload(rx);
+
+        if (fileName != null && fileName.length() > 255) {
+            throw new IllegalArgumentException(
+                    "Prescription file name is too long."
+            );
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
 
         if ("image".equalsIgnoreCase(text(rx.get("mode")))) {
@@ -770,6 +778,74 @@ public class OrderService {
                     exception
             );
         }
+    }
+
+    static void validatePrescriptionPayload(Map<String, Object> prescription) {
+        try {
+            String serialized = PRESCRIPTION_WRITER.writeValueAsString(prescription);
+            if (serialized.length() > 8192) {
+                throw new IllegalArgumentException(
+                        "Prescription details are too large."
+                );
+            }
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(
+                    "Prescription details are invalid."
+            );
+        }
+
+        int[] nodeCount = {0};
+        validatePrescriptionValue(prescription, 0, nodeCount);
+    }
+
+    private static void validatePrescriptionValue(
+            Object value,
+            int depth,
+            int[] nodeCount
+    ) {
+        nodeCount[0]++;
+        if (nodeCount[0] > 60 || depth > 2) {
+            throw new IllegalArgumentException(
+                    "Prescription details are too complex."
+            );
+        }
+
+        if (value == null || value instanceof Boolean || value instanceof Number) {
+            return;
+        }
+
+        if (value instanceof String text) {
+            if (text.length() > 2048) {
+                throw new IllegalArgumentException(
+                        "A prescription field is too long."
+                );
+            }
+            return;
+        }
+
+        if (value instanceof Map<?, ?> map) {
+            if (map.size() > 20) {
+                throw new IllegalArgumentException(
+                        "Prescription details contain too many fields."
+                );
+            }
+
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key)
+                        || key.isBlank()
+                        || key.length() > 40) {
+                    throw new IllegalArgumentException(
+                            "Prescription field name is invalid."
+                    );
+                }
+                validatePrescriptionValue(entry.getValue(), depth + 1, nodeCount);
+            }
+            return;
+        }
+
+        throw new IllegalArgumentException(
+                "Prescription details contain an unsupported value."
+        );
     }
 
     private Map<String, String> cleanEye(Object raw) {
