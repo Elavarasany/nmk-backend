@@ -311,6 +311,16 @@ class AdminActionAuthorizationServiceTest {
         verify(authorizationRepository).save(authorization);
     }
 
+    @Test
+    void authorizeActionRejectsPasswordsOverBcryptByteLimitBeforeDatabaseAccess() {
+        String oversizedUtf8Password = "😀".repeat(19);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.authorizeAction("admin", oversizedUtf8Password, "POS_RETURN"));
+
+        verifyNoInteractions(adminRepository, passwordEncoder, authorizationRepository);
+    }
+
     private AdminActionAuthorization validAuthorization() {
         AdminActionAuthorization authorization =
                 new AdminActionAuthorization();
