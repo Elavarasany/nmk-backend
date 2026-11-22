@@ -106,6 +106,20 @@ class ProcurementServiceTest {
     }
 
     @Test
+    void createSupplierTranslatesConcurrentUniqueConstraintViolation() {
+        when(supplierRepository.existsByNameIgnoreCase("New Supplier")).thenReturn(false);
+        when(supplierRepository.saveAndFlush(any(Supplier.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.createSupplier(new SupplierCreateRequest(
+                        " New Supplier ", null, null, null, null)));
+
+        assertEquals("A supplier with this name already exists", error.getMessage());
+        verify(supplierRepository).saveAndFlush(any(Supplier.class));
+    }
+
+    @Test
     void createPurchaseOrderStoresSupplierCostAndSubtotalWithoutChangingStock() {
         AtomicReference<PurchaseOrder> savedOrder = new AtomicReference<>();
         when(purchaseOrderRepository.findByIdempotencyKey("po-create-key-1"))
