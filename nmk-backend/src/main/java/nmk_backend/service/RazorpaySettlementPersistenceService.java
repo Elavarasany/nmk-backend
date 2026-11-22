@@ -1,6 +1,7 @@
 package nmk_backend.service;
 
 import nmk_backend.dto.RazorpaySettlementEntryResponse;
+import nmk_backend.dto.RazorpaySettlementExceptionResponse;
 import nmk_backend.dto.RazorpaySettlementProviderSummary;
 import nmk_backend.dto.RazorpaySettlementReconEntry;
 import nmk_backend.dto.RazorpaySettlementSummaryResponse;
@@ -213,6 +214,42 @@ public class RazorpaySettlementPersistenceService {
                         PageRequest.of(page, size, Sort.by(
                                 Sort.Order.desc("providerCreatedAt"), Sort.Order.desc("id"))))
                 .map(this::toEntryResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RazorpaySettlementExceptionResponse> exceptions(String status, int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 200");
+        }
+        List<String> statuses;
+        if (status == null || status.isBlank()) {
+            statuses = List.of("UNMATCHED", "MISMATCH", "MANUAL_REVIEW", "PENDING");
+        } else {
+            String normalized = status.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!List.of("UNMATCHED", "MISMATCH", "MANUAL_REVIEW", "PENDING").contains(normalized)) {
+                throw new IllegalArgumentException("Status must be UNMATCHED, MISMATCH, MANUAL_REVIEW or PENDING");
+            }
+            statuses = List.of(normalized);
+        }
+        return entryRepository.findByMatchStatusIn(
+                        statuses,
+                        PageRequest.of(page, size, Sort.by(
+                                Sort.Order.desc("providerCreatedAt"), Sort.Order.desc("id"))))
+                .map(this::toExceptionResponse);
+    }
+
+    private RazorpaySettlementExceptionResponse toExceptionResponse(RazorpaySettlementEntry entry) {
+        RazorpaySettlement settlement = entry.getSettlement();
+        return new RazorpaySettlementExceptionResponse(
+                settlement.getId(), settlement.getProviderSettlementId(), settlement.getStatus(),
+                settlement.getReconciliationStatus(), settlement.getUtr(), settlement.getAmountPaise(),
+                entry.getId(), entry.getProviderEntityId(), entry.getEntryType(),
+                entry.getDebitPaise(), entry.getCreditPaise(), entry.getAmountPaise(),
+                entry.getFeePaise(), entry.getTaxPaise(), entry.getCurrency(),
+                entry.isOnHold(), entry.isSettled(), entry.getProviderCreatedAt(), entry.getProviderSettledAt(),
+                entry.getPaymentId(), entry.getOrderId(), entry.getMatchStatus(), entry.getMatchMessage(),
+                entry.getLocalOrderId(), entry.getLocalRefundId(), entry.getLocalDisputeId()
+        );
     }
 
     private void copyProviderRow(RazorpaySettlementEntry entry, RazorpaySettlementReconEntry row) {

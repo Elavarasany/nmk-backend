@@ -58,6 +58,19 @@ public class RazorpaySettlementController {
         }
     }
 
+    @GetMapping("/exceptions")
+    public ResponseEntity<?> exceptions(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        try {
+            return ResponseEntity.ok(persistenceService.exceptions(status, page, size));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        }
+    }
+
     @GetMapping("/{settlementId}/entries")
     public ResponseEntity<?> entries(
             @PathVariable Long settlementId,

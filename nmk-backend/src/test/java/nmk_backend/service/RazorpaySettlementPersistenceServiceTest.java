@@ -21,6 +21,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -54,6 +58,38 @@ class RazorpaySettlementPersistenceServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(settlementRepository.save(any(RazorpaySettlement.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void exposesUnmatchedProviderRowsInPaginatedExceptionQueue() {
+        RazorpaySettlement settlement = new RazorpaySettlement();
+        ReflectionTestUtils.setField(settlement, "id", 501L);
+        settlement.setProviderSettlementId("setl_exception");
+        settlement.setStatus("processed");
+        settlement.setReconciliationStatus("REVIEW_REQUIRED");
+        settlement.setUtr("utr_exception");
+        settlement.setAmountPaise(95000L);
+
+        RazorpaySettlementEntry entry = new RazorpaySettlementEntry();
+        ReflectionTestUtils.setField(entry, "id", 601L);
+        entry.setSettlement(settlement);
+        entry.setProviderEntityId("pay_unmatched");
+        entry.setEntryType("payment");
+        entry.setCurrency("INR");
+        entry.setMatchStatus("UNMATCHED");
+        entry.setMatchMessage("No local order matches this provider payment.");
+
+        when(entryRepository.findByMatchStatusIn(
+                eq(List.of("UNMATCHED", "MISMATCH", "MANUAL_REVIEW", "PENDING")),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(entry), PageRequest.of(0, 25), 1));
+
+        var result = service().exceptions(null, 0, 25);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("setl_exception", result.getContent().getFirst().providerSettlementId());
+        assertEquals("pay_unmatched", result.getContent().getFirst().providerEntityId());
+        assertEquals("UNMATCHED", result.getContent().getFirst().matchStatus());
     }
 
     @Test
