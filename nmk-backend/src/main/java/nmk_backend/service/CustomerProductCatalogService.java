@@ -46,6 +46,21 @@ public class CustomerProductCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public CustomerProductCatalogResponse.ProductItem getActiveProductById(Long productId) {
+        if (productId == null || productId <= 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+        }
+
+        return getActiveProducts().stream()
+                .filter(product -> product.id().equals(productId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Product not found"
+                ));
+    }
+
+    @Transactional(readOnly = true)
     public List<CustomerProductCatalogResponse.ProductItem> getActiveProducts() {
         if (checkoutLocationCode == null || checkoutLocationCode.isBlank()) {
             throw new ResponseStatusException(
