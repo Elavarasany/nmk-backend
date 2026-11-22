@@ -11,6 +11,7 @@ import nmk_backend.dto.AdminOrderResponse;
 import nmk_backend.dto.UpdateOrderStatusRequest;
 import nmk_backend.entity.Order;
 import nmk_backend.repository.OrderRepository;
+import nmk_backend.repository.OrderRefundRepository;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,7 @@ public class AdminOrderController {
     private final SmsService smsService;
 
     private final OrderRepository orderRepository;
+    private final OrderRefundRepository orderRefundRepository;
     private final OrderService orderService;
     private final String publicUrl;
 
@@ -52,12 +54,14 @@ public class AdminOrderController {
 
     public AdminOrderController(
             OrderRepository orderRepository,
+            OrderRefundRepository orderRefundRepository,
             OrderService orderService,
             SmsService smsService,
             AdminActionAuthorizationService authorizationService,
             @Value("${app.public-url:http://localhost:5173}") String publicUrl
     ) {
         this.orderRepository = orderRepository;
+        this.orderRefundRepository = orderRefundRepository;
         this.orderService = orderService;
         this.smsService = smsService;
         this.authorizationService = authorizationService;
@@ -162,6 +166,12 @@ public class AdminOrderController {
                     authorizationToken,
                     "CLEAR_ORDERS"
             );
+
+            if (orderRefundRepository.count() > 0) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "Orders with provider refund records cannot be cleared; financial refund history must be retained."
+                ));
+            }
 
             long deletedCount = orderRepository.count();
 
