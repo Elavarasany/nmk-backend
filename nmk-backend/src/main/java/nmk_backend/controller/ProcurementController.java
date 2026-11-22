@@ -41,7 +41,9 @@ public class ProcurementController {
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(procurementService.createSupplier(request));
         } catch (DataIntegrityViolationException exception) {
-            return conflict("A supplier with this name already exists");
+            // Supplier-name duplicates are translated by the service. Any integrity
+            // violation reaching this layer may be a different database constraint.
+            return conflict("Supplier could not be saved because a related database constraint was violated");
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
