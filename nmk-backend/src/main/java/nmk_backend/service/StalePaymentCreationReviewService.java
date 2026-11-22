@@ -4,7 +4,6 @@ import nmk_backend.dto.StalePaymentCreationResponse;
 import nmk_backend.dto.RazorpayOrderSnapshot;
 import nmk_backend.dto.StalePaymentProviderReviewResponse;
 import nmk_backend.entity.Order;
-import nmk_backend.exception.PaymentConfigurationException;
 import nmk_backend.repository.OrderRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,7 +27,7 @@ public class StalePaymentCreationReviewService {
         this.providerGateway = providerGateway;
     }
 
-    @Transactional(readOnly = true)
+    // Do not hold a database transaction/connection while making the provider network calls.
     public StalePaymentProviderReviewResponse getProviderStatus(Long localOrderId) {
         if (localOrderId == null || localOrderId <= 0) {
             throw new IllegalArgumentException("A valid local order ID is required");
