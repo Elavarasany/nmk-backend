@@ -65,6 +65,26 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    void appliesDedicatedLimitToOnlineRefundInitiation() throws Exception {
+        when(service.isEnabled()).thenReturn(true);
+        when(service.increment("razorpay-refund-initiation", "192.0.2.10", 5, 60))
+                .thenReturn(new ApiRateLimitService.RateLimitDecision(false, 30, 6, 5));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("POST");
+        request.setRequestURI("/api/admin/orders/45/refunds");
+        request.setRemoteAddr("192.0.2.10");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter().doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertEquals(429, response.getStatus());
+        assertEquals("30", response.getHeader("Retry-After"));
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
     void providerWebhooksAreNeverRateLimited() throws Exception {
         when(service.isEnabled()).thenReturn(true);
         MockHttpServletRequest request = new MockHttpServletRequest();
