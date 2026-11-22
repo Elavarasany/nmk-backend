@@ -304,7 +304,8 @@ class PosReportServiceTest {
         assertEquals(401L, report.reservedQuantity());
         assertEquals(1604L, report.availableQuantity());
         assertEquals(1, report.lowStockCount());
-        assertEquals("Last Frame", report.items().get(0).productName());
+        assertEquals("Frame 0", report.items().get(0).productName());
+        assertEquals("Last Frame", report.items().get(report.items().size() - 1).productName());
         verify(inventoryBalanceRepository, times(2))
                 .findByLocationId(eq(1L), any(Pageable.class));
     }
