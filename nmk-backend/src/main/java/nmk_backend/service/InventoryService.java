@@ -99,7 +99,7 @@ public class InventoryService {
     ) {
         validateQuantity(quantity);
         return execute(locationId, variantId, quantity, idempotencyKey,
-                actorStaffId, reason, "RESERVATION", 0, quantity, false,
+                actorStaffId, null, reason, "RESERVATION", 0, quantity, false,
                 referenceType, referenceId);
     }
 
@@ -120,7 +120,7 @@ public class InventoryService {
     ) {
         validateQuantity(quantity);
         return execute(locationId, variantId, quantity, idempotencyKey,
-                actorStaffId, reason, "RELEASE", 0, -quantity, false,
+                actorStaffId, null, reason, "RELEASE", 0, -quantity, false,
                 referenceType, referenceId);
     }
 
@@ -141,7 +141,7 @@ public class InventoryService {
     ) {
         validateQuantity(quantity);
         return execute(locationId, variantId, quantity, idempotencyKey,
-                actorStaffId, reason, "CONSUMPTION", -quantity, -quantity,
+                actorStaffId, null, reason, "CONSUMPTION", -quantity, -quantity,
                 false, referenceType, referenceId);
     }
 
@@ -159,6 +159,7 @@ public class InventoryService {
                 quantity,
                 idempotencyKey,
                 actorStaffId,
+                null,
                 reason,
                 "SALE",
                 -quantity,
