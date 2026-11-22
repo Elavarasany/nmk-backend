@@ -106,6 +106,9 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/api/orders/checkout".equals(path)) {
             return new Rule("order-checkout", checkoutLimit);
         }
+        if ("POST".equals(method) && "/api/prescriptions/upload".equals(path)) {
+            return new Rule("prescription-upload", 6);
+        }
         if ("POST".equals(method) && "/api/payment/verify".equals(path)) {
             return new Rule("payment-verification", verificationLimit);
         }
