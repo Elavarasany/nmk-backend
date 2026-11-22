@@ -3,10 +3,12 @@ package nmk_backend.security;
 import nmk_backend.entity.Admin;
 import nmk_backend.entity.InventoryLocation;
 import nmk_backend.entity.Order;
+import nmk_backend.entity.Product;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.AdminAuditEventRepository;
 import nmk_backend.repository.InventoryLocationRepository;
 import nmk_backend.repository.OrderRepository;
+import nmk_backend.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +54,9 @@ class PosAuthorizationIntegrationTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private ProductRepository productRepository;
+
     private String adminToken;
     private InventoryLocation testLocation;
 
@@ -80,6 +85,31 @@ class PosAuthorizationIntegrationTest {
     @Test
     void anonymousRequestCannotAccessPosEndpoint() throws Exception {
         mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminProductListReturnsBoundedPages() throws Exception {
+        long before = productRepository.count();
+        java.util.List<Product> newProducts = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            Product product = new Product();
+            product.setName("Product pagination " + i);
+            product.setCategory("Eyeglasses");
+            product.setGender("Unisex");
+            product.setPrice(new java.math.BigDecimal("100.00"));
+            product.setStockQuantity(10);
+            newProducts.add(product);
+        }
+        productRepository.saveAllAndFlush(newProducts);
+
+        mockMvc.perform(get("/api/admin/products?page=0&size=10")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(10))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(before + 30))
+                .andExpect(jsonPath("$.content[0].version").exists());
     }
 
     @Test
