@@ -37,7 +37,7 @@ class ProductVariantServiceTest {
         product.setId(10L);
         product.setActive(true);
 
-        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(product));
         when(variantRepository.existsBySku("FRAME-BLK")).thenReturn(false);
         when(variantRepository.existsByBarcode("8901234567890")).thenReturn(false);
         when(variantRepository.saveAndFlush(any(ProductVariant.class)))
@@ -68,7 +68,7 @@ class ProductVariantServiceTest {
         Product product = new Product();
         product.setId(10L);
         product.setActive(true);
-        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(product));
         when(variantRepository.existsBySku("FRAME-BLK")).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
@@ -87,7 +87,7 @@ class ProductVariantServiceTest {
         Product product = new Product();
         product.setId(10L);
         product.setActive(false);
-        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(product));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -105,7 +105,7 @@ class ProductVariantServiceTest {
         Product product = new Product();
         product.setId(10L);
         product.setActive(true);
-        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(product));
         when(variantRepository.existsBySku("FRAME-BLK")).thenReturn(false);
         when(variantRepository.existsByBarcode("8901234567890")).thenReturn(true);
 
