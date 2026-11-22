@@ -35,7 +35,7 @@ class CorsConfigurationTest {
 
     @Test
     void rejectsWildcardOrigins() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
         ReflectionTestUtils.setField(config, "allowedOrigins", "*");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
@@ -44,7 +44,7 @@ class CorsConfigurationTest {
 
     @Test
     void rejectsNonHttpsOriginsWhenProductionPolicyIsEnabled() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
         ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", true);
 
@@ -60,7 +60,7 @@ class CorsConfigurationTest {
                 "ftp://shop.example.com",
                 "https://shop.example.com#fragment"
         )) {
-            SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+            SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
             ReflectionTestUtils.setField(config, "allowedOrigins", value);
             ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
@@ -70,7 +70,7 @@ class CorsConfigurationTest {
 
     @Test
     void acceptsExplicitHttpOriginForLocalDevelopment() {
-        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class));
+        SecurityConfig config = new SecurityConfig(mock(JwtAuthenticationFilter.class), new AdminSecurityRejectionAuditFilter(mock(AdminAuditEventService.class)));
         ReflectionTestUtils.setField(config, "allowedOrigins", "http://localhost:5173");
         ReflectionTestUtils.setField(config, "requireHttpsOrigins", false);
 
