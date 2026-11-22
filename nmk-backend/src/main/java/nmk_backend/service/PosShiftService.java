@@ -5,6 +5,7 @@ import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -23,6 +24,7 @@ public class PosShiftService {
     private final PosRegisterRepository registerRepository;
     private final PosShiftRepository shiftRepository;
     private final PosCashMovementRepository cashMovementRepository;
+    private final AdminLocationAccessService locationAccessService;
 
     public PosShiftService(
             InventoryLocationRepository locationRepository,
@@ -30,17 +32,35 @@ public class PosShiftService {
             PosShiftRepository shiftRepository,
             PosCashMovementRepository cashMovementRepository
     ) {
+        this(locationRepository, registerRepository, shiftRepository, cashMovementRepository, null);
+    }
+
+    @Autowired
+    public PosShiftService(
+            InventoryLocationRepository locationRepository,
+            PosRegisterRepository registerRepository,
+            PosShiftRepository shiftRepository,
+            PosCashMovementRepository cashMovementRepository,
+            AdminLocationAccessService locationAccessService
+    ) {
         this.locationRepository = locationRepository;
         this.registerRepository = registerRepository;
         this.shiftRepository = shiftRepository;
         this.cashMovementRepository = cashMovementRepository;
+        this.locationAccessService = locationAccessService;
     }
 
     @Transactional(readOnly = true)
     public List<PosRegisterResponse> getRegisters(Long locationId) {
+        return getRegisters(locationId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PosRegisterResponse> getRegisters(Long locationId, String username, String role) {
         if (locationId == null || locationId <= 0) {
             throw new IllegalArgumentException("A valid locationId is required");
         }
+        assertLocationAccess(username, role, locationId);
         return registerRepository.findByLocationIdAndActiveTrueOrderByRegisterCode(locationId)
                 .stream().map(PosRegisterResponse::from).toList();
     }
@@ -68,12 +88,18 @@ public class PosShiftService {
 
     @Transactional(readOnly = true)
     public Page<PosShiftResponse> getShiftHistory(Long locationId, int page, int size) {
+        return getShiftHistory(locationId, page, size, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PosShiftResponse> getShiftHistory(Long locationId, int page, int size, String username, String role) {
         if (locationId == null || locationId <= 0) {
             throw new IllegalArgumentException("A valid locationId is required");
         }
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
         }
+        assertLocationAccess(username, role, locationId);
         var pageable = PageRequest.of(page, size, Sort.by(
                 Sort.Order.desc("openedAt"), Sort.Order.desc("id")));
         return shiftRepository.findByRegisterLocationId(locationId, pageable)
@@ -89,6 +115,7 @@ public class PosShiftService {
                 .findFirstByRegisterIdAndStatusOrderByOpenedAtDesc(registerId, "OPEN")
                 .orElse(null);
         if (shift == null) return null;
+        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         if (!canManageOtherShifts(role) && !shift.getOpenedByUsername().equalsIgnoreCase(username)) {
             return null;
         }
@@ -125,6 +152,7 @@ public class PosShiftService {
             }
             return response(existing);
         }
+        assertLocationAccess(username, null, register.getLocation().getId());
         if (!register.isActive() || !register.getLocation().isActive()) {
             throw new IllegalArgumentException("POS register or its location is inactive");
         }
@@ -181,6 +209,7 @@ public class PosShiftService {
         if (racedMovement.isPresent()) {
             return replayCashMovement(racedMovement.get(), shiftId, type, amount, request.reason(), username, role);
         }
+        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         if (!"OPEN".equals(shift.getStatus())) {
             throw new IllegalArgumentException("The POS shift is not open");
         }
@@ -205,6 +234,7 @@ public class PosShiftService {
     ) {
         PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("POS shift was not found"));
+        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         assertShiftActor(shift, username, role);
 
         BigDecimal counted = money(request.closingCashCount(), "Closing cash count");
@@ -241,6 +271,7 @@ public class PosShiftService {
     public List<PosCashMovementResponse> getCashMovements(Long shiftId, String username, String role) {
         PosShift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("POS shift was not found"));
+        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         assertShiftActor(shift, username, role);
         return cashMovementRepository.findByShiftIdOrderByCreatedAtAscIdAsc(shiftId)
                 .stream().map(PosCashMovementResponse::from).toList();
@@ -440,6 +471,10 @@ public class PosShiftService {
             throw new IllegalArgumentException("A valid idempotency key is required");
         }
         return key.trim();
+    }
+
+    private void assertLocationAccess(String username, String role, Long locationId) {
+        if (locationAccessService != null) locationAccessService.assertCanAccess(username, role, locationId);
     }
 
     private void validateActor(String username) {
