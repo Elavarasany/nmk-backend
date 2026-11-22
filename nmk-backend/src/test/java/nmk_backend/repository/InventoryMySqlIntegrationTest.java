@@ -26,10 +26,88 @@ class InventoryMySqlIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
+    private ProductService productService;
+
+    @Autowired
+    private InventoryBalanceRepository balanceRepository;
+
+    @Autowired
+    private StockMovementRepository movementRepository;
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private ProductVariantRepository variantRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired
+    private ProductService productService;
+
+    @Autowired
+    private InventoryBalanceRepository balanceRepository;
+
+    @Autowired
+    private StockMovementRepository movementRepository;
+
+    @Test
+    void deletingProductDeactivatesItAndPreservesInventoryAndMovementHistory() {
+        Product product = new Product();
+        product.setName("Soft Delete Integration Product");
+        product.setPrice(new BigDecimal("1499.00"));
+        product.setStockQuantity(0);
+        product.setActive(true);
+        product = productRepository.saveAndFlush(product);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setProduct(product);
+        variant.setSku("SOFT-DELETE-" + java.util.UUID.randomUUID());
+        variant.setVariantName("Preserved Variant");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setActive(true);
+        variant = variantRepository.saveAndFlush(variant);
+
+        InventoryLocation location = new InventoryLocation();
+        location.setCode("SD-" + java.util.UUID.randomUUID());
+        location.setName("Soft Delete Test Location");
+        location.setActive(true);
+        location = entityManager.persist(location);
+        entityManager.flush();
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(4);
+        balance.setReservedQuantity(0);
+        balance.setReorderLevel(0);
+        balanceRepository.saveAndFlush(balance);
+
+        ProductVariant savedVariant = variant;
+        inventoryService.receiveStock(
+                location.getId(), savedVariant.getId(), 0,
+                "SOFT-DELETE-TEST-" + java.util.UUID.randomUUID(),
+                null, "Audit movement before product deactivation"
+        );
+
+        productService.deleteProduct(product.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        Product persistedProduct = productRepository.findById(product.getId()).orElseThrow();
+        ProductVariant persistedVariant = variantRepository.findById(savedVariant.getId()).orElseThrow();
+        InventoryBalance persistedBalance = balanceRepository
+                .findByLocationIdAndVariantId(location.getId(), savedVariant.getId())
+                .orElseThrow();
+
+        assertFalse(persistedProduct.isActive());
+        assertTrue(persistedVariant.isActive());
+        assertEquals(4, persistedBalance.getOnHandQuantity());
+        assertTrue(movementRepository.findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+                location.getId(), savedVariant.getId()
+        ).size() >= 1);
+    }
 
     @Test
     void mysqlPersistsVariantJsonAttributesAndSellingPriceOverride() {
