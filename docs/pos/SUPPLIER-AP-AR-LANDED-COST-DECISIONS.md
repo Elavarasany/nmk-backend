@@ -12,7 +12,7 @@ The POS now has an additive supplier-accounting ledger:
 - Supplier bill posting, payment recording and credit-note recording require fresh administrator-password authorization. Managers cannot authorize these financial actions.
 - Cash supplier payments require an open POS shift, verify that the shift belongs to the bill's purchase-order location, ensure the drawer has sufficient expected cash, and create one linked OUT movement in the cash ledger.
 - Bank/UPI/other payments require a reference. The administrator is responsible for verifying the external payment evidence before recording the payment as confirmed. Credit notes may optionally link to a supplier return and must match the bill's supplier and purchase order.
-- Bill and payment history endpoints are administrator-only.
+- Bill, payment, credit-note history and supplier payables-aging endpoints are administrator-only. Aging groups outstanding bills into not-due, 1–30, 31–60, 61–90 and over-90-day buckets using the bill due date.
 
 Manual schema migration: 022-create-supplier-ap-and-landed-cost-ledger.sql. It is additive and has not been applied to any client database.
 
@@ -40,7 +40,7 @@ The approved POS scope says POS sales are fully paid and split tender is allowed
 
 ## 4. Supplier credits and accounting gaps
 
-The AP implementation supports supplier credit notes applied to an unpaid bill, but does not support debit notes, supplier advances, unallocated credits on already-paid bills, supplier statement reconciliation, payment reversal/chargeback, multi-bill payment allocations, AP aging summaries, or automated bank reconciliation. Supplier returns reduce stock through the existing supplier-return flow but do **not** automatically reduce a supplier bill balance; the supplier must issue a credit note and an administrator must record it against the linked bill. If the bill has already been fully paid, the resulting supplier credit/refund balance is not yet supported.
+The AP implementation supports supplier credit notes applied to an unpaid bill, but does not support debit notes, supplier advances, unallocated credits on already-paid bills, supplier statement reconciliation, payment reversal/chargeback, multi-bill payment allocations, or automated bank reconciliation. Supplier returns reduce stock through the existing supplier-return flow but do **not** automatically reduce a supplier bill balance; the supplier must issue a credit note and an administrator must record it against the linked bill. If the bill has already been fully paid, the resulting supplier credit/refund balance is not yet supported.
 
 Landed-cost allocations are persisted but not yet rolled into weighted-average inventory valuation or COGS. Do not use them as a profit calculation.
 
@@ -70,4 +70,4 @@ Before production AP postings or valuation reports are treated as accounting rec
 
 ## 7. Release gate
 
-Code-side AP balances, bill-linked credit notes and receipt-level landed-cost allocations are operational records only until accountant/owner review, unallocated supplier credit handling, inventory valuation/COGS integration, and bank evidence controls are complete. No live database migration or financial opening-balance posting is authorized by this document.
+Code-side AP balances, bill-linked credit notes, AP aging and receipt-level landed-cost allocations are operational records only until accountant/owner review, unallocated supplier credit handling, inventory valuation/COGS integration, and bank evidence controls are complete. No live database migration or financial opening-balance posting is authorized by this document.
