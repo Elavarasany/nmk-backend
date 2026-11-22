@@ -21,6 +21,7 @@ public class PosPaymentRequest {
     @PositiveOrZero
     private BigDecimal tenderedAmount;
 
+    @Size(max = 150)
     private String transactionReference;
 
     public String getPaymentMethod() {
