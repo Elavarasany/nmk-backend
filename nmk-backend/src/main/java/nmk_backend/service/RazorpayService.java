@@ -11,7 +11,6 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.List;
 
 @Service
 public class RazorpayService {
@@ -206,66 +205,6 @@ public class RazorpayService {
         requirePaymentCredentials();
 
         return keyId;
-    }
-
-    /**
-     * Check whether a Razorpay order has a successful,
-     * pending, or otherwise unsettled payment attempt.
-     *
-     * Failures in this method must not cause stock release.
-     */
-    public boolean hasUnsettledOrSuccessfulPayment(
-            String razorpayOrderId) throws Exception {
-
-        requirePaymentCredentials();
-
-        if (razorpayOrderId == null || razorpayOrderId.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Razorpay order ID is missing"
-            );
-        }
-
-        RazorpayClient client =
-                new RazorpayClient(keyId, keySecret);
-
-        // Fetch the latest Razorpay order status.
-        com.razorpay.Order razorpayOrder =
-                client.orders.fetch(razorpayOrderId);
-
-        String orderStatus = razorpayOrder.get("status");
-
-        // A paid order must never have its reservation released.
-        if ("paid".equalsIgnoreCase(orderStatus)) {
-            return true;
-        }
-
-        // Fetch every payment attempt associated with this order.
-        List<com.razorpay.Payment> payments =
-                client.orders.fetchPayments(razorpayOrderId);
-
-        for (com.razorpay.Payment payment : payments) {
-
-            String status = payment.get("status");
-
-            // Only terminal failed or fully refunded attempts
-            // are safe to ignore.
-            if (!"failed".equalsIgnoreCase(status)
-                    && !"refunded".equalsIgnoreCase(status)) {
-                return true;
-            }
-        }
-
-        // If Razorpay reports attempts but gives no payment records,
-        // treat the result as uncertain and retain the reservation.
-        Number attempts = razorpayOrder.get("attempts");
-
-        if (attempts != null
-                && attempts.intValue() > 0
-                && payments.isEmpty()) {
-            return true;
-        }
-
-        return false;
     }
 
     /**
