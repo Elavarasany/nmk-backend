@@ -35,6 +35,10 @@ It is a **net recorded procurement-cost activity measure** only. It is not proof
 
 - Cash drawer expected balance is based on recorded cash movements only. UPI/card amounts do not belong in the cash drawer.
 - Shift close and cash-refund operations both lock the shift row before changing drawer state. A MySQL concurrency regression test now races a cash refund against shift close and verifies that either the refund is included before close or is rejected after close, with no post-close drawer mutation.
+
+- Cash-in/cash-out entries require a reason and are recorded against the shift with the acting username. A cashier may record movements on their own shift; a manager/admin may manage another staff member's shift. Cash-out is capped at the current expected drawer balance, but cash-in has no configured ceiling.
+- There is no separate fresh-password approval, supervisor threshold, attachment/evidence field, or second-person confirmation for cash-in/cash-out. A large or unsupported cash-in can inflate expected drawer cash, while an otherwise permitted cash-out can remove cash without independent approval. The actor/reason audit trail is useful but does not prove the physical movement occurred.
+- Before production, the owner must define cash-in/out limits, permitted reasons, approval requirements, evidence retention, and who may authorize movements on another cashier's shift. Do not invent monetary thresholds without that policy.
 - UPI/card sale and refund references are operator-entered. Verify transactions in the merchant/provider portal independently.
 - POS does not initiate or verify provider refunds. Complete and verify noncash refunds externally before recording them.
 - Reconcile daily sales tender totals against provider transaction exports and provider net settlements against bank credits. Investigate fees, timing differences, reversals, chargebacks, and unmatched references.
