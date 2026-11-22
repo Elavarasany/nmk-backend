@@ -90,7 +90,9 @@ public class AdminOrderController {
                 page, size,
                 Sort.by(Sort.Order.desc("orderDate"), Sort.Order.desc("id"))
         ));
-        if (idPage.isEmpty()) return ResponseEntity.ok(idPage.map(ignored -> (AdminOrderResponse) null));
+        if (idPage.isEmpty()) {
+            return ResponseEntity.ok(new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements()));
+        }
 
         Map<Long, Order> ordersById = orderRepository.findWithItemsByIdIn(idPage.getContent())
                 .stream()
