@@ -45,6 +45,26 @@ class ApiRateLimitFilterTest {
     }
 
     @Test
+    void appliesDedicatedLimitToPrescriptionUploads() throws Exception {
+        when(service.isEnabled()).thenReturn(true);
+        when(service.increment("prescription-upload", "192.0.2.9", 6, 60))
+                .thenReturn(new ApiRateLimitService.RateLimitDecision(false, 18, 7, 6));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("POST");
+        request.setRequestURI("/api/prescriptions/upload");
+        request.setRemoteAddr("192.0.2.9");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter().doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertEquals(429, response.getStatus());
+        assertEquals("18", response.getHeader("Retry-After"));
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
     void providerWebhooksAreNeverRateLimited() throws Exception {
         when(service.isEnabled()).thenReturn(true);
         MockHttpServletRequest request = new MockHttpServletRequest();
