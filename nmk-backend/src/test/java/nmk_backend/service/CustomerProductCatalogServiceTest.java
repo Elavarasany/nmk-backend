@@ -154,6 +154,33 @@ class CustomerProductCatalogServiceTest {
         assertEquals(0, result.get(0).variants().get(0).availableQuantity());
     }
 
+
+    @Test
+    void publicProductDetailReturnsNotFoundForMissingOrInactiveProducts() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setCode("AVP-01");
+        location.setActive(true);
+
+        Product inactive = new Product();
+        inactive.setId(10L);
+        inactive.setName("Inactive frame");
+        inactive.setPrice(new BigDecimal("100.00"));
+        inactive.setActive(false);
+
+        when(locationRepository.findByCode("AVP-01")).thenReturn(Optional.of(location));
+        when(balanceRepository.findByLocationId(1L)).thenReturn(List.of());
+        when(variantRepository.findAll()).thenReturn(List.of());
+        when(productRepository.findAll()).thenReturn(List.of(inactive));
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.getActiveProductById(10L));
+        assertThrows(ResponseStatusException.class,
+                () -> service.getActiveProductById(999L));
+        assertThrows(ResponseStatusException.class,
+                () -> service.getActiveProductById(0L));
+    }
+
     @Test
     void rejectsMissingCheckoutLocationConfiguration() {
         CustomerProductCatalogService unconfigured = new CustomerProductCatalogService(
