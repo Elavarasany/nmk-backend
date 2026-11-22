@@ -246,6 +246,9 @@ class PosReportServiceTest {
         assertEquals(1, report.lowStockCount());
         assertTrue(report.items().get(0).lowStock());
         assertEquals(6, report.items().get(0).availableQuantity());
+        assertEquals(1, report.totalItems());
+        assertEquals(0, report.itemsPage());
+        assertFalse(report.itemsHasNext());
     }
 
     @Test
@@ -304,10 +307,47 @@ class PosReportServiceTest {
         assertEquals(401L, report.reservedQuantity());
         assertEquals(1604L, report.availableQuantity());
         assertEquals(1, report.lowStockCount());
+        assertEquals(201, report.totalItems());
+        assertEquals(50, report.items().size());
+        assertEquals(50, report.itemsSize());
+        assertTrue(report.itemsHasNext());
         assertEquals("Frame 0", report.items().get(0).productName());
-        assertEquals("Last Frame", report.items().get(report.items().size() - 1).productName());
+        assertEquals("Frame 49", report.items().get(report.items().size() - 1).productName());
         verify(inventoryBalanceRepository, times(2))
                 .findByLocationId(eq(1L), any(Pageable.class));
+    }
+
+    @Test
+    void inventoryReportEntriesCanBeLoadedInValidatedPages() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setCode("MAIN");
+        location.setName("Main Store");
+        Product product = new Product();
+        product.setId(10L);
+        product.setName("Classic Frame");
+        ProductVariant variant = new ProductVariant();
+        variant.setId(20L);
+        variant.setProduct(product);
+        variant.setSku("FRAME-20");
+        variant.setAttributes(java.util.Map.of());
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(8);
+        balance.setReservedQuantity(2);
+        balance.setReorderLevel(7);
+        when(inventoryBalanceRepository.findByLocationId(eq(1L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(balance)));
+
+        var page = service.getInventoryReportEntries(1L, 0, 25, "admin", "ADMIN");
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals("Classic Frame", page.getContent().get(0).productName());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getInventoryReportEntries(1L, -1, 25, "admin", "ADMIN"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.getInventoryReportEntries(1L, 0, 101, "admin", "ADMIN"));
     }
 
     @Test
