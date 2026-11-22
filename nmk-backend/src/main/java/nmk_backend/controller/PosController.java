@@ -34,18 +34,22 @@ public class PosController {
     }
 
     @GetMapping("/locations")
-    public ResponseEntity<?> getLocations() {
-        return ResponseEntity.ok(catalogService.getActiveLocations());
+    public ResponseEntity<?> getLocations(Authentication authentication) {
+        return ResponseEntity.ok(catalogService.getActiveLocations(authentication.getName(), authenticatedRole(authentication)));
     }
 
     @GetMapping("/catalog")
-    public ResponseEntity<?> getCatalog(@RequestParam Long locationId) {
+    public ResponseEntity<?> getCatalog(@RequestParam Long locationId, Authentication authentication) {
         if (locationId == null || locationId <= 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "A positive locationId is required"
             ));
         }
-        return ResponseEntity.ok(catalogService.getCatalog(locationId));
+        try {
+            return ResponseEntity.ok(catalogService.getCatalog(locationId, authentication.getName(), authenticatedRole(authentication)));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+        }
     }
 
     @GetMapping("/sales")
