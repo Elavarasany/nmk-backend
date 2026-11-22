@@ -63,6 +63,8 @@ Do not skip these scripts on a database where the webhook worker is enabled, and
 
 The schema scripts deliberately do **not** invent product variants or opening stock. Existing `products.stock_quantity` values are preserved as legacy data; POS and online variant availability is calculated from `product_variants` and `inventory_balances`.
 
+Product removal from the admin catalogue is a **soft deactivation**, not a physical database delete. Product, variant, inventory-balance, stock-movement, and historical sale records are retained for auditability. Deactivated products are excluded from active catalogue/checkout flows and cannot receive new stock or have new variants created. Existing reservations can still be consumed or released to complete/cancel an in-flight order. Reactivate a product only after reviewing its variants and stock state.
+
 Before the first live sale:
 
 1. Review every active product and decide its real sellable SKU/variant and barcode. Do not blindly create one default variant for every optical product if frame size, colour, power, lens or other attributes distinguish saleable stock.
