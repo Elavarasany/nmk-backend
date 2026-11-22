@@ -108,13 +108,15 @@ class PosExchangeMySqlTest {
   inventoryService.receiveStock(f.locationId(),f.variantId(),2,"MYSQL-EX-REF-LIMIT-OPEN-"+UUID.randomUUID(),null,"Exchange refund reference limit stock");
   PosSaleResponse original=checkout(f,"MYSQL-EX-REF-LIMIT-SALE-"+UUID.randomUUID());
   Long originalLine=saleItems.findBySaleId(original.id()).get(0).getId();
+  ProductVariant cheaper=createReplacementVariant("REF-LIMIT-"+UUID.randomUUID(),new BigDecimal("50.00"));
+  inventoryService.receiveStock(f.locationId(),cheaper.getId(),1,"MYSQL-EX-REF-LIMIT-NEW-"+UUID.randomUUID(),null,"Exchange refund reference limit replacement stock");
   PosSaleItemRequest replacement=new PosSaleItemRequest();
-  replacement.setProductId(f.productId()); replacement.setVariantId(f.variantId()); replacement.setQuantity(1);
+  replacement.setProductId(cheaper.getProduct().getId()); replacement.setVariantId(cheaper.getId()); replacement.setQuantity(1);
   PosExchangeRequest request=new PosExchangeRequest(f.shiftId(),"Exchange refund reference limit",
    "MYSQL-EX-REF-LIMIT-KEY-"+UUID.randomUUID(),
    List.of(new PosReturnItemRequest(originalLine,1,"RESTOCK",null)),List.of(replacement),
    new BigDecimal("0.00"),List.of(),
-   List.of(new PosRefundPaymentRequest("UPI",new BigDecimal("0.00"),"R".repeat(151))));
+   List.of(new PosRefundPaymentRequest("UPI",new BigDecimal("50.00"),"R".repeat(151))));
 
   IllegalArgumentException error=assertThrows(IllegalArgumentException.class,
    ()->exchangeService.exchange(original.id(),request,f.username(),"CASHIER"));
