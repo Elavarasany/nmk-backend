@@ -47,6 +47,9 @@ class RazorpayWebhookProcessorTest {
     private PaymentVerificationService paymentVerificationService;
 
     @Mock
+    private RazorpayRefundReconciliationService refundReconciliationService;
+
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     @Mock
@@ -69,6 +72,7 @@ class RazorpayWebhookProcessorTest {
                 razorpayService,
                 paymentVerificationService,
                 objectMapper,
+                refundReconciliationService,
                 transactionManager
         );
     }
@@ -143,7 +147,7 @@ class RazorpayWebhookProcessorTest {
     }
 
     @Test
-    void refundWebhookIsRoutedToManualReviewUntilProviderReconciliationExists()
+    void processedRefundWebhookUpdatesProviderRefundLedger()
             throws Exception {
 
         RazorpayWebhookEvent event = event("""
@@ -155,6 +159,7 @@ class RazorpayWebhookProcessorTest {
                         "id":"rfnd_123",
                         "payment_id":"pay_123",
                         "amount":5000,
+                        "currency":"INR",
                         "status":"processed"
                       }
                     }
@@ -168,18 +173,15 @@ class RazorpayWebhookProcessorTest {
 
         processor.processOne(1L);
 
-        assertEquals("MANUAL_REVIEW", event.getStatus());
-        assertTrue(event.getProcessingError().contains("manual reconciliation"));
-        assertNull(event.getProcessedAt(),
-                "A provider refund event must not be marked fully processed without updating the refund ledger");
+        assertEquals("PROCESSED", event.getStatus());
+        assertNotNull(event.getProcessedAt());
         assertNull(event.getClaimToken());
         assertNull(event.getProcessingStartedAt());
 
-        verifyNoInteractions(
-                orderRepository,
-                razorpayService,
-                paymentVerificationService
+        verify(refundReconciliationService).reconcile(
+                "evt_test_1", "refund.processed", "rfnd_123", "pay_123", 5000L, "INR", "processed"
         );
+        verifyNoInteractions(orderRepository, razorpayService, paymentVerificationService);
     }
 
     @Test
