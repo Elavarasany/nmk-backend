@@ -64,7 +64,7 @@ class SupplierAccountServiceTest {
         SupplierBill bill = bill(12L, new BigDecimal("100.00"));
         when(paymentRepository.findByIdempotencyKey("PAY-12")).thenReturn(Optional.empty(), Optional.empty());
         when(billRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(bill));
-        when(paymentRepository.sumConfirmedAmountByBillId(12L)).thenReturn(new BigDecimal("20.00"));
+        bill.setPaidAmount(new BigDecimal("20.00"));
         when(paymentRepository.saveAndFlush(any(SupplierPayment.class))).thenAnswer(invocation -> {
             SupplierPayment payment = invocation.getArgument(0);
             ReflectionTestUtils.setField(payment, "id", 88L);
@@ -96,7 +96,7 @@ class SupplierAccountServiceTest {
         bill.setPurchaseOrder(order);
         when(paymentRepository.findByIdempotencyKey("PAY-CASH-14")).thenReturn(Optional.empty(), Optional.empty());
         when(billRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(bill));
-        when(paymentRepository.sumConfirmedAmountByBillId(14L)).thenReturn(BigDecimal.ZERO);
+        bill.setPaidAmount(BigDecimal.ZERO);
         when(paymentRepository.saveAndFlush(any(SupplierPayment.class))).thenAnswer(invocation -> {
             SupplierPayment payment = invocation.getArgument(0);
             ReflectionTestUtils.setField(payment, "id", 89L);
@@ -123,7 +123,7 @@ class SupplierAccountServiceTest {
         SupplierBill bill = bill(13L, new BigDecimal("100.00"));
         when(paymentRepository.findByIdempotencyKey("PAY-13")).thenReturn(Optional.empty(), Optional.empty());
         when(billRepository.findByIdForUpdate(13L)).thenReturn(Optional.of(bill));
-        when(paymentRepository.sumConfirmedAmountByBillId(13L)).thenReturn(new BigDecimal("80.00"));
+        bill.setPaidAmount(new BigDecimal("80.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 service.recordPayment(
@@ -195,6 +195,7 @@ class SupplierAccountServiceTest {
         ReflectionTestUtils.setField(bill, "id", id);
         bill.setSupplier(supplier);
         bill.setAmount(amount);
+        bill.setPaidAmount(BigDecimal.ZERO);
         bill.setStatus("POSTED");
         bill.setBillType("GOODS");
         return bill;
