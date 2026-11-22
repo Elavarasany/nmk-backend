@@ -15,6 +15,7 @@ public record SupplierBillResponse(
         LocalDate dueDate,
         BigDecimal amount,
         BigDecimal paidAmount,
+        BigDecimal creditedAmount,
         BigDecimal outstandingAmount,
         String billType,
         String status,
