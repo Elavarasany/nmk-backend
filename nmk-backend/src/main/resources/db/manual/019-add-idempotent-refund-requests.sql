@@ -15,4 +15,4 @@ ALTER TABLE order_refunds
     ADD COLUMN reason VARCHAR(255) NULL,
     ADD COLUMN initiated_by VARCHAR(100) NULL,
     ADD UNIQUE KEY uk_order_refunds_request_key (request_idempotency_key),
-    ADD UNIQUE KEY uk_order_refunds_receipt (receipt);
+    ADD UNIQUE KEY uk_order_refunds_payment_receipt (razorpay_payment_id, receipt);
