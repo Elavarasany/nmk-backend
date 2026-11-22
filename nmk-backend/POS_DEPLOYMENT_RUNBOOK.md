@@ -11,6 +11,8 @@ This runbook is a controlled deployment checklist. The POS feature branch is not
 
 ## 2. Before touching a database
 
+The SQL directory has no automatic migration runner or durable migration-history table. Maintain a signed migration execution record outside the application database for each target environment. For every script, record its exact filename and SHA-256 checksum, target database, operator, approval/ticket, backup identifier, start/end time, result, verification output and any recovery action. Never infer that a script ran successfully from the presence of some of its tables: MySQL DDL can implicitly commit, so a failed script may have left a partially changed schema. Stop, inspect and prepare a schema-specific repair before continuing.
+
 1. Obtain written client approval and the correct database credentials. Confirm host, database name, MySQL version, TLS mode and timezone.
 2. Take a full logical backup and verify that it can be restored to a separate database.
 3. Restore a copy to a disposable staging database. Do not use the live database for experiments.
@@ -75,7 +77,7 @@ No online or POS checkout should be enabled until the active sellable variants a
 
 ## 6. Staff, register and cashier setup
 
-1. Confirm the owner/admin account and test that disabled accounts cannot authenticate.
+1. Confirm the owner/admin account and test that disabled accounts cannot authenticate. If `ADMIN_BOOTSTRAP_USERNAME` and `ADMIN_BOOTSTRAP_PASSWORD` are used for first-time creation, treat them as temporary one-time deployment secrets: verify the account exists, remove both variables immediately after bootstrap, and rotate the password through the approved account process. Do not leave bootstrap credentials configured across routine restarts/deployments.
 2. **Review every account that existed before migration 006.** That migration assigns the default role `ADMIN` to existing rows; do not leave all legacy accounts as administrators. Keep only the designated owner/admin accounts as `ADMIN`, downgrade operational staff to `MANAGER` or `CASHIER` through staff administration, and disable stale/shared accounts.
 3. Create individual MANAGER and CASHIER accounts; do not share logins.
 4. Create/verify the MAIN register for the active location.
@@ -85,13 +87,15 @@ No online or POS checkout should be enabled until the active sellable variants a
 
 ## 7. Application hosting configuration
 
+**Production must explicitly activate the `prod` Spring profile** using `SPRING_PROFILES_ACTIVE=prod`. The stricter CORS allowlist, HTTPS-origin enforcement, reduced error details and production logging settings are in `application-prod.properties`; they are not applied merely because the deployment is hosted online. Verify the active profile in startup configuration/logs before exposing the API. If the profile is missing, the base configuration defaults CORS to localhost development origins and does not enforce HTTPS origins.
+
 Backend secrets must be configured in the hosting provider, never committed to Git:
 
 - `AIVEN_HOST`, `AIVEN_PORT`, `AIVEN_DATABASE`, `AIVEN_USER`, `AIVEN_PASSWORD`
 - a strong random `JWT_SECRET`
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
 - `APP_CORS_ALLOWED_ORIGINS`: exact frontend origin(s), comma-separated, no wildcard
-- `APP_CORS_REQUIRE_HTTPS=true` in production
+- `APP_CORS_REQUIRE_HTTPS=true` in production (the production profile currently hard-enables HTTPS origin validation)
 
 Frontend build-time variable:
 
@@ -129,7 +133,11 @@ These are genuine release gates, not items to guess in code:
 - **Supplier accounting:** purchase orders, goods receipts and supplier stock returns do not constitute supplier credit notes, accounts payable, supplier payment, landed-cost accounting or bank settlement. Obtain the client's accounting workflow and required fields before implementing these ledgers.
 - **Profit reporting:** gross sales/product totals are not profit. Cost history and approved accounting treatment are not yet available for a reliable POS profit report.
 
-## 10. Release decision
+## 10. Production content initialization
+
+The current `AdminDataInitializer` creates missing default website-image records (including placeholder logo/hero/category/store image URLs) on application startup in every profile. It does not overwrite existing keys, but a fresh production database will receive these defaults. Before making the storefront public, replace and verify every seeded placeholder with client-approved assets, or change the initializer to use an explicitly controlled non-production seed profile. Confirm no placeholder assets remain in the public website.
+
+## 11. Release decision
 
 Do not merge the draft POS pull requests or point staff at production until:
 - the client database migration has been reviewed and tested on a restorable clone;
