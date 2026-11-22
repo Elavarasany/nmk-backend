@@ -442,6 +442,7 @@ public class AdminOrderController {
                 order.getPincode(),
                 order.getTotalAmount(),
                 order.getPaymentStatus(),
+                order.getRefundStatus(),
                 order.getPaymentCreationStatus(),
                 order.getOrderStatus(),
                 order.isStockReserved(),
