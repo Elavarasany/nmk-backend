@@ -5,6 +5,8 @@ import nmk_backend.service.RazorpayWebhookService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequestMapping("/api/payment")
 public class RazorpayWebhookController {
+
+    private static final Logger log = LoggerFactory.getLogger(RazorpayWebhookController.class);
 
     private final RazorpayService razorpayService;
     private final RazorpayWebhookService webhookService;
@@ -31,11 +35,24 @@ public class RazorpayWebhookController {
             String eventId,
             @RequestBody(required = false) byte[] rawBody) {
 
-        if (signature == null || signature.isBlank()
-                || eventId == null || eventId.isBlank()
+        if (signature == null || eventId == null
                 || rawBody == null || rawBody.length == 0) {
             return ResponseEntity.badRequest().body(
                     Map.of("received", false, "message", "Missing webhook headers or body")
+            );
+        }
+
+        if (!signature.matches("[A-Fa-f0-9]{64}")) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("received", false, "message", "Invalid webhook signature format")
+            );
+        }
+
+        String normalizedEventId = eventId.trim();
+        if (normalizedEventId.isEmpty() || normalizedEventId.length() > 150
+                || normalizedEventId.chars().anyMatch(Character::isISOControl)) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("received", false, "message", "Invalid webhook event ID")
             );
         }
 
@@ -53,7 +70,7 @@ public class RazorpayWebhookController {
             }
 
             webhookService.storeEvent(
-                    eventId.trim(),
+                    normalizedEventId,
                     new String(rawBody, StandardCharsets.UTF_8)
             );
             return ResponseEntity.ok(
@@ -68,9 +85,12 @@ public class RazorpayWebhookController {
             );
         } catch (IllegalArgumentException invalidPayload) {
             return ResponseEntity.badRequest().body(
-                    Map.of("received", false, "message", invalidPayload.getMessage())
+                    Map.of("received", false, "message", "Invalid webhook payload")
             );
         } catch (Exception error) {
+            // Log only exception type; never log signatures, event IDs, or payloads.
+            log.error("Webhook ingress failed; exceptionType={}",
+                    error.getClass().getSimpleName());
             // Return non-2xx so Razorpay can retry if durable storage failed.
             return ResponseEntity.internalServerError().body(
                     Map.of("received", false, "message", "Webhook could not be stored")
