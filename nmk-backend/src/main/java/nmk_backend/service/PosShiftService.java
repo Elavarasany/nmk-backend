@@ -5,6 +5,9 @@ import nmk_backend.entity.*;
 import nmk_backend.exception.InventoryNotFoundException;
 import nmk_backend.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -64,12 +67,17 @@ public class PosShiftService {
     }
 
     @Transactional(readOnly = true)
-    public List<PosShiftResponse> getShiftHistory(Long locationId) {
+    public Page<PosShiftResponse> getShiftHistory(Long locationId, int page, int size) {
         if (locationId == null || locationId <= 0) {
             throw new IllegalArgumentException("A valid locationId is required");
         }
-        return shiftRepository.findTop100ByRegisterLocationIdOrderByOpenedAtDesc(locationId)
-                .stream().map(this::response).toList();
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
+        var pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("openedAt"), Sort.Order.desc("id")));
+        return shiftRepository.findByRegisterLocationId(locationId, pageable)
+                .map(this::response);
     }
 
     @Transactional(readOnly = true)
