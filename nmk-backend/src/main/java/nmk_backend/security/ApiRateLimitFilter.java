@@ -95,6 +95,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && "/api/admin/auth/login".equals(path)) {
             return new Rule("admin-login", loginLimit);
         }
+        if ("POST".equals(method)
+                && ("/api/admin/auth/authorize-action".equals(path)
+                || "/api/admin/auth/verify-password".equals(path))) {
+            return new Rule("admin-password-authorization", loginLimit);
+        }
         if ("POST".equals(method) && "/api/appointments".equals(path)) {
             return new Rule("appointment-booking", appointmentLimit);
         }
