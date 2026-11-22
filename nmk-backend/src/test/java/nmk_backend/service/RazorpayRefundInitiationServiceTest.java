@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -83,6 +84,21 @@ class RazorpayRefundInitiationServiceTest {
                 () -> service().initiate(45L, request, "admin"));
 
         verify(reconciliationService).markInitiationFailed("refund-key-123456");
+    }
+
+    @Test
+    void retriesADeadlockedReservationBeforeCallingProvider() {
+        when(requestService.prepare(45L, 5000L, "Customer cancellation",
+                "refund-key-123456", "admin"))
+                .thenThrow(new CannotAcquireLockException("deadlock"))
+                .thenReturn(prepared("rfnd_123"));
+
+        var result = service().initiate(45L, request, "admin");
+
+        assertEquals("rfnd_123", result.razorpayRefundId());
+        verify(requestService, times(2)).prepare(45L, 5000L,
+                "Customer cancellation", "refund-key-123456", "admin");
+        verifyNoInteractions(gateway);
     }
 
     @Test
