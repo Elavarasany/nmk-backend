@@ -211,6 +211,14 @@ void validAdminTokenCanAccessAdminProductList() throws Exception {
     }
 
     @Test
+    void settlementSynchronizationRequiresAdminAuthentication() throws Exception {
+        mockMvc.perform(post("/api/admin/pos/payments/settlements/sync")
+                        .param("year", "2026")
+                        .param("month", "11"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void prescriptionUploadIsPublicButFailsClosedWithoutCloudinaryCredentials() throws Exception {
         org.springframework.mock.web.MockMultipartFile file =
                 new org.springframework.mock.web.MockMultipartFile(
