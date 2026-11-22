@@ -315,7 +315,27 @@ A purchase order begins as DRAFT and must be submitted before goods can be recei
 
 Supplier returns can only include quantities already received and not previously returned. The backend locks the purchase order and item rows, creates a supplier-return record, and writes a negative `SUPPLIER_RETURN` stock movement. A return fails if it would reduce on-hand below reserved stock. Goods receipt and supplier return stock movements are blocked during a frozen physical stock count.
 
-Supplier returns are inventory and supplier audit records only; they do not create supplier credit notes, accounts-payable entries or automatic bank refunds. Purchase cost is stored for purchasing visibility; GST and landed-cost accounting are intentionally not calculated until the shop's accountant confirms the required rules.
+Supplier returns reverse physical stock and create an immutable supplier-return audit record. They do not automatically create a supplier credit note or reduce accounts payable. When the supplier issues an actual credit note, record it separately against the corresponding posted bill:
+
+- `POST /api/admin/procurement/supplier-bills/{billId}/credit-notes` — ADMIN only; requires fresh password authorization with action `SUPPLIER_CREDIT_NOTE`.
+- `GET /api/admin/procurement/supplier-bills/{billId}/credit-notes` — list the bill's recorded supplier credit notes.
+
+Example credit-note request:
+
+```json
+{
+  "creditNoteNumber": "SCN-2026-001",
+  "issueDate": "2026-11-22",
+  "amount": 125.00,
+  "reason": "Supplier-issued credit for returned frames",
+  "supplierReturnId": 18,
+  "idempotencyKey": "supplier-credit-note-device-key"
+}
+```
+
+The amount must match the actual supplier-issued document and cannot exceed the bill's remaining unpaid balance after confirmed payments and earlier credit notes. The optional `supplierReturnId`, when supplied, must belong to the same supplier and purchase order as the bill. A supplier return by itself never reduces AP. Credit notes against already-paid bills, supplier credit balances/refunds, debit notes and supplier advances are not supported. Credit notes do not automatically adjust inventory valuation or COGS.
+
+Purchase cost is stored for purchasing visibility; GST and landed-cost valuation accounting are intentionally not calculated until the shop's accountant confirms the required rules.
 
 ## 13. Stock movement history
 
@@ -427,7 +447,7 @@ The automated integration suite covers equal-value credit, higher-value collecti
 - **Refund reconciliation required before automation:** link each refundable POS tender to its provider and original provider payment ID; model refund requests and provider refund IDs separately from the existing cash/non-cash refund allocations; use idempotent provider requests and verify final provider status; consume signed refund webhooks with amount/currency/payment-ID checks; support partial and multiple refunds without exceeding captured amount; and provide an exception queue for pending, failed, reversed and unmatched settlements. For non-Razorpay UPI/card terminals, use the terminal/acquirer settlement and refund API or a controlled operator-confirmation process with evidence. Cash refunds continue to use the audited cash drawer ledger.
 - The atomic exchange endpoint is present on the POS feature branch but remains unreleased until its review, migration, and production release gates are approved. Do not manually simulate an exchange as a separate return and sale.
 - Inter-location stock transfers are not implemented. The current shop operates one physical location; do not enable a second stock location until a transfer/dispatch/receipt workflow and its reconciliation controls are added.
-- Manual SQL files are under `src/main/resources/db/manual/`. In addition to the numbered 001–014 POS chain, the webhook worker requires the pre-existing `razorpay_webhook_events` table plus `razorpay-webhook-claim-token.sql` and `razorpay-webhook-retry-columns.sql`; verify the base table and apply these two scripts only when their columns/index are absent. The scripts do not create the base webhook table. First verify the existing schema and choose the correct baseline path: `001` is the legacy product/order update for the verified reference schema; `002` creates variants/inventory; `003` inserts the `MAIN_STORE` location; `004` is a staging-only reconciliation draft for the partially migrated `nmk_staging_restore` database and is an alternative to overlapping parts of `001`—never run both blindly and never run `004` in production. After the approved baseline, apply POS additions in order: `005` sales/payments, `006` staff roles, `007` registers/shifts/cash, `008` returns/refunds, `009` stock counts, `010` procurement, `011` reorder-level audit fields, `012` full-void type, and `013` stock-count cancellation audit fields, then `014` linked POS exchange headers and non-cash credit settlements. Verify every precondition and record each applied migration on a disposable MySQL 8.4 restore first. Do not execute against the client's live database without a separately approved migration plan and backup.
+- Manual SQL files are under `src/main/resources/db/manual/`. In addition to the numbered 001–014 POS chain, the webhook worker requires the pre-existing `razorpay_webhook_events` table plus `razorpay-webhook-claim-token.sql` and `razorpay-webhook-retry-columns.sql`; verify the base table and apply these two scripts only when their columns/index are absent. The scripts do not create the base webhook table. First verify the existing schema and choose the correct baseline path: `001` is the legacy product/order update for the verified reference schema; `002` creates variants/inventory; `003` inserts the `MAIN_STORE` location; `004` is a staging-only reconciliation draft for the partially migrated `nmk_staging_restore` database and is an alternative to overlapping parts of `001`—never run both blindly and never run `004` in production. After the approved baseline, apply POS additions in order: `005` sales/payments, `006` staff roles, `007` registers/shifts/cash, `008` returns/refunds, `009` stock counts, `010` procurement, `011` reorder-level audit fields, `012` full-void type, and `013` stock-count cancellation audit fields, then `014` linked POS exchange headers and non-cash credit settlements. Supplier bills, payments, supplier credit notes and receipt-level landed-cost allocations are created by manual migration `022-create-supplier-ap-and-landed-cost-ledger.sql`; apply it only after the procurement and POS-shift base tables are verified on a disposable MySQL 8.4 restore. Verify every precondition and record each applied migration on a disposable MySQL 8.4 restore first. Do not execute against the client's live database without a separately approved migration plan and backup.
 - Production deployments must activate `SPRING_PROFILES_ACTIVE=prod` and provide `APP_CORS_ALLOWED_ORIGINS` as an explicit HTTPS origin allowlist. The production profile enforces Hibernate `validate`, disables automatic schema changes and hides exception details. Keep manual migrations separate from application startup.
 - No database migration is executed by these code changes.
 
@@ -456,6 +476,7 @@ Action-to-endpoint mapping:
 - `PURCHASE_ORDER_SUBMIT`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/submit`
 - `GOODS_RECEIPT`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/receive`
 - `SUPPLIER_RETURN`: `POST /api/admin/procurement/purchase-orders/{purchaseOrderId}/supplier-returns`
+- `SUPPLIER_CREDIT_NOTE`: `POST /api/admin/procurement/supplier-bills/{billId}/credit-notes`
 - `POS_RETURN`, `POS_VOID`, `POS_EXCHANGE`: the corresponding POST endpoints documented above
 
 
