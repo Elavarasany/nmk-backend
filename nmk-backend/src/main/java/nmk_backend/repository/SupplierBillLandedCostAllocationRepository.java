@@ -16,4 +16,6 @@ public interface SupplierBillLandedCostAllocationRepository extends JpaRepositor
 
     @Query("select coalesce(sum(a.allocatedAmount), 0) from SupplierBillLandedCostAllocation a where a.bill.id = :billId")
     BigDecimal sumAllocatedAmountByBillId(@Param("billId") Long billId);
+    @Query("select coalesce(sum(a.allocatedAmount), 0) from SupplierBillLandedCostAllocation a where a.goodsReceiptItem.id = :receiptItemId")
+    BigDecimal sumAllocatedAmountByGoodsReceiptItemId(@Param("receiptItemId") Long receiptItemId);
 }
