@@ -5,6 +5,9 @@ import nmk_backend.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -154,6 +157,54 @@ class CustomerProductCatalogServiceTest {
         assertEquals(0, result.get(0).variants().get(0).availableQuantity());
     }
 
+
+    @Test
+    void loadsCustomerCatalogueProductsAndVariantsInBoundedPages() {
+        InventoryLocation location = new InventoryLocation();
+        location.setId(1L);
+        location.setCode("AVP-01");
+        location.setActive(true);
+
+        Product product = new Product();
+        product.setId(10L);
+        product.setName("Paged Frame");
+        product.setPrice(new BigDecimal("100.00"));
+        product.setActive(true);
+
+        ProductVariant variant = new ProductVariant();
+        variant.setId(25L);
+        variant.setProduct(product);
+        variant.setVariantName("Black");
+        variant.setAttributes(Map.of("color", "Black"));
+        variant.setSellingPriceOverride(new BigDecimal("125.00"));
+        variant.setActive(true);
+
+        InventoryBalance balance = new InventoryBalance();
+        balance.setLocation(location);
+        balance.setVariant(variant);
+        balance.setOnHandQuantity(8);
+        balance.setReservedQuantity(3);
+
+        Pageable pageable = PageRequest.of(0, 24);
+        when(locationRepository.findByCode("AVP-01")).thenReturn(Optional.of(location));
+        when(productRepository.findActiveProductsWithActiveVariants(pageable))
+                .thenReturn(new PageImpl<>(List.of(product), pageable, 30));
+        when(variantRepository.findByProductIdInAndActiveTrue(List.of(10L)))
+                .thenReturn(List.of(variant));
+        when(balanceRepository.findByLocationIdAndVariantIdIn(1L, List.of(25L)))
+                .thenReturn(List.of(balance));
+
+        var page = service.getActiveProducts(pageable);
+
+        assertEquals(30, page.getTotalElements());
+        assertEquals(24, page.getSize());
+        assertEquals(1, page.getContent().size());
+        assertEquals(5, page.getContent().get(0).stockQuantity());
+        assertEquals(25L, page.getContent().get(0).variants().get(0).id());
+        verify(productRepository, never()).findAll();
+        verify(variantRepository, never()).findAll();
+        verify(balanceRepository, never()).findByLocationId(1L);
+    }
 
     @Test
     void loadsOnlyRequestedProductAndItsVariantsForPublicDetail() {
