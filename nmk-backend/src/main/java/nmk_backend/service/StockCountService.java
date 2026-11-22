@@ -70,13 +70,6 @@ public class StockCountService {
         if (request.reason() == null || request.reason().isBlank() || request.reason().trim().length() > 400) {
             throw new IllegalArgumentException("A stock count reason of 1 to 400 characters is required");
         }
-        List<ProductVariant> variantsToCount = variantRepository.findAll().stream()
-                .filter(variant -> variant.getProduct() != null)
-                .toList();
-        if (variantsToCount.isEmpty()) {
-            throw new IllegalArgumentException("Create at least one product variant before starting a stock count");
-        }
-
         InventoryLocation location = locationRepository.findByIdForUpdate(request.locationId())
                 .orElseThrow(() -> new InventoryNotFoundException("Inventory location was not found"));
         if (!location.isActive()) {
@@ -89,6 +82,15 @@ public class StockCountService {
                 location.getId(), ACTIVE_STATUSES
         ).isPresent()) {
             throw new InventoryConflictException("An active stock count already exists for this location");
+        }
+
+        // Enumerate variants only after acquiring the location lock. This keeps
+        // the count's variant snapshot aligned with the inventory freeze boundary.
+        List<ProductVariant> variantsToCount = variantRepository.findAll().stream()
+                .filter(variant -> variant.getProduct() != null)
+                .toList();
+        if (variantsToCount.isEmpty()) {
+            throw new IllegalArgumentException("Create at least one product variant before starting a stock count");
         }
 
         // Freeze stock-changing operations while the physical count is in progress.
