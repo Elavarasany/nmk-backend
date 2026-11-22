@@ -2,6 +2,7 @@ package nmk_backend.config;
 
 import nmk_backend.security.JwtAuthenticationFilter;
 import nmk_backend.security.AdminSecurityRejectionAuditFilter;
+import nmk_backend.security.ApiRateLimitFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,6 +31,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AdminSecurityRejectionAuditFilter adminSecurityRejectionAuditFilter;
+    private final ApiRateLimitFilter apiRateLimitFilter;
 
     @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:5174}")
     private String allowedOrigins;
@@ -38,9 +40,11 @@ public class SecurityConfig {
     private boolean requireHttpsOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          AdminSecurityRejectionAuditFilter adminSecurityRejectionAuditFilter) {
+                          AdminSecurityRejectionAuditFilter adminSecurityRejectionAuditFilter,
+                          ApiRateLimitFilter apiRateLimitFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.adminSecurityRejectionAuditFilter = adminSecurityRejectionAuditFilter;
+        this.apiRateLimitFilter = apiRateLimitFilter;
     }
 
     @Bean
@@ -130,6 +134,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/appointments/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(apiRateLimitFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .addFilterAfter(adminSecurityRejectionAuditFilter, org.springframework.security.web.context.SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -154,6 +159,13 @@ public class SecurityConfig {
         } catch (URISyntaxException invalidOrigin) {
             return false;
         }
+    }
+
+    @Bean
+    public FilterRegistrationBean<ApiRateLimitFilter> apiRateLimitFilterRegistration(ApiRateLimitFilter filter) {
+        FilterRegistrationBean<ApiRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
