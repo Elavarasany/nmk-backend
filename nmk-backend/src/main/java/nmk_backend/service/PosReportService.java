@@ -122,10 +122,14 @@ public class PosReportService {
         }
 
         BigDecimal refundTotal = ZERO;
+        BigDecimal salesReversals = ZERO;
         BigDecimal recordedRefundPaymentTotal = ZERO;
         int customerReturnCount = 0;
         for (PosReturn record : returns) {
             refundTotal = refundTotal.add(record.getRefundTotal());
+            if ("VOID".equals(record.getReturnType())) {
+                salesReversals = salesReversals.add(record.getRefundTotal());
+            }
             MutableDaily day = daily.computeIfAbsent(
                     record.getCreatedAt().toLocalDate(), ignored -> new MutableDaily()
             );
@@ -187,7 +191,7 @@ public class PosReportService {
         return new PosSalesReportResponse(
                 locationId, from, to, sales.size(),
                 subtotal, discounts, netSales,
-                customerReturnCount, refundTotal, refundTotal,
+                customerReturnCount, refundTotal, salesReversals,
                 recordedRefundPaymentTotal, exchangeCreditApplied, netSales.subtract(refundTotal),
                 Collections.unmodifiableMap(salesByPayment),
                 Collections.unmodifiableMap(refundsByPayment),
