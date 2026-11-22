@@ -231,6 +231,30 @@ class PosAuthorizationIntegrationTest {
     }
 
     @Test
+    void stalePaymentProviderReviewIsRestrictedToManagersAndAdmins() throws Exception {
+        String managerToken = tokenForRole("MANAGER");
+        String cashierToken = tokenForRole("CASHIER");
+        String reviewUrl = "/api/admin/pos/payments/stale-creation-review/999999999/provider-status";
+
+        mockMvc.perform(get(reviewUrl))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get(reviewUrl)
+                        .header("Authorization", "Bearer " + cashierToken))
+                .andExpect(status().isForbidden());
+
+        // A missing local order returns the controller's validation response,
+        // proving authorized roles passed the security layer without contacting Razorpay.
+        mockMvc.perform(get(reviewUrl)
+                        .header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get(reviewUrl)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void invalidBearerTokenCannotAccessPosEndpoint() throws Exception {
         mockMvc.perform(get(POS_LOCATIONS)
                 .header("Authorization", "Bearer invalid-token"))
