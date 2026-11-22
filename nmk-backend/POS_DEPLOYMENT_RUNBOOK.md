@@ -191,3 +191,12 @@ The upload endpoint has a dedicated rate limit and a 6 MB multipart transport ce
 - Apply manual migration `020-create-razorpay-settlement-reconciliation.sql` after migrations 017, 018 and 019 and before deploying this code. Inspect exact existing schema/indexes/constraints, rehearse on a disposable MySQL 8.4 restore, and take a verified backup. Do not apply to the client database without explicit approval.
 - Configure Razorpay API key ID/secret on the backend only. The sync endpoint is Admin-only, read-only against Razorpay and rate-limited. If credentials are absent it fails closed with HTTP 503.
 - Bank statement import/matching, bank-account confirmation, chargeback/dispute accounting and POS terminal/UPI tender verification remain separate work.
+
+
+## Razorpay dispute and chargeback webhooks
+
+- Apply manual migration `021-create-razorpay-dispute-ledger.sql` after migration 020. Rehearse and back up as described above; do not apply to the client's live database without approval.
+- In the Razorpay Dashboard, subscribe the configured webhook URL to `payment.dispute.created`, `payment.dispute.under_review`, `payment.dispute.action_required`, `payment.dispute.won`, `payment.dispute.lost` and `payment.dispute.closed`. Keep the webhook secret backend-only and verify the exact event names supported by the merchant account before enabling.
+- Admin → Payment Disputes displays dispute amount, amount deducted, reason, phase, response deadline and local order match. Older/out-of-order webhook events cannot downgrade a newer recorded status.
+- The app does not submit evidence, accept/contest a dispute, cancel an order, change payment status or adjust stock. Respond to evidence deadlines and make dispute decisions in the Razorpay Dashboard.
+- Newly received webhook payloads are stored after removing customer email, phone, VPA, card/bank metadata, notes and dispute evidence references. This is not retroactive: historical webhook rows may still contain fields received before this sanitization change and need a separately approved retention/redaction plan.
