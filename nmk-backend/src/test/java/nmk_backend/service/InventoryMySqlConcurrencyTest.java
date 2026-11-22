@@ -101,6 +101,60 @@ class InventoryMySqlConcurrencyTest {
     }
 
     @Test
+    void concurrentFirstReceiptsCreateOneBalanceAndPreserveBothMovements() throws Exception {
+        InventoryIds ids = createInventory(0);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.execute(status -> {
+            InventoryBalance balance = balanceRepository
+                    .findByLocationIdAndVariantId(ids.locationId(), ids.variantId())
+                    .orElseThrow();
+            balanceRepository.deleteAndFlush(balance);
+            return null;
+        });
+
+        String key1 = "FIRST-RECEIPT-A-" + UUID.randomUUID();
+        String key2 = "FIRST-RECEIPT-B-" + UUID.randomUUID();
+
+        List<Boolean> results = runConcurrently(
+                () -> {
+                    inventoryService.receiveStock(
+                            ids.locationId(), ids.variantId(), 3,
+                            key1, null, "Concurrent first receipt A"
+                    );
+                    return true;
+                },
+                () -> {
+                    inventoryService.receiveStock(
+                            ids.locationId(), ids.variantId(), 4,
+                            key2, null, "Concurrent first receipt B"
+                    );
+                    return true;
+                }
+        );
+
+        assertEquals(List.of(true, true), results);
+        transaction.execute(status -> {
+            InventoryBalance balance = balanceRepository
+                    .findByLocationIdAndVariantId(ids.locationId(), ids.variantId())
+                    .orElseThrow();
+            assertEquals(7, balance.getOnHandQuantity());
+            assertEquals(0, balance.getReservedQuantity());
+
+            List<StockMovement> movements = movementRepository
+                    .findByLocationIdAndVariantIdOrderByCreatedAtDesc(
+                            ids.locationId(), ids.variantId()
+                    );
+            assertEquals(2, movements.size());
+            assertTrue(movements.stream().anyMatch(m -> key1.equals(m.getIdempotencyKey())));
+            assertTrue(movements.stream().anyMatch(m -> key2.equals(m.getIdempotencyKey())));
+            assertEquals(1, balanceRepository.findByLocationId(ids.locationId()).stream()
+                    .filter(row -> row.getVariant().getId().equals(ids.variantId()))
+                    .count());
+            return null;
+        });
+    }
+
+    @Test
     void concurrentReservationsCannotOversellStock() throws Exception {
         InventoryIds ids = createInventory(5);
 
