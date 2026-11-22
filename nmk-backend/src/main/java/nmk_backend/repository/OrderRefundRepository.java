@@ -19,8 +19,9 @@ public interface OrderRefundRepository extends JpaRepository<OrderRefund, Long> 
     Optional<OrderRefund> findByRequestIdempotencyKeyForUpdate(@Param("key") String key);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT refund FROM OrderRefund refund WHERE refund.receipt = :receipt")
-    Optional<OrderRefund> findByReceiptForUpdate(@Param("receipt") String receipt);
+    @Query("SELECT refund FROM OrderRefund refund WHERE refund.razorpayPaymentId = :paymentId AND refund.receipt = :receipt")
+    Optional<OrderRefund> findByRazorpayPaymentIdAndReceiptForUpdate(
+            @Param("paymentId") String paymentId, @Param("receipt") String receipt);
 
     Optional<OrderRefund> findByRequestIdempotencyKey(String key);
 
