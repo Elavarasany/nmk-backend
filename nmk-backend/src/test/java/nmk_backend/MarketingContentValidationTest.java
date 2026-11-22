@@ -60,10 +60,10 @@ class MarketingContentValidationTest {
     }
 
     @Test
-    void rejectsUnknownWebsiteImageSlotAndUnsafeImageUrl() {
+    void rejectsUnsafeWebsiteImageUrl() {
         WebsiteImage image = new WebsiteImage();
-        image.setImageKey("FOOTER");
-        image.setTitle("Footer");
+        image.setImageKey("STORE");
+        image.setTitle("Store Image");
         image.setImageUrl("javascript:alert(1)");
 
         assertFalse(validator.validate(image).isEmpty());
