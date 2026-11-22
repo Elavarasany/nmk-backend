@@ -2,9 +2,11 @@ package nmk_backend.security;
 
 import nmk_backend.entity.Admin;
 import nmk_backend.entity.InventoryLocation;
+import nmk_backend.entity.Order;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.AdminAuditEventRepository;
 import nmk_backend.repository.InventoryLocationRepository;
+import nmk_backend.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,6 +48,9 @@ class PosAuthorizationIntegrationTest {
 
     @Autowired
     private InventoryLocationRepository locationRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     private String adminToken;
     private InventoryLocation testLocation;
@@ -74,6 +80,28 @@ class PosAuthorizationIntegrationTest {
     @Test
     void anonymousRequestCannotAccessPosEndpoint() throws Exception {
         mockMvc.perform(get(POS_LOCATIONS)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminOrderListReturnsBoundedPageMetadata() throws Exception {
+        long before = orderRepository.count();
+        java.util.List<Order> newOrders = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            Order order = new Order();
+            order.setCustomerName("Order pagination " + i);
+            order.setTotalAmount(new java.math.BigDecimal("100.00"));
+            order.setPaymentStatus("PENDING");
+            newOrders.add(order);
+        }
+        orderRepository.saveAllAndFlush(newOrders);
+
+        mockMvc.perform(get("/api/admin/orders?page=0&size=10")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(10))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(before + 30));
     }
 
     @Test
