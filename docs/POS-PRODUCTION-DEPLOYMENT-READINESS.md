@@ -105,3 +105,15 @@ No deployment, live database access, migration execution, PR merge, or productio
 - [ ] Disable the old unsigned `nmk_opticals` upload preset after the new flow is deployed and verified.
 - [ ] Treat old order prescription URLs as legacy public files; inventory and re-upload them only under an approved migration plan.
 - [ ] Configure the reverse proxy to permit the 6 MB multipart upload request ceiling for `/api/prescriptions/upload`; the JSON body ceiling remains 1 MB.
+
+
+## Online Razorpay refund release checks
+
+- [ ] Apply and verify manual migration 019 after migration 017 on the approved target schema.
+- [ ] Configure Razorpay key ID and secret on the backend only; confirm credentials are live/test as intended before enabling the endpoint.
+- [ ] Verify only Admin can authorize refunds and that every request requires a fresh password authorization.
+- [ ] Verify normal-speed partial/full refunds, minimum ₹1, remaining-balance enforcement, and the provider `X-Refund-Idempotency` header.
+- [ ] Verify retries after timeout/409 reuse the same local idempotency key and do not create duplicate refunds.
+- [ ] Verify refund webhooks arriving before the API response link through the unique receipt and do not create duplicate ledger rows.
+- [ ] Confirm order shipment is blocked while a refund is pending; confirm completed refunds do not auto-cancel or restock stock.
+- [ ] Keep bank settlement matching, POS tender provider verification and chargeback reconciliation as separate go-live gaps.
