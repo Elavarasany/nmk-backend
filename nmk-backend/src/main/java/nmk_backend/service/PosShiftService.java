@@ -344,6 +344,7 @@ public class PosShiftService {
     public PosShift requireOpenShift(Long shiftId, Long locationId, String username) {
         PosShift shift = shiftRepository.findByIdForUpdate(shiftId)
                 .orElseThrow(() -> new InventoryNotFoundException("An open POS shift is required"));
+        assertLocationAccess(username, role, shift.getRegister().getLocation().getId());
         if (!"OPEN".equals(shift.getStatus())) {
             throw new IllegalArgumentException("The selected POS shift is not open");
         }
@@ -394,6 +395,7 @@ public class PosShiftService {
             String role
     ) {
         PosShift existingShift = existing.getShift();
+        assertLocationAccess(username, role, existingShift.getRegister().getLocation().getId());
         assertShiftActor(existingShift, username, role);
         if (!Objects.equals(existingShift.getId(), requestedShiftId)
                 || existing.getActorUsername() == null
