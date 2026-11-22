@@ -22,9 +22,9 @@ public class PosShiftController {
     }
 
     @GetMapping("/registers")
-    public ResponseEntity<?> getRegisters(@RequestParam Long locationId) {
+    public ResponseEntity<?> getRegisters(@RequestParam Long locationId, Authentication authentication) {
         try {
-            return ResponseEntity.ok(shiftService.getRegisters(locationId));
+            return ResponseEntity.ok(shiftService.getRegisters(locationId, authentication.getName(), role(authentication)));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
@@ -43,10 +43,11 @@ public class PosShiftController {
     public ResponseEntity<?> getShiftHistory(
             @RequestParam Long locationId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size
+            @RequestParam(defaultValue = "25") int size,
+            Authentication authentication
     ) {
         try {
-            return ResponseEntity.ok(shiftService.getShiftHistory(locationId, page, size));
+            return ResponseEntity.ok(shiftService.getShiftHistory(locationId, page, size, authentication.getName(), role(authentication)));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
@@ -73,7 +74,7 @@ public class PosShiftController {
     ) {
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(
-                    shiftService.openShift(request, authentication.getName())
+                    shiftService.openShift(request, authentication.getName(), role(authentication))
             );
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
