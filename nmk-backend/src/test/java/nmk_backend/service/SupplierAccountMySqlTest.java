@@ -1,12 +1,14 @@
 package nmk_backend.service;
 
 import nmk_backend.dto.SupplierPaymentRequest;
+import nmk_backend.dto.SupplierCreditNoteRequest;
 import nmk_backend.entity.Admin;
 import nmk_backend.entity.Supplier;
 import nmk_backend.entity.SupplierBill;
 import nmk_backend.repository.AdminRepository;
 import nmk_backend.repository.SupplierBillRepository;
 import nmk_backend.repository.SupplierPaymentRepository;
+import nmk_backend.repository.SupplierBillCreditNoteRepository;
 import nmk_backend.repository.SupplierRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,7 @@ class SupplierAccountMySqlTest {
     @Autowired private SupplierRepository supplierRepository;
     @Autowired private SupplierBillRepository billRepository;
     @Autowired private SupplierPaymentRepository paymentRepository;
+    @Autowired private SupplierBillCreditNoteRepository creditNoteRepository;
     @Autowired private AdminRepository adminRepository;
 
     @Test
@@ -75,6 +78,51 @@ class SupplierAccountMySqlTest {
         assertEquals(first.id(), retry.id());
         assertEquals(1, paymentRepository.findByBillIdOrderByPaidAtDescIdDesc(bill.getId()).size());
         assertEquals(new BigDecimal("25.00"), paymentRepository.sumConfirmedAmountByBillId(bill.getId()));
+    }
+
+    @Test
+    void concurrentPaymentAndCreditNoteCannotReduceOneBillBelowZero() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        Admin admin = createAdmin(suffix);
+        Supplier supplier = createSupplier(suffix);
+        SupplierBill bill = createBill(supplier, suffix, new BigDecimal("100.00"));
+        Long billId = bill.getId();
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> payment = executor.submit(() -> attemptPayment(
+                    billId, suffix, "cross", admin.getUsername(), ready, start));
+            Future<Boolean> credit = executor.submit(() -> attemptCreditNote(
+                    billId, suffix, admin.getUsername(), ready, start));
+            ready.await();
+            start.countDown();
+
+            int accepted = (payment.get() ? 1 : 0) + (credit.get() ? 1 : 0);
+            assertEquals(1, accepted);
+            SupplierBill refreshed = billRepository.findById(billId).orElseThrow();
+            assertEquals(new BigDecimal("60.00"),
+                    refreshed.getPaidAmount().add(refreshed.getCreditedAmount()));
+        }
+    }
+
+    private boolean attemptCreditNote(Long billId, String suffix, String username,
+                                      CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        start.await();
+        try {
+            supplierAccountService.recordCreditNote(
+                    billId,
+                    new SupplierCreditNoteRequest(
+                            "CN-" + suffix, LocalDate.now(), new BigDecimal("60.00"),
+                            "Concurrent supplier return credit", null, "suppliercredit_" + suffix
+                    ),
+                    username
+            );
+            return true;
+        } catch (IllegalArgumentException outstandingBalance) {
+            return false;
+        }
     }
 
     private boolean attemptPayment(Long billId, String suffix, String label, String username,
