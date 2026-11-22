@@ -6,6 +6,7 @@ import nmk_backend.dto.PosCatalogResponse;
 import nmk_backend.dto.PosLocationResponse;
 import nmk_backend.service.PosCatalogService;
 import nmk_backend.service.PosCheckoutService;
+import nmk_backend.util.DatabaseConstraintUtils;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -98,6 +99,9 @@ public class PosController {
             if (DatabaseConstraintUtils.isUniqueConstraintViolation(
                     exception,
                     "uk_pos_sales_idempotency_key"
+            ) || DatabaseConstraintUtils.isUniqueConstraintViolation(
+                    exception,
+                    "uk_stock_movements_idempotency"
             )) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                         "message",
