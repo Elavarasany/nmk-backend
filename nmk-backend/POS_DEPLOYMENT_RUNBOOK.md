@@ -186,7 +186,7 @@ The upload endpoint has a dedicated rate limit and a 6 MB multipart transport ce
 ## Razorpay provider settlement reconciliation
 
 - Admin → Payment Settlements fetches the read-only Razorpay combined settlement reconciliation report with pagination and stores provider batches/entries idempotently.
-- Each batch is checked against provider net amount, fees, tax and UTR. Payment rows match local captured orders; refund rows match processed local refund ledger records. Transfers, adjustments and unknown provider entry types are flagged for manual review.
+- Each batch is checked against provider net amount, fees, tax and UTR. Payment rows match local captured orders; refund rows match processed local refund ledger records; lost-dispute debit rows match the local dispute ledger. Transfers, adjustments and unknown provider entry types are flagged for manual review.
 - `PROVIDER_RECONCILED` means the provider report balances and its supported rows match local NMK records. It does not mean the UTR credit has been verified against the bank statement.
 - Apply manual migration `020-create-razorpay-settlement-reconciliation.sql` after migrations 017, 018 and 019 and before deploying this code. Inspect exact existing schema/indexes/constraints, rehearse on a disposable MySQL 8.4 restore, and take a verified backup. Do not apply to the client database without explicit approval.
 - Configure Razorpay API key ID/secret on the backend only. The sync endpoint is Admin-only, read-only against Razorpay and rate-limited. If credentials are absent it fails closed with HTTP 503.
