@@ -95,3 +95,13 @@ No deployment, live database access, migration execution, PR merge, or productio
 - Keep the webhook's existing 1 MiB raw-body limit aligned with `app.http.max-request-body-bytes`; if either limit changes, update and test both together.
 - This in-process body cap does not replace reverse-proxy limits. Configure the hosting edge to cap request headers and body sizes, enforce HTTPS, and apply per-IP rate limits to login, checkout, appointment booking and public order tracking. Exclude or separately tune Razorpay webhook traffic so legitimate provider retries are not dropped.
 - No hosting provider or reverse proxy is defined in this repository, so edge rate limiting, header limits and TLS policy remain deployment tasks. Do not trust client-supplied forwarded-IP headers unless the hosting proxy is configured to overwrite them and the application is configured to trust only that proxy.
+
+
+## Prescription file privacy
+
+- [ ] Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` on the backend only.
+- [ ] Confirm new prescription uploads use the backend endpoint, are content-signature checked, limited to 5 MB, and stored with Cloudinary delivery type `authenticated`.
+- [ ] Confirm Admin obtains a five-minute download URL only through the order/item-scoped endpoint.
+- [ ] Disable the old unsigned `nmk_opticals` upload preset after the new flow is deployed and verified.
+- [ ] Treat old order prescription URLs as legacy public files; inventory and re-upload them only under an approved migration plan.
+- [ ] Configure the reverse proxy to permit the 6 MB multipart upload request ceiling for `/api/prescriptions/upload`; the JSON body ceiling remains 1 MB.
