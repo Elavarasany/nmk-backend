@@ -10,6 +10,7 @@ import nmk_backend.repository.AppointmentRepository;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -73,7 +74,7 @@ public class AppointmentController {
     // Customer: Book an appointment
     @PostMapping
     public ResponseEntity<?> bookAppointment(
-            @RequestBody Appointment appointment) {
+            @Valid @RequestBody Appointment appointment) {
 
         if (appointment.getCustomerName() == null ||
                 appointment.getCustomerName().isBlank() ||
