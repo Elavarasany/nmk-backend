@@ -1,6 +1,7 @@
 package nmk_backend.controller;
 
 import nmk_backend.service.PosReportService;
+import nmk_backend.service.PosShiftService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
@@ -14,9 +15,11 @@ import java.util.Map;
 public class PosReportController {
 
     private final PosReportService reportService;
+    private final PosShiftService shiftService;
 
-    public PosReportController(PosReportService reportService) {
+    public PosReportController(PosReportService reportService, PosShiftService shiftService) {
         this.reportService = reportService;
+        this.shiftService = shiftService;
     }
 
     @GetMapping("/inventory")
@@ -44,6 +47,24 @@ public class PosReportController {
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", exception.getMessage() == null ? "Invalid inventory report request" : exception.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/cash-reconciliation")
+    public ResponseEntity<?> getDailyCashReconciliation(
+            @RequestParam Long locationId,
+            @RequestParam LocalDate date,
+            Authentication authentication
+    ) {
+        try {
+            return ResponseEntity.ok(shiftService.getDailyCashReconciliation(
+                    locationId, date, authentication.getName(), role(authentication)
+            ));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", exception.getMessage() == null
+                            ? "Invalid cash reconciliation request" : exception.getMessage()
             ));
         }
     }
