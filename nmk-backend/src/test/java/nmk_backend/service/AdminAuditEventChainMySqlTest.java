@@ -1,6 +1,10 @@
 package nmk_backend.service;
 
 import nmk_backend.entity.AdminAuditEvent;
+import nmk_backend.repository.AdminAuditEventRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
+import org.springframework.test.context.jdbc.Sql;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,8 +23,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("mysql-test")
+@Sql(scripts = "/db/manual/016-create-tamper-evident-admin-audit-chain.sql",
+        executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class AdminAuditEventChainMySqlTest {
     @Autowired private AdminAuditEventService service;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     @Test
     void concurrentAuditWritesRemainInOneVerifiableChainOnMySql() throws Exception {
@@ -57,6 +64,24 @@ class AdminAuditEventChainMySqlTest {
         assertTrue(integrity.checkedEvents() >= workers + 1);
         assertNotNull(integrity.lastEventId());
         assertEquals(integrity.calculatedLastHash(), integrity.storedLastHash());
+    }
+
+    @Test
+    void databaseRejectsAuditEventUpdatesAndDeletes() {
+        String requestId = UUID.randomUUID().toString();
+        service.record(event(requestId));
+        Long eventId = jdbcTemplate.queryForObject(
+                "SELECT id FROM admin_audit_events WHERE request_id = ?",
+                Long.class,
+                requestId
+        );
+
+        assertNotNull(eventId);
+        assertThrows(DataAccessException.class, () ->
+                jdbcTemplate.update("UPDATE admin_audit_events SET outcome = 'FAILURE' WHERE id = ?", eventId));
+        assertThrows(DataAccessException.class, () ->
+                jdbcTemplate.update("DELETE FROM admin_audit_events WHERE id = ?", eventId));
+        assertTrue(service.verifyIntegrity().valid());
     }
 
     private static AdminAuditEvent event(String requestId) {
