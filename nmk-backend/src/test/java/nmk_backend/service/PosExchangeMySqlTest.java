@@ -288,7 +288,9 @@ class PosExchangeMySqlTest {
    assertEquals(1L,returnItemRepository.sumReturnedQuantityBySaleItemId(originalLine),
     "The sold unit must be returned exactly once across both competing workflows");
    InventoryBalance balance=balances.findByLocationIdAndVariantId(f.locationId(),f.variantId()).orElseThrow();
-   assertEquals(1,balance.getOnHandQuantity(),"Exactly one returned unit must be restocked");
+   int expectedOnHand=exchangeResult.successful()?1:2;
+   assertEquals(expectedOnHand,balance.getOnHandQuantity(),
+    "A winning exchange restocks the returned unit then sells one replacement of the same variant; a winning customer return only restocks it");
   } finally {
    start.countDown();
    executor.shutdownNow();
