@@ -216,7 +216,7 @@ class PosReportServiceTest {
         assertEquals(201, report.transactionCount());
         assertEquals(new BigDecimal("2020.00"), report.subtotal());
         assertEquals(new BigDecimal("202.00"), report.discounts());
-        assertEquals(new BigDecimal("1998.00"), report.netSalesBeforeRefunds());
+        assertEquals(new BigDecimal("1818.00"), report.netSalesBeforeRefunds());
         assertEquals(2, report.cashiers().size());
         verify(saleRepository, times(2))
                 .findCompletedSalesForReport(eq(1L), any(), any(), any(Pageable.class));
