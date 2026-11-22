@@ -226,10 +226,11 @@ public class ProcurementController {
     public ResponseEntity<?> getSupplierBills(
             @PathVariable Long supplierId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size
+            @RequestParam(defaultValue = "25") int size,
+            Authentication authentication
     ) {
         try {
-            return ResponseEntity.ok(supplierAccountService.getBills(supplierId, page, size));
+            return ResponseEntity.ok(supplierAccountService.getBills(supplierId, page, size, authentication.getName()));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
@@ -280,18 +281,18 @@ public class ProcurementController {
     }
 
     @GetMapping("/supplier-bills/{billId}/payments")
-    public ResponseEntity<?> getSupplierPayments(@PathVariable Long billId) {
+    public ResponseEntity<?> getSupplierPayments(@PathVariable Long billId, Authentication authentication) {
         try {
-            return ResponseEntity.ok(supplierAccountService.getPayments(billId));
+            return ResponseEntity.ok(supplierAccountService.getPayments(billId, authentication.getName()));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
     }
 
     @GetMapping("/supplier-bills/{billId}/landed-cost-allocations")
-    public ResponseEntity<?> getLandedCostAllocations(@PathVariable Long billId) {
+    public ResponseEntity<?> getLandedCostAllocations(@PathVariable Long billId, Authentication authentication) {
         try {
-            return ResponseEntity.ok(supplierAccountService.getLandedCostAllocations(billId));
+            return ResponseEntity.ok(supplierAccountService.getLandedCostAllocations(billId, authentication.getName()));
         } catch (IllegalArgumentException exception) {
             return badRequest(exception);
         }
