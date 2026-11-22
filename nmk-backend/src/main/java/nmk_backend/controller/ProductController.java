@@ -6,8 +6,10 @@ import nmk_backend.service.CustomerProductCatalogService;
 import nmk_backend.service.ProductService;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
@@ -25,8 +27,18 @@ public class ProductController {
     }
 
     @GetMapping
-    public List<CustomerProductCatalogResponse.ProductItem> getAllProducts() {
-        return customerProductCatalogService.getActiveProducts();
+    public ResponseEntity<?> getAllProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
+        return ResponseEntity.ok(customerProductCatalogService.getActiveProducts(PageRequest.of(
+                page, size, Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id"))
+        )));
     }
 
     @PostMapping
