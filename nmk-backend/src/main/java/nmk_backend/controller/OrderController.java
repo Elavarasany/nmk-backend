@@ -11,6 +11,8 @@ import nmk_backend.service.RazorpayService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.RoundingMode;
 import java.util.Map;
@@ -18,6 +20,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
 
     private final OrderService orderService;
     private final OrderRepository orderRepository;
@@ -78,9 +82,8 @@ public class OrderController {
             );
 
         } catch (Exception e) {
-            System.err.println(
-                    "Checkout preparation failed: " + e.getMessage()
-            );
+            log.error("Checkout preparation failed; orderId={}, exceptionType={}",
+                    order == null ? null : order.getId(), e.getClass().getSimpleName());
 
             releaseStockAfterFailure(order);
 
@@ -97,10 +100,8 @@ public class OrderController {
             orderRepository.saveAndFlush(order);
 
         } catch (Exception e) {
-            System.err.println(
-                    "Could not persist payment creation status for order "
-                            + order.getId() + ": " + e.getMessage()
-            );
+            log.error("Could not persist payment creation status; orderId={}, exceptionType={}",
+                    order.getId(), e.getClass().getSimpleName());
 
             releaseStockAfterFailure(order);
 
@@ -151,11 +152,8 @@ public class OrderController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            System.err.println(
-                    "Razorpay checkout result requires review. Order ID: "
-                            + order.getId()
-                            + ". Reason: " + e.getMessage()
-            );
+            log.error("Razorpay checkout result requires review; orderId={}, exceptionType={}",
+                    order.getId(), e.getClass().getSimpleName());
 
             // Intentionally retain stock reservation.
             // Payment creation status remains IN_PROGRESS if the
@@ -180,10 +178,8 @@ public class OrderController {
             orderService.releaseReservation(order.getId());
 
         } catch (Exception e) {
-            System.err.println(
-                    "WARNING: Could not release stock reservation for order "
-                            + order.getId() + ": " + e.getMessage()
-            );
+            log.error("Could not release stock reservation; orderId={}, exceptionType={}",
+                    order.getId(), e.getClass().getSimpleName());
         }
     }
 }
