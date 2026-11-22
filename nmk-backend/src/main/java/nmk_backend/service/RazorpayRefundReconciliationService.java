@@ -138,11 +138,11 @@ public class RazorpayRefundReconciliationService {
                     || "CONFIRMED".equalsIgnoreCase(order.getOrderStatus())) {
                 order.setOrderStatus("CANCELLED");
             }
+        } else if (activeRefundTotal > processedRefundTotal) {
+            order.setRefundStatus("PENDING");
+            order.setPaymentStatus("PAID");
         } else if (processedRefundTotal > 0) {
             order.setRefundStatus("PARTIALLY_REFUNDED");
-            order.setPaymentStatus("PAID");
-        } else if (activeRefundTotal > 0) {
-            order.setRefundStatus("PENDING");
             order.setPaymentStatus("PAID");
         } else {
             order.setRefundStatus("FAILED");
