@@ -143,9 +143,9 @@ class ProcurementMySqlIntegrationTest {
         assertEquals(new BigDecimal("175.00"), report.receivedCost());
         assertEquals(new BigDecimal("70.00"), report.returnedCost());
         assertEquals(new BigDecimal("105.00"), report.netRecordedProcurementCost());
-        assertEquals(2L, report.totalEntries());
-        assertEquals(2, report.entries().size());
-        assertEquals(List.of("RECEIVED", "SUPPLIER_RETURN"),
+        assertEquals(3L, report.totalEntries());
+        assertEquals(3, report.entries().size());
+        assertEquals(List.of("RECEIVED", "RECEIVED", "SUPPLIER_RETURN"),
                 report.entries().stream().map(ProcurementCostReportResponse.Entry::type).toList());
 
         var firstPage = procurement.getProcurementCostReportEntries(
@@ -154,13 +154,19 @@ class ProcurementMySqlIntegrationTest {
         var secondPage = procurement.getProcurementCostReportEntries(
                 location.getId(), LocalDate.now(), LocalDate.now(), 1, 1
         );
-        assertEquals(2L, firstPage.getTotalElements());
+        assertEquals(3L, firstPage.getTotalElements());
         assertEquals(1, firstPage.getContent().size());
         assertTrue(firstPage.hasNext());
         assertEquals("RECEIVED", firstPage.getContent().get(0).type());
         assertEquals(1, secondPage.getContent().size());
-        assertFalse(secondPage.hasNext());
-        assertEquals("SUPPLIER_RETURN", secondPage.getContent().get(0).type());
+        assertTrue(secondPage.hasNext());
+        assertEquals("RECEIVED", secondPage.getContent().get(0).type());
+        var thirdPage = procurement.getProcurementCostReportEntries(
+                location.getId(), LocalDate.now(), LocalDate.now(), 2, 1
+        );
+        assertEquals(1, thirdPage.getContent().size());
+        assertFalse(thirdPage.hasNext());
+        assertEquals("SUPPLIER_RETURN", thirdPage.getContent().get(0).type());
     }
 
     @Test
