@@ -30,7 +30,19 @@ class PosExchangeMigrationMySqlTest {
   try(Connection connection=dataSource.getConnection(); Statement statement=connection.createStatement()) {
    statement.execute("CREATE DATABASE `"+schema+"`");
   }
-  String targetUrl=sourceUrl.replace("/nmk_pos_ci?","/"+schema+"?");
+  int queryIndex = sourceUrl.indexOf('?');
+  int databaseStart = sourceUrl.lastIndexOf(
+          '/',
+          queryIndex >= 0 ? queryIndex : sourceUrl.length()
+  );
+
+  if (databaseStart < 0) {
+   throw new IllegalStateException("Unable to determine database name from JDBC URL");
+  }
+
+  String targetUrl = sourceUrl.substring(0, databaseStart + 1)
+          + schema
+          + (queryIndex >= 0 ? sourceUrl.substring(queryIndex) : "");
   DriverManagerDataSource target=new DriverManagerDataSource(targetUrl,username,password);
   JdbcTemplate jdbc=new JdbcTemplate(target);
   try {
