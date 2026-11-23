@@ -95,6 +95,7 @@ CREATE TABLE stock_movements (
     reference_id BIGINT NULL,
     idempotency_key VARCHAR(150) NOT NULL,
     actor_staff_id BIGINT NULL,
+    actor_admin_id BIGINT NULL,
     reason VARCHAR(500) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
@@ -109,6 +110,9 @@ CREATE TABLE stock_movements (
     CONSTRAINT fk_stock_movements_variant
         FOREIGN KEY (variant_id) REFERENCES product_variants (id),
 
+    CONSTRAINT fk_stock_movements_actor_admin
+        FOREIGN KEY (actor_admin_id) REFERENCES admins (id),
+
     CONSTRAINT chk_stock_movements_quantities
         CHECK (
             on_hand_after >= 0
@@ -120,5 +124,8 @@ CREATE TABLE stock_movements (
         (location_id, variant_id, created_at),
 
     INDEX idx_stock_movements_reference
-        (reference_type, reference_id)
+        (reference_type, reference_id),
+
+    INDEX idx_stock_movements_actor_admin
+        (actor_admin_id)
 ) ENGINE=InnoDB;
