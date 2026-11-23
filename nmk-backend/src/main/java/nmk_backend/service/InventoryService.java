@@ -55,6 +55,22 @@ public class InventoryService {
     }
 
     @Transactional
+    public InventoryBalance receiveStockByAdmin(
+            Long locationId, Long variantId, int quantity,
+            String idempotencyKey, Long actorAdminId, String reason
+    ) {
+        validateQuantity(quantity);
+        if (actorAdminId == null || actorAdminId <= 0) {
+            throw new InvalidInventoryOperationException("A valid admin identity is required");
+        }
+        return execute(
+                locationId, variantId, quantity, idempotencyKey,
+                null, actorAdminId, reason, "RECEIPT", quantity, 0, true,
+                null, null
+        );
+    }
+
+    @Transactional
     public InventoryBalance reserveStock(
             Long locationId, Long variantId, int quantity,
             String idempotencyKey, Long actorStaffId, String reason
@@ -336,6 +352,31 @@ public class InventoryService {
         );
     }
 
+    @Transactional
+    public InventoryBalance adjustStockByAdmin(
+            Long locationId, Long variantId, int quantityDelta,
+            String idempotencyKey, Long actorAdminId, String reason
+    ) {
+        if (actorAdminId == null || actorAdminId <= 0) {
+            throw new InvalidInventoryOperationException("A valid admin identity is required");
+        }
+        if (quantityDelta == 0) {
+            throw new InvalidInventoryOperationException(
+                    "Stock adjustment must change the quantity"
+            );
+        }
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500) {
+            throw new InvalidInventoryOperationException(
+                    "A stock adjustment reason of 1 to 500 characters is required"
+            );
+        }
+        return execute(
+                locationId, variantId, 1, idempotencyKey,
+                null, actorAdminId, reason.trim(), "ADJUSTMENT",
+                quantityDelta, 0, false, null, null
+        );
+    }
+
     private InventoryBalance execute(
             Long locationId,
             Long variantId,
@@ -350,6 +391,34 @@ public class InventoryService {
             String referenceType,
             Long referenceId
     ) {
+        return execute(
+                locationId, variantId, quantity, idempotencyKey,
+                actorStaffId, null, reason, movementType,
+                quantityDelta, reservedDelta, allowBalanceCreation,
+                referenceType, referenceId
+        );
+    }
+
+    private InventoryBalance execute(
+            Long locationId,
+            Long variantId,
+            int quantity,
+            String idempotencyKey,
+            Long actorStaffId,
+            Long actorAdminId,
+            String reason,
+            String movementType,
+            int quantityDelta,
+            int reservedDelta,
+            boolean allowBalanceCreation,
+            String referenceType,
+            Long referenceId
+    ) {
+        if (actorStaffId != null && actorAdminId != null) {
+            throw new InvalidInventoryOperationException(
+                    "A stock movement cannot have both staff and admin actors"
+            );
+        }
         validateIds(locationId, variantId);
 
         String normalizedKey =
@@ -444,6 +513,10 @@ public class InventoryService {
                             && Objects.equals(
                             existing.getActorStaffId(),
                             actorStaffId
+                    )
+                            && Objects.equals(
+                            existing.getActorAdminId(),
+                            actorAdminId
                     )
                             && Objects.equals(
                             existing.getReason(),
@@ -580,6 +653,7 @@ public class InventoryService {
         movement.setReferenceId(referenceId);
         movement.setIdempotencyKey(normalizedKey);
         movement.setActorStaffId(actorStaffId);
+        movement.setActorAdminId(actorAdminId);
         movement.setReason(reason);
 
         movementRepository.saveAndFlush(movement);
