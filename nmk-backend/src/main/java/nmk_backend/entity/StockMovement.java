@@ -28,6 +28,10 @@ import java.time.LocalDateTime;
         @Index(
             name = "idx_stock_movements_reference",
             columnList = "reference_type, reference_id"
+        ),
+        @Index(
+            name = "idx_stock_movements_actor_admin",
+            columnList = "actor_admin_id"
         )
     }
 )
@@ -72,6 +76,10 @@ public class StockMovement {
     // Keep this as a scalar until a StaffAccount entity is implemented.
     @Column(name = "actor_staff_id")
     private Long actorStaffId;
+
+    // Admin and staff identities belong to separate tables.
+    @Column(name = "actor_admin_id")
+    private Long actorAdminId;
 
     @Column(length = 500)
     private String reason;
@@ -172,6 +180,14 @@ public class StockMovement {
 
     public void setActorStaffId(Long actorStaffId) {
         this.actorStaffId = actorStaffId;
+    }
+
+    public Long getActorAdminId() {
+        return actorAdminId;
+    }
+
+    public void setActorAdminId(Long actorAdminId) {
+        this.actorAdminId = actorAdminId;
     }
 
     public String getReason() {
