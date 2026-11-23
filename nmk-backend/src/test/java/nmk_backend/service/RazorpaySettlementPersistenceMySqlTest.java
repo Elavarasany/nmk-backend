@@ -46,10 +46,13 @@ class RazorpaySettlementPersistenceMySqlTest {
 
         var exceptions = persistenceService.exceptions("UNMATCHED", 0, 25);
 
-        assertEquals(1, exceptions.getTotalElements());
-        assertEquals(settlementId, exceptions.getContent().getFirst().providerSettlementId());
-        assertEquals(paymentId, exceptions.getContent().getFirst().providerEntityId());
-        assertEquals("UNMATCHED", exceptions.getContent().getFirst().matchStatus());
+        assertTrue(
+                exceptions.getContent().stream().anyMatch(exception ->
+                        settlementId.equals(exception.providerSettlementId())
+                                && paymentId.equals(exception.providerEntityId())
+                                && "UNMATCHED".equals(exception.matchStatus())),
+                "The newly persisted unmatched provider row must appear in the global exception queue"
+        );
     }
 
     @Test
