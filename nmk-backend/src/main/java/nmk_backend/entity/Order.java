@@ -1,5 +1,6 @@
 
 package nmk_backend.entity;
+
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -29,6 +30,13 @@ public class Order {
     private BigDecimal totalAmount;
 
     private String paymentStatus;
+
+    @Column(name = "refund_status", nullable = false, length = 30)
+    private String refundStatus = "NONE";
+
+    @Column(name = "payment_creation_status", length = 30, nullable = false)
+    private String paymentCreationStatus = "NOT_STARTED";
+
     private String orderStatus = "PENDING";
 
     @Column(name = "reservation_expires_at")
@@ -36,6 +44,14 @@ public class Order {
 
     @Column(name = "stock_reserved", nullable = false)
     private boolean stockReserved = false;
+
+    // Null on existing orders; new orders identify their reservation system.
+    @Column(name = "reservation_type", length = 30)
+    private String reservationType;
+
+    // Snapshot of the inventory location used for this order.
+    @Column(name = "inventory_location_id")
+    private Long inventoryLocationId;
 
     private String razorpayOrderId;
     private String razorpayPaymentId;
@@ -59,10 +75,17 @@ public class Order {
 
     @PrePersist
     public void prePersist() {
-        orderDate = LocalDateTime.now();
+        if (orderDate == null) {
+            orderDate = LocalDateTime.now();
+        }
 
         if (orderStatus == null) {
             orderStatus = "PENDING";
+        }
+
+        if (paymentCreationStatus == null
+                || paymentCreationStatus.isBlank()) {
+            paymentCreationStatus = "NOT_STARTED";
         }
 
         if (trackingToken == null) {
@@ -148,12 +171,62 @@ public class Order {
         this.paymentStatus = paymentStatus;
     }
 
+    public String getRefundStatus() {
+        return refundStatus == null ? "NONE" : refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
+    }
+
+    public String getPaymentCreationStatus() {
+        return paymentCreationStatus == null
+                ? "NOT_STARTED"
+                : paymentCreationStatus;
+    }
+
+    public void setPaymentCreationStatus(String paymentCreationStatus) {
+        this.paymentCreationStatus = paymentCreationStatus;
+    }
+
     public String getOrderStatus() {
         return orderStatus == null ? "PENDING" : orderStatus;
     }
 
     public void setOrderStatus(String orderStatus) {
         this.orderStatus = orderStatus;
+    }
+
+    public LocalDateTime getReservationExpiresAt() {
+        return reservationExpiresAt;
+    }
+
+    public void setReservationExpiresAt(LocalDateTime reservationExpiresAt) {
+        this.reservationExpiresAt = reservationExpiresAt;
+    }
+
+    public boolean isStockReserved() {
+        return stockReserved;
+    }
+
+    public void setStockReserved(boolean stockReserved) {
+        this.stockReserved = stockReserved;
+    }
+
+    public String getReservationType() {
+        return reservationType;
+    }
+
+    public void setReservationType(String reservationType) {
+        this.reservationType = reservationType;
+    }
+
+    public Long getInventoryLocationId() {
+        return inventoryLocationId;
+    }
+
+    public void setInventoryLocationId(Long inventoryLocationId) {
+        this.inventoryLocationId = inventoryLocationId;
     }
 
     public String getRazorpayOrderId() {
@@ -206,20 +279,5 @@ public class Order {
 
     public void setItems(List<OrderItem> items) {
         this.items = items;
-    }
-    public LocalDateTime getReservationExpiresAt() {
-        return reservationExpiresAt;
-    }
-
-    public void setReservationExpiresAt(LocalDateTime reservationExpiresAt) {
-        this.reservationExpiresAt = reservationExpiresAt;
-    }
-
-    public boolean isStockReserved() {
-        return stockReserved;
-    }
-
-    public void setStockReserved(boolean stockReserved) {
-        this.stockReserved = stockReserved;
     }
 }

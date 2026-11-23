@@ -6,13 +6,21 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 import nmk_backend.entity.Appointment;
+import nmk_backend.dto.AppointmentResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import nmk_backend.dto.AppointmentStatusRequest;
 import nmk_backend.repository.AppointmentRepository;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import nmk_backend.service.AdminActionAuthorizationService;
@@ -24,13 +32,16 @@ public class AppointmentController {
     private final AdminActionAuthorizationService authorizationService;
 
     private final AppointmentRepository appointmentRepository;
+    private final ZoneId businessZone;
 
     public AppointmentController(
             AppointmentRepository appointmentRepository,
-            AdminActionAuthorizationService authorizationService
+            AdminActionAuthorizationService authorizationService,
+            @Value("${app.business.time-zone:Asia/Kolkata}") String businessTimeZone
     ) {
         this.appointmentRepository = appointmentRepository;
         this.authorizationService = authorizationService;
+        this.businessZone = ZoneId.of(businessTimeZone);
     }
     @DeleteMapping("/clear")
     @Transactional
@@ -73,7 +84,7 @@ public class AppointmentController {
     // Customer: Book an appointment
     @PostMapping
     public ResponseEntity<?> bookAppointment(
-            @RequestBody Appointment appointment) {
+            @Valid @RequestBody Appointment appointment) {
 
         if (appointment.getCustomerName() == null ||
                 appointment.getCustomerName().isBlank() ||
@@ -86,7 +97,7 @@ public class AppointmentController {
                     .body(Map.of("message", "Please provide all required details."));
         }
 
-        if (appointment.getAppointmentDate().isBefore(LocalDate.now())) {
+        if (appointment.getAppointmentDate().isBefore(LocalDate.now(businessZone))) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Appointment date cannot be in the past."));
         }
@@ -112,30 +123,36 @@ public class AppointmentController {
         appointment.setCreatedAt(null);
 
         Appointment saved = appointmentRepository.save(appointment);
-        System.out.println("SAVED APPOINTMENT ID: " + saved.getId());
-        System.out.println("SAVED CUSTOMER: " + saved.getCustomerName());
-        System.out.println("SAVED DATE: " + saved.getAppointmentDate());
-        System.out.println("SAVED TIME: " + saved.getAppointmentTime());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AppointmentResponse.from(saved));
     }
 
-    // Admin: View all appointments
+    // Admin: View appointments in bounded, deterministic pages.
     @GetMapping
-    public List<Appointment> getAllAppointments() {
-        List<Appointment> appointments =
-                appointmentRepository.findAllByOrderByAppointmentDateAscAppointmentTimeAsc();
+    public ResponseEntity<?> getAllAppointments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Page must be non-negative and size must be between 1 and 100"
+            ));
+        }
 
-        System.out.println("TOTAL APPOINTMENTS: " + appointments.size());
-
-        return appointments;
+        Page<AppointmentResponse> result = appointmentRepository
+                .findAll(PageRequest.of(page, size, Sort.by(
+                        Sort.Order.asc("appointmentDate"),
+                        Sort.Order.asc("appointmentTime"),
+                        Sort.Order.asc("id")
+                )))
+                .map(AppointmentResponse::from);
+        return ResponseEntity.ok(result);
     }
 
     // Admin: Update appointment status
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(
             @PathVariable Long id,
-            @RequestBody Map<String, String> request) {
+            @Valid @RequestBody AppointmentStatusRequest request) {
 
         Appointment appointment = appointmentRepository.findById(id)
                 .orElse(null);
@@ -144,22 +161,9 @@ public class AppointmentController {
             return ResponseEntity.notFound().build();
         }
 
-        String status = request.get("status");
-
-        Set<String> allowedStatuses = Set.of(
-                "PENDING",
-                "CONFIRMED",
-                "COMPLETED",
-                "CANCELLED"
-        );
-
-        if (status == null || !allowedStatuses.contains(status)) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Invalid appointment status."));
-        }
-
+        String status = request.status();
         appointment.setStatus(status);
 
-        return ResponseEntity.ok(appointmentRepository.save(appointment));
+        return ResponseEntity.ok(AppointmentResponse.from(appointmentRepository.save(appointment)));
     }
 }

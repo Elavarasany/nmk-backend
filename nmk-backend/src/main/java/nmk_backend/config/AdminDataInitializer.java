@@ -21,6 +21,9 @@ public class AdminDataInitializer {
     @Value("${admin.bootstrap.password:}")
     private String password;
 
+    @Value("${website-images.bootstrap.enabled:true}")
+    private boolean websiteImagesBootstrapEnabled;
+
     @Bean
     public ApplicationRunner createInitialAdmin(
             AdminRepository adminRepository,
@@ -43,6 +46,13 @@ public class AdminDataInitializer {
                 adminRepository.save(admin);
 
                 System.out.println("Initial admin account created successfully.");
+            }
+
+            // Demo image records are seeded in development/test only. Production must
+            // receive client-approved assets through the admin website-image workflow.
+            if (!websiteImagesBootstrapEnabled) {
+                System.out.println("Website image bootstrap is disabled.");
+                return;
             }
 
             // Insert existing website images only if their keys are missing

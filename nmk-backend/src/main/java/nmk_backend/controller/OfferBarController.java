@@ -1,9 +1,8 @@
-
 package nmk_backend.controller;
 
+import jakarta.validation.Valid;
 import nmk_backend.entity.OfferBar;
 import nmk_backend.repository.OfferBarRepository;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,7 +12,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://localhost:5173")
 public class OfferBarController {
 
     private final OfferBarRepository offerBarRepository;
@@ -22,46 +20,38 @@ public class OfferBarController {
         this.offerBarRepository = offerBarRepository;
     }
 
-    // Public: Get the currently valid offer bar
     @GetMapping("/marketing/offer")
     public ResponseEntity<OfferBar> getCurrentOffer() {
-
-        LocalDateTime now = LocalDateTime.now(
-                ZoneId.of("Asia/Kolkata")
-        );
-
-        return offerBarRepository.findByActiveTrue()
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
+        return offerBarRepository.findCurrentlyValidOrdered(now)
                 .stream()
-                .filter(offer ->
-                        (offer.getStartDateTime() == null ||
-                                !now.isBefore(offer.getStartDateTime()))
-                                &&
-                                (offer.getEndDateTime() == null ||
-                                        !now.isAfter(offer.getEndDateTime()))
-                )
                 .findFirst()
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
-    // Admin: Get all offer bars
     @GetMapping("/admin/marketing/offers")
     public List<OfferBar> getAllOffers() {
         return offerBarRepository.findAll();
     }
 
-    // Admin: Create offer bar
     @PostMapping("/admin/marketing/offers")
-    public OfferBar createOffer(@RequestBody OfferBar offer) {
+    public ResponseEntity<OfferBar> createOffer(@Valid @RequestBody OfferBar offer) {
+        if (!hasValidDateRange(offer)) {
+            return ResponseEntity.badRequest().build();
+        }
         offer.setId(null);
-        return offerBarRepository.save(offer);
+        return ResponseEntity.ok(offerBarRepository.save(offer));
     }
 
-    // Admin: Update offer bar
     @PutMapping("/admin/marketing/offers/{id}")
     public ResponseEntity<OfferBar> updateOffer(
             @PathVariable Long id,
-            @RequestBody OfferBar updatedOffer) {
+            @Valid @RequestBody OfferBar updatedOffer) {
+
+        if (!hasValidDateRange(updatedOffer)) {
+            return ResponseEntity.badRequest().build();
+        }
 
         return offerBarRepository.findById(id)
                 .map(offer -> {
@@ -72,23 +62,23 @@ public class OfferBarController {
                     offer.setStartDateTime(updatedOffer.getStartDateTime());
                     offer.setEndDateTime(updatedOffer.getEndDateTime());
                     offer.setActive(updatedOffer.isActive());
-
-                    return ResponseEntity.ok(
-                            offerBarRepository.save(offer)
-                    );
+                    return ResponseEntity.ok(offerBarRepository.save(offer));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Admin: Delete offer bar
     @DeleteMapping("/admin/marketing/offers/{id}")
     public ResponseEntity<Void> deleteOffer(@PathVariable Long id) {
-
         if (!offerBarRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
-
         offerBarRepository.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private boolean hasValidDateRange(OfferBar offer) {
+        return offer.getStartDateTime() == null
+                || offer.getEndDateTime() == null
+                || offer.getEndDateTime().isAfter(offer.getStartDateTime());
     }
 }

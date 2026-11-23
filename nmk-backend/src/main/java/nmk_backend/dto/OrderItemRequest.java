@@ -2,18 +2,33 @@
 package nmk_backend.dto;
 
 import java.util.Map;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 public class OrderItemRequest {
 
+    @NotNull
+    @Positive
     private Long productId;
+    @NotNull
+    @Positive
+    private Long variantId;
+    @NotNull
+    @Positive
     private Integer quantity;
 
+    @Size(max = 30)
     private String lensKind;
+    @Size(max = 50)
     private String prescriptionType;
+    @Size(max = 100)
     private String lensType;
     private Boolean photochromic;
 
+    @Size(max = 20)
     private Map<String, Object> prescription;
+    @Size(max = 255)
     private String prescriptionFileName;
 
     public Long getProductId() {
@@ -22,6 +37,14 @@ public class OrderItemRequest {
 
     public void setProductId(Long productId) {
         this.productId = productId;
+    }
+
+    public Long getVariantId() {
+        return variantId;
+    }
+
+    public void setVariantId(Long variantId) {
+        this.variantId = variantId;
     }
 
     public Integer getQuantity() {

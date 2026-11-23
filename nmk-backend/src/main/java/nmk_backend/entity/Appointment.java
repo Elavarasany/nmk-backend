@@ -2,6 +2,10 @@
 package nmk_backend.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -14,14 +18,22 @@ public class Appointment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank
+    @Size(max = 255)
     private String customerName;
 
+    @NotBlank
+    @Size(max = 255)
     private String phone;
 
+    @Email
+    @Size(max = 255)
     private String email;
 
+    @NotNull
     private LocalDate appointmentDate;
 
+    @NotNull
     private LocalTime appointmentTime;
 
     private String status;

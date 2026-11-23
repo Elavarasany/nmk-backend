@@ -5,7 +5,7 @@ import nmk_backend.entity.Admin;
 import nmk_backend.entity.AdminActionAuthorization;
 import nmk_backend.repository.AdminActionAuthorizationRepository;
 import nmk_backend.repository.AdminRepository;
-
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,14 @@ public class AdminActionAuthorizationService {
 
     private static final Set<String> ALLOWED_ACTIONS = Set.of(
             "CLEAR_ORDERS",
-            "CLEAR_APPOINTMENTS"
+            "CLEAR_APPOINTMENTS",
+            "RAZORPAY_REFUND",
+            "INVENTORY_RECEIPT",
+            "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN", "PURCHASE_ORDER_SUBMIT", "SUPPLIER_BILL_POST", "SUPPLIER_PAYMENT", "SUPPLIER_CREDIT_NOTE"
+    );
+
+    private static final Set<String> MANAGER_ALLOWED_ACTIONS = Set.of(
+            "INVENTORY_RECEIPT", "INVENTORY_ADJUSTMENT", "POS_RETURN", "POS_VOID", "POS_EXCHANGE", "STOCK_COUNT_POST", "STOCK_COUNT_CANCEL", "GOODS_RECEIPT", "SUPPLIER_RETURN", "PURCHASE_ORDER_SUBMIT"
     );
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -51,10 +58,17 @@ public class AdminActionAuthorizationService {
         if (action == null || !ALLOWED_ACTIONS.contains(action)) {
             throw new IllegalArgumentException("Invalid destructive action");
         }
+        if (password == null || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Incorrect admin password");
+        }
 
         Admin admin = adminRepository.findByUsername(username)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Invalid admin"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid staff account"));
+        if (!admin.isEnabled()) throw new IllegalArgumentException("Staff account is disabled");
+        String role = admin.getRole() == null ? "" : admin.getRole().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"ADMIN".equals(role) && !("MANAGER".equals(role) && MANAGER_ALLOWED_ACTIONS.contains(action))) {
+            throw new IllegalArgumentException("This staff role cannot authorize the requested action");
+        }
 
         if (!passwordEncoder.matches(password, admin.getPassword())) {
             throw new IllegalArgumentException("Incorrect admin password");
@@ -81,7 +95,7 @@ public class AdminActionAuthorizationService {
         return rawToken;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void consumeAuthorization(
             String username,
             String rawToken,
@@ -107,6 +121,17 @@ public class AdminActionAuthorizationService {
                                 ));
 
         LocalDateTime now = LocalDateTime.now();
+
+        Admin currentAdmin = adminRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Staff account is no longer available"));
+        String currentRole = currentAdmin.getRole() == null
+                ? ""
+                : currentAdmin.getRole().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!currentAdmin.isEnabled()
+                || (!"ADMIN".equals(currentRole)
+                && !("MANAGER".equals(currentRole) && MANAGER_ALLOWED_ACTIONS.contains(expectedAction)))) {
+            throw new IllegalArgumentException("Staff account is no longer authorized for this action");
+        }
 
         if (!authorization.getAdminUsername().equals(username)
                 || !authorization.getAction().equals(expectedAction)
