@@ -115,7 +115,7 @@ public class InventoryController {
         }
 
         try {
-            var balance = inventoryService.adjustStock(
+            var balance = inventoryService.adjustStockByAdmin(
                     request.getLocationId(),
                     request.getVariantId(),
                     request.getQuantityDelta(),
@@ -165,7 +165,7 @@ public class InventoryController {
         }
 
         try {
-            var balance = inventoryService.receiveStock(
+            var balance = inventoryService.receiveStockByAdmin(
                     request.getLocationId(),
                     request.getVariantId(),
                     request.getQuantity(),
