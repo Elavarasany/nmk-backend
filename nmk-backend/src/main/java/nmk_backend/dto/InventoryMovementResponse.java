@@ -19,6 +19,7 @@ public record InventoryMovementResponse(
         String referenceType,
         Long referenceId,
         Long actorStaffId,
+        Long actorAdminId,
         String reason,
         LocalDateTime createdAt
 ) {
@@ -39,6 +40,7 @@ public record InventoryMovementResponse(
                 movement.getReferenceType(),
                 movement.getReferenceId(),
                 movement.getActorStaffId(),
+                movement.getActorAdminId(),
                 movement.getReason(),
                 movement.getCreatedAt()
         );
