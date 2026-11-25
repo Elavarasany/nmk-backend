@@ -30,9 +30,8 @@ class WebsiteImageControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals("CATEGORY_COMPUTER_GLASSES", response.getBody().getImageKey());
+        assertEquals("CATEGORY_COMPUTER_GLASSES", ((WebsiteImage) response.getBody()).getImageKey());
     }
-
 
     @Test
     void acceptsPowerSunglassesAndAccessoriesCategorySlots() {
@@ -55,8 +54,28 @@ class WebsiteImageControllerTest {
 
             assertEquals(HttpStatus.OK, response.getStatusCode(), imageKey);
             assertNotNull(response.getBody(), imageKey);
-            assertEquals(imageKey, response.getBody().getImageKey());
+            assertEquals(imageKey, ((WebsiteImage) response.getBody()).getImageKey());
         }
+    }
+
+    @Test
+    void normalizesWebsiteImageKeyBeforeSaving() {
+        WebsiteImageRepository repository = mock(WebsiteImageRepository.class);
+        when(repository.findByImageKey("CATEGORY_POWER_SUNGLASSES"))
+                .thenReturn(Optional.empty());
+        when(repository.save(any(WebsiteImage.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WebsiteImageController controller = new WebsiteImageController(repository);
+        WebsiteImage request = new WebsiteImage();
+        request.setTitle("Power Sunglasses");
+        request.setImageUrl("https://example.com/power-sunglasses.webp");
+
+        var response = controller.saveWebsiteImage(" category_power_sunglasses ", request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("CATEGORY_POWER_SUNGLASSES", ((WebsiteImage) response.getBody()).getImageKey());
     }
 
     @Test
