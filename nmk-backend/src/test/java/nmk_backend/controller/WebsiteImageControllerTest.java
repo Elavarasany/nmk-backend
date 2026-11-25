@@ -33,6 +33,32 @@ class WebsiteImageControllerTest {
         assertEquals("CATEGORY_COMPUTER_GLASSES", response.getBody().getImageKey());
     }
 
+
+    @Test
+    void acceptsPowerSunglassesAndAccessoriesCategorySlots() {
+        WebsiteImageRepository repository = mock(WebsiteImageRepository.class);
+        when(repository.findByImageKey(anyString())).thenReturn(Optional.empty());
+        when(repository.save(any(WebsiteImage.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WebsiteImageController controller = new WebsiteImageController(repository);
+
+        for (String imageKey : new String[]{
+                "CATEGORY_POWER_SUNGLASSES",
+                "CATEGORY_ACCESSORIES"
+        }) {
+            WebsiteImage request = new WebsiteImage();
+            request.setTitle(imageKey);
+            request.setImageUrl("https://example.com/category.webp");
+
+            var response = controller.saveWebsiteImage(imageKey, request);
+
+            assertEquals(HttpStatus.OK, response.getStatusCode(), imageKey);
+            assertNotNull(response.getBody(), imageKey);
+            assertEquals(imageKey, response.getBody().getImageKey());
+        }
+    }
+
     @Test
     void rejectsUnknownWebsiteImageSlot() {
         WebsiteImageRepository repository = mock(WebsiteImageRepository.class);
