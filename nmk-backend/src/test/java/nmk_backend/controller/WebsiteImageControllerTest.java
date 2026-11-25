@@ -59,6 +59,26 @@ class WebsiteImageControllerTest {
     }
 
     @Test
+    void acceptsFutureCategoryImageSlotsWithoutControllerChanges() {
+        WebsiteImageRepository repository = mock(WebsiteImageRepository.class);
+        when(repository.findByImageKey("CATEGORY_FUTURE_CATEGORY"))
+                .thenReturn(Optional.empty());
+        when(repository.save(any(WebsiteImage.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WebsiteImageController controller = new WebsiteImageController(repository);
+        WebsiteImage request = new WebsiteImage();
+        request.setTitle("Future Category");
+        request.setImageUrl("https://example.com/future-category.webp");
+
+        var response = controller.saveWebsiteImage("CATEGORY_FUTURE_CATEGORY", request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("CATEGORY_FUTURE_CATEGORY", ((WebsiteImage) response.getBody()).getImageKey());
+    }
+
+    @Test
     void normalizesWebsiteImageKeyBeforeSaving() {
         WebsiteImageRepository repository = mock(WebsiteImageRepository.class);
         when(repository.findByImageKey("CATEGORY_POWER_SUNGLASSES"))
