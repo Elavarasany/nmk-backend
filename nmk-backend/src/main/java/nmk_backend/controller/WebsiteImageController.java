@@ -18,7 +18,9 @@ public class WebsiteImageController {
             "CATEGORY_EYEGLASSES",
             "CATEGORY_SUNGLASSES",
             "CATEGORY_CONTACT_LENSES",
-            "CATEGORY_COMPUTER_GLASSES"
+            "CATEGORY_COMPUTER_GLASSES",
+            "CATEGORY_POWER_SUNGLASSES",
+            "CATEGORY_ACCESSORIES"
     );
 
     private final WebsiteImageRepository websiteImageRepository;
