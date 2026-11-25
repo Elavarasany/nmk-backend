@@ -52,9 +52,14 @@ public class WebsiteImageController {
                         .toUpperCase(Locale.ROOT)
                         .replaceAll("[^A-Z0-9_]", "");
 
-        if (!ALLOWED_IMAGE_KEYS.contains(normalizedImageKey)) {
+        boolean isCategoryImageKey = normalizedImageKey.matches("^CATEGORY_[A-Z0-9_]+$");
+        boolean isAllowedImageKey = ALLOWED_IMAGE_KEYS.contains(normalizedImageKey)
+                || isCategoryImageKey;
+
+        if (!isAllowedImageKey) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Unsupported website image key: " + imageKey
+                    "message", "Unsupported website image key: " + imageKey,
+                    "normalizedKey", normalizedImageKey
             ));
         }
 
