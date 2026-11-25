@@ -48,7 +48,9 @@ public class WebsiteImageController {
 
         String normalizedImageKey = imageKey == null
                 ? ""
-                : imageKey.trim().toUpperCase(Locale.ROOT);
+                : imageKey.trim()
+                        .toUpperCase(Locale.ROOT)
+                        .replaceAll("[^A-Z0-9_]", "");
 
         if (!ALLOWED_IMAGE_KEYS.contains(normalizedImageKey)) {
             return ResponseEntity.badRequest().body(Map.of(
