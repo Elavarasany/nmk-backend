@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @RestController
@@ -40,19 +42,25 @@ public class WebsiteImageController {
     }
 
     @PutMapping("/admin/website-images/{imageKey}")
-    public ResponseEntity<WebsiteImage> saveWebsiteImage(
+    public ResponseEntity<?> saveWebsiteImage(
             @PathVariable String imageKey,
             @Valid @RequestBody WebsiteImage updatedImage) {
 
-        if (!ALLOWED_IMAGE_KEYS.contains(imageKey)) {
-            return ResponseEntity.badRequest().build();
+        String normalizedImageKey = imageKey == null
+                ? ""
+                : imageKey.trim().toUpperCase(Locale.ROOT);
+
+        if (!ALLOWED_IMAGE_KEYS.contains(normalizedImageKey)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Unsupported website image key: " + imageKey
+            ));
         }
 
         WebsiteImage image = websiteImageRepository
-                .findByImageKey(imageKey)
+                .findByImageKey(normalizedImageKey)
                 .orElseGet(WebsiteImage::new);
 
-        image.setImageKey(imageKey);
+        image.setImageKey(normalizedImageKey);
         image.setTitle(updatedImage.getTitle());
         image.setImageUrl(updatedImage.getImageUrl());
 
